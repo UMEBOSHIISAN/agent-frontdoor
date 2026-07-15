@@ -319,6 +319,11 @@ def test_unsafe_keyword_inflections_require_blocking(
         "chown the application files",
         "Approve this proposal for execution",
         "Authorize the task for execution",
+        "Approve a proposal for execution",
+        "Authorize a task for execution",
+        "Promote a worker",
+        "Truncate the stale table",
+        "Drop the stale table",
     ],
 )
 def test_unsafe_command_and_authority_aliases_require_blocking(
@@ -340,6 +345,15 @@ def test_descriptive_authority_words_do_not_require_blocking(
     valid_card, human_request
 ):
     valid_card.update(human_request=human_request, human_gate="NONE")
+
+    assert validate_card(valid_card).valid
+
+
+def test_descriptive_drop_does_not_require_blocking(valid_card):
+    valid_card.update(
+        human_request="Analyze the reported drop in test coverage",
+        human_gate="NONE",
+    )
 
     assert validate_card(valid_card).valid
 
@@ -493,6 +507,16 @@ def test_unknown_rejects_safe_action_followed_by_mutation(valid_card):
     assert "$.allowed_actions[0]" in {
         issue.path for issue in result.issues
     }
+
+
+def test_unknown_rejects_contextual_drop_mutation(valid_card):
+    make_unknown(valid_card)
+    valid_card["allowed_actions"] = ["review then drop the stale table"]
+
+    result = validate_card(valid_card)
+
+    assert not result.valid
+    assert "unknown_mutation_forbidden" in issue_codes(result)
 
 
 def test_unknown_rejects_next_step_outside_safe_allowlist(valid_card):

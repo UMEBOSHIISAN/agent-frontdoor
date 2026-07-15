@@ -65,19 +65,25 @@ _UNSAFE_PATTERNS = tuple(
         r"\b(?:delete|deletion|deleting|deleted|destroy(?:s|ed|ing)?|"
         r"purg(?:e|es|ed|ing)|remove|removal|removing|removed|"
         r"rm|rmdir|unlink|shred|eras(?:e|es|ed|ing)|"
-        r"wip(?:e|es|ed|ing)|"
+        r"wip(?:e|es|ed|ing)|truncat(?:e|es|ing)|"
+        r"drop(?:s|ping)?"
+        r"(?: (?:this|that|the|a|an|my|our|your))?"
+        r"(?: \w+){0,3} (?:tables?|databases?|schemas?|columns?|"
+        r"records?|files?|director(?:y|ies)|artifacts?)|"
         r"destructive (?:cleanup|clean up))\b",
         r"\b(?:ssot|source of truth)\b",
         r"\b(?:publish(?:es|ed|ing)?|go live)\b",
         r"\b(?:external(?:ly)? (?:post(?:s|ed|ing)?|publications?)|"
         r"post(?:s|ed|ing)?(?: \w+){0,4} externally)\b",
         r"\b(?:authority promotion|"
-        r"promot(?:e|es|ing)(?: (?:this|the))? "
+        r"promot(?:e|es|ing)"
+        r"(?: (?:this|that|the|a|an|my|our|your))? "
         r"(?:proposal|request|task|user|worker)|"
         r"grant(?:s|ing)? (?:authority|permission)|"
         r"elevat(?:e|es|ing) permission|"
         r"(?:approv(?:e|es|ing)|authoriz(?:e|es|ing))"
-        r"(?: (?:this|the))? (?:proposal|request|task))\b",
+        r"(?: (?:this|that|the|a|an|my|our|your))? "
+        r"(?:proposal|request|task))\b",
     )
 )
 
@@ -111,7 +117,11 @@ _UNKNOWN_MUTATION_PATTERN = re.compile(
     r"cop(?:y|ies|ied|ying)|touch\w*|replac\w*|truncat\w*|append\w*|"
     r"overwrit\w*|overwrote|rm|rmdir|unlink|shred|eras\w*|wip\w*|"
     r"chmod|chown|approv(?:e|es|ing)|authoriz(?:e|es|ing)|"
-    r"grant\w*|elevat\w*)\b"
+    r"grant\w*|elevat\w*|"
+    r"drop(?:s|ped|ping)?"
+    r"(?: (?:this|that|the|a|an|my|our|your))?"
+    r"(?: \w+){0,3} (?:tables?|databases?|schemas?|columns?|"
+    r"records?|files?|director(?:y|ies)|artifacts?))\b"
 )
 
 

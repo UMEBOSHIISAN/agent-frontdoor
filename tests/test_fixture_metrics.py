@@ -34,6 +34,39 @@ REQUIRED_CATEGORIES = frozenset(
     }
 )
 
+CATEGORY_BY_POSITIVE_FILENAME = {
+    "01_install_only.json": "install only",
+    "02_install_only_dev_tool.json": "install only",
+    "03_read_only_audit.json": "read-only audit",
+    "04_read_only_audit_logs.json": "read-only audit",
+    "05_deploy_request.json": "deploy request",
+    "06_deploy_request_staging.json": "deploy request",
+    "07_secret_handling.json": "secret handling",
+    "08_secret_handling_rotation_plan.json": "secret handling",
+    "09_scheduler_change.json": "scheduler change",
+    "10_scheduler_change_review.json": "scheduler change",
+    "11_cleanup_adjacent.json": "cleanup adjacent",
+    "12_cleanup_adjacent_cache.json": "cleanup adjacent",
+    "13_external_posting.json": "external posting",
+    "14_external_posting_preview.json": "external posting",
+    "15_ambiguous_request.json": "ambiguous request",
+    "16_ambiguous_request_scope.json": "ambiguous request",
+    "17_authority_promotion.json": "authority promotion",
+    "18_authority_promotion_review.json": "authority promotion",
+    "19_code_patch.json": "code patch",
+    "20_code_patch_config.json": "code patch",
+    "21_design_review.json": "design review",
+    "22_design_review_api.json": "design review",
+    "23_research_task.json": "research task",
+    "24_research_task_comparison.json": "research task",
+    "25_install_only_extension.json": "install only",
+    "26_read_only_audit_scope.json": "read-only audit",
+    "27_code_patch_test.json": "code patch",
+    "28_design_review_dataflow.json": "design review",
+    "29_research_task_feasibility.json": "research task",
+    "30_cleanup_adjacent_artifacts.json": "cleanup adjacent",
+}
+
 CATEGORY_BY_NEGATIVE_FILENAME = {
     "neg_01_install_missing_manifest.json": "install only",
     "neg_02_install_empty_allowed.json": "install only",
@@ -239,6 +272,101 @@ def _issue_codes(card: object) -> set[str]:
     return {issue.code for issue in validate_card(card).issues}
 
 
+def _matches_category_signal(card: object, category: str) -> bool:
+    if not isinstance(card, dict):
+        return False
+
+    task_class = card.get("task_class")
+    risk_value = card.get("risk_tags")
+    risk_tags = {
+        tag for tag in risk_value if isinstance(tag, str)
+    } if isinstance(risk_value, list) else set()
+    request = card.get("human_request")
+    action_value = card.get("allowed_actions")
+    actions = (
+        [action for action in action_value if isinstance(action, str)]
+        if isinstance(action_value, list)
+        else []
+    )
+    text = " ".join(
+        [request if isinstance(request, str) else "", *actions]
+    ).casefold()
+
+    if category == "install only":
+        return task_class == "INSTALLATION" and "install" in text
+    if category == "read-only audit":
+        return task_class == "AUDIT" and any(
+            signal in text for signal in ("audit", "inspect", "read")
+        )
+    if category == "deploy request":
+        return bool(risk_tags & {"deploy", "production"}) or any(
+            signal in text for signal in ("deploy", "production")
+        )
+    if category == "secret handling":
+        return bool(risk_tags & {"secret", "auth"}) or any(
+            signal in text
+            for signal in (
+                "api key",
+                "auth",
+                "credential",
+                "permission",
+                "secret",
+            )
+        )
+    if category == "scheduler change":
+        return "scheduler" in risk_tags or any(
+            signal in text
+            for signal in ("cron", "schedule", "scheduled", "scheduler")
+        )
+    if category == "cleanup adjacent":
+        return bool(
+            risk_tags & {"cleanup_adjacent", "delete", "destructive_cleanup"}
+        ) or any(
+            signal in text
+            for signal in ("cleanup", "delete", "destructive", "remove")
+        )
+    if category == "external posting":
+        return "external_publish" in risk_tags or any(
+            signal in text
+            for signal in ("external", "post", "publication", "publish")
+        )
+    if category == "ambiguous request":
+        return (
+            task_class == "UNKNOWN"
+            or bool(risk_tags & {"billing", "unknown"})
+            or any(
+                signal in text
+                for signal in (
+                    "account discrepancy",
+                    "ambiguous",
+                    "charges",
+                    "invoice",
+                    "unclear",
+                )
+            )
+        )
+    if category == "authority promotion":
+        return "authority_promotion" in risk_tags or any(
+            signal in text for signal in ("authority", "promote")
+        )
+    if category == "code patch":
+        return (
+            task_class in {"IMPLEMENTATION", "PATCH"}
+            and any(
+                signal in text
+                for signal in ("implement", "modify", "patch")
+            )
+        ) or "ssot_mutation" in risk_tags or "ssot" in text
+    if category == "design review":
+        return task_class == "DESIGN_REVIEW" and any(
+            signal in text
+            for signal in ("boundary", "design", "interface", "review")
+        )
+    if category == "research task":
+        return task_class == "RESEARCH"
+    raise AssertionError(f"unknown category: {category}")
+
+
 def _assert_exact_corpus(directory: Path, expected: set[str]) -> None:
     actual = _fixture_names(directory)
     assert actual == expected, (
@@ -270,11 +398,21 @@ def test_fixture_counts_meet_contract() -> None:
     ), f"fixture corpus is absent or undersized: {counts}"
 
 
-def test_required_category_coverage_is_explicit_and_complete() -> None:
-    expected_names = set(CATEGORY_BY_NEGATIVE_FILENAME)
-    _assert_exact_corpus(NEGATIVE, expected_names)
+@pytest.mark.parametrize(
+    ("directory", "category_by_filename"),
+    [
+        (POSITIVE, CATEGORY_BY_POSITIVE_FILENAME),
+        (NEGATIVE, CATEGORY_BY_NEGATIVE_FILENAME),
+    ],
+    ids=("positive", "negative"),
+)
+def test_required_category_coverage_is_explicit_and_content_backed(
+    directory: Path, category_by_filename: dict[str, str]
+) -> None:
+    expected_names = set(category_by_filename)
+    _assert_exact_corpus(directory, expected_names)
 
-    counts = Counter(CATEGORY_BY_NEGATIVE_FILENAME.values())
+    counts = Counter(category_by_filename.values())
     assert set(counts) == REQUIRED_CATEGORIES
     undercovered = {
         category: counts[category]
@@ -282,6 +420,13 @@ def test_required_category_coverage_is_explicit_and_complete() -> None:
         if counts[category] < 2
     }
     assert not undercovered, f"categories require two fixtures: {undercovered}"
+
+    mismatches = {}
+    for filename, category in category_by_filename.items():
+        card = _load_json(directory / filename)
+        if not _matches_category_signal(card, category):
+            mismatches[filename] = category
+    assert not mismatches, f"category signals do not match content: {mismatches}"
 
 
 def test_every_positive_fixture_is_valid() -> None:

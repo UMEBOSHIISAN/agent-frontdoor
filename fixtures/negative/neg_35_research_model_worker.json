@@ -13,7 +13,7 @@
   "required_evidence": [],
   "required_manifest": null,
   "human_gate": "NONE",
-  "predicted_worker_capability": "Qwen",
+  "predicted_worker_capability": "VendorModelX",
   "unknowns": [],
   "assumptions": [],
   "next_safe_step": "Inspect the named inputs"

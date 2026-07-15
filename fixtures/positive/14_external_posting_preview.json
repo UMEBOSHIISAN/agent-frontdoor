@@ -1,0 +1,16 @@
+{
+  "schema_version": "intake.v0",
+  "request_id": "positive-14",
+  "human_request": "Review a draft before any external publication",
+  "task_class": "CONTENT_DRAFT",
+  "risk_tags": ["external_publish"],
+  "allowed_actions": ["review the local draft", "report publication concerns"],
+  "forbidden_actions": ["publish the draft", "send the draft externally"],
+  "required_evidence": ["review findings", "approval status"],
+  "required_manifest": null,
+  "human_gate": "BLOCKING",
+  "predicted_worker_capability": "content-draft",
+  "unknowns": ["whether the audience list is final"],
+  "assumptions": [],
+  "next_safe_step": "Ask the human to confirm the audience before publication"
+}

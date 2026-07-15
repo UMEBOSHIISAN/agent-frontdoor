@@ -1,0 +1,16 @@
+{
+  "schema_version": "intake.v0",
+  "request_id": "positive-02",
+  "human_request": "Install one named development tool without changing project structure",
+  "task_class": "INSTALLATION",
+  "risk_tags": [],
+  "allowed_actions": ["review the tool manifest", "install the named development tool"],
+  "forbidden_actions": ["migrate project architecture", "add optional tools"],
+  "required_evidence": ["tool version", "installation check"],
+  "required_manifest": "tool-install-manifest.txt",
+  "human_gate": "CONFIRM",
+  "predicted_worker_capability": "installation",
+  "unknowns": [],
+  "assumptions": ["the supported platform is already known"],
+  "next_safe_step": "Review the named tool and confirm the bounded install scope"
+}

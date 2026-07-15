@@ -1,0 +1,16 @@
+{
+  "schema_version": "intake.v0",
+  "request_id": "positive-23",
+  "human_request": "Research the documented behavior of two data formats",
+  "task_class": "RESEARCH",
+  "risk_tags": [],
+  "allowed_actions": ["read provided source material", "compare documented behavior", "summarize evidence"],
+  "forbidden_actions": ["change source material", "publish the summary"],
+  "required_evidence": ["source references", "comparison notes"],
+  "required_manifest": null,
+  "human_gate": "NONE",
+  "predicted_worker_capability": "research",
+  "unknowns": [],
+  "assumptions": ["the provided material is current"],
+  "next_safe_step": "Read the provided sources and record comparable facts"
+}

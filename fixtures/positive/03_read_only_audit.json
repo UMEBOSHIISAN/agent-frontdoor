@@ -1,0 +1,16 @@
+{
+  "schema_version": "intake.v0",
+  "request_id": "positive-03",
+  "human_request": "Perform a read-only audit of the supplied configuration snapshot",
+  "task_class": "AUDIT",
+  "risk_tags": [],
+  "allowed_actions": ["read the supplied snapshot", "report audit findings"],
+  "forbidden_actions": ["modify configuration", "apply recommendations"],
+  "required_evidence": ["audit checklist", "finding references"],
+  "required_manifest": null,
+  "human_gate": "NONE",
+  "predicted_worker_capability": "audit",
+  "unknowns": [],
+  "assumptions": ["the snapshot is complete"],
+  "next_safe_step": "Inspect the supplied snapshot and record findings"
+}

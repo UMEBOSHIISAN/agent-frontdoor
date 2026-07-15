@@ -1,0 +1,16 @@
+{
+  "schema_version": "intake.v0",
+  "request_id": "positive-15",
+  "human_request": "Clarify an ambiguous request with no stated outcome",
+  "task_class": "UNKNOWN",
+  "risk_tags": ["unknown"],
+  "allowed_actions": ["ask the human for the intended outcome", "read supplied context", "list unresolved questions"],
+  "forbidden_actions": ["execute any task", "select a worker"],
+  "required_evidence": ["human clarification"],
+  "required_manifest": null,
+  "human_gate": "BLOCKING",
+  "predicted_worker_capability": "none-until-clarified",
+  "unknowns": ["the intended outcome", "the allowed scope"],
+  "assumptions": [],
+  "next_safe_step": "Ask the human to clarify the intended outcome and constraints"
+}

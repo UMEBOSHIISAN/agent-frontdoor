@@ -1,0 +1,16 @@
+{
+  "schema_version": "intake.v0",
+  "request_id": "positive-27",
+  "human_request": "Add a bounded regression patch for one formatting defect",
+  "task_class": "IMPLEMENTATION",
+  "risk_tags": [],
+  "allowed_actions": ["read the formatter test", "patch the formatting defect", "run the formatter test"],
+  "forbidden_actions": ["change unrelated formatting", "refactor other modules"],
+  "required_evidence": ["regression reproduction", "focused test result"],
+  "required_manifest": "formatter-change-manifest.txt",
+  "human_gate": "CONFIRM",
+  "predicted_worker_capability": "implementation",
+  "unknowns": [],
+  "assumptions": ["the defect is limited to one formatter"],
+  "next_safe_step": "Patch the single defect after confirming the regression test"
+}

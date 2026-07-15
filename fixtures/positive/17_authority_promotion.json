@@ -1,0 +1,16 @@
+{
+  "schema_version": "intake.v0",
+  "request_id": "positive-17",
+  "human_request": "Review an authority promotion proposal without granting authority",
+  "task_class": "DESIGN_REVIEW",
+  "risk_tags": ["authority_promotion"],
+  "allowed_actions": ["review the authority proposal", "report approval dependencies"],
+  "forbidden_actions": ["grant authority", "elevate permissions"],
+  "required_evidence": ["proposal text", "named approver"],
+  "required_manifest": null,
+  "human_gate": "BLOCKING",
+  "predicted_worker_capability": "design-review",
+  "unknowns": [],
+  "assumptions": ["the proposal has no current authority"],
+  "next_safe_step": "Wait for explicit human approval before authority promotion"
+}

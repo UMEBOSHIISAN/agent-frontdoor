@@ -1,0 +1,16 @@
+{
+  "schema_version": "intake.v0",
+  "request_id": "positive-09",
+  "human_request": "Prepare a scheduler change proposal for explicit human approval",
+  "task_class": "OPERATIONS",
+  "risk_tags": ["scheduler"],
+  "allowed_actions": ["review the current schedule", "draft a scheduler change proposal"],
+  "forbidden_actions": ["change the scheduler", "activate a new schedule"],
+  "required_evidence": ["current schedule", "proposed time window"],
+  "required_manifest": "schedule-proposal.txt",
+  "human_gate": "BLOCKING",
+  "predicted_worker_capability": "operations",
+  "unknowns": [],
+  "assumptions": ["the current schedule is supplied"],
+  "next_safe_step": "Wait for human confirmation of the proposed scheduler change"
+}

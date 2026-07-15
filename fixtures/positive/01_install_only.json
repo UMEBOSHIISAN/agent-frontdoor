@@ -1,0 +1,16 @@
+{
+  "schema_version": "intake.v0",
+  "request_id": "positive-01",
+  "human_request": "Install only the named validation package in the local environment",
+  "task_class": "INSTALLATION",
+  "risk_tags": [],
+  "allowed_actions": ["inspect package metadata", "install only the named package"],
+  "forbidden_actions": ["change application architecture", "install unrelated packages"],
+  "required_evidence": ["package name and version", "local installation result"],
+  "required_manifest": "install-manifest.txt",
+  "human_gate": "CONFIRM",
+  "predicted_worker_capability": "installation",
+  "unknowns": [],
+  "assumptions": ["the package source is already available locally"],
+  "next_safe_step": "Confirm the package name and version before installation"
+}

@@ -1,0 +1,16 @@
+{
+  "schema_version": "intake.v0",
+  "request_id": "positive-29",
+  "human_request": "Research the feasibility of a local text comparison method",
+  "task_class": "RESEARCH",
+  "risk_tags": [],
+  "allowed_actions": ["read supplied method descriptions", "analyze stated limitations", "summarize feasibility evidence"],
+  "forbidden_actions": ["implement a method", "publish conclusions"],
+  "required_evidence": ["method references", "limitation summary"],
+  "required_manifest": null,
+  "human_gate": "NONE",
+  "predicted_worker_capability": "research",
+  "unknowns": ["whether all sample inputs are representative"],
+  "assumptions": [],
+  "next_safe_step": "Analyze the supplied descriptions and list evidence gaps"
+}

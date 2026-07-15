@@ -1,0 +1,16 @@
+{
+  "schema_version": "intake.v0",
+  "request_id": "positive-16",
+  "human_request": "Determine the missing scope of a short ambiguous request",
+  "task_class": "UNKNOWN",
+  "risk_tags": ["unknown"],
+  "allowed_actions": ["review supplied context", "identify missing constraints", "report unresolved scope questions"],
+  "forbidden_actions": ["implement a solution", "invoke a worker"],
+  "required_evidence": ["clarified scope statement"],
+  "required_manifest": null,
+  "human_gate": "BLOCKING",
+  "predicted_worker_capability": "none-until-clarified",
+  "unknowns": ["which files or records are in scope"],
+  "assumptions": [],
+  "next_safe_step": "Wait for the human to select a bounded outcome"
+}

@@ -1,0 +1,16 @@
+{
+  "schema_version": "intake.v0",
+  "request_id": "positive-24",
+  "human_request": "Compare three documented approaches to structured validation",
+  "task_class": "RESEARCH",
+  "risk_tags": [],
+  "allowed_actions": ["inspect provided references", "classify stated constraints", "report evidence gaps"],
+  "forbidden_actions": ["select an implementation", "alter reference material"],
+  "required_evidence": ["comparison table", "evidence gaps"],
+  "required_manifest": null,
+  "human_gate": "NONE",
+  "predicted_worker_capability": "research",
+  "unknowns": [],
+  "assumptions": ["all approaches use the same input examples"],
+  "next_safe_step": "Compare the stated constraints in the provided references"
+}

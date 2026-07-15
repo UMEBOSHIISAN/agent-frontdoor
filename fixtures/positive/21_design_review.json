@@ -1,0 +1,16 @@
+{
+  "schema_version": "intake.v0",
+  "request_id": "positive-21",
+  "human_request": "Review a proposed component boundary design",
+  "task_class": "DESIGN_REVIEW",
+  "risk_tags": [],
+  "allowed_actions": ["read the design proposal", "compare stated tradeoffs", "report design findings"],
+  "forbidden_actions": ["implement the proposal", "change source files"],
+  "required_evidence": ["design finding references", "tradeoff summary"],
+  "required_manifest": null,
+  "human_gate": "NONE",
+  "predicted_worker_capability": "design-review",
+  "unknowns": [],
+  "assumptions": ["the proposal is complete enough for review"],
+  "next_safe_step": "Inspect the proposal and report boundary concerns"
+}

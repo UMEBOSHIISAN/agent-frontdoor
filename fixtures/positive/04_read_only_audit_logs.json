@@ -1,0 +1,16 @@
+{
+  "schema_version": "intake.v0",
+  "request_id": "positive-04",
+  "human_request": "Conduct a read-only audit of the provided event records",
+  "task_class": "AUDIT",
+  "risk_tags": [],
+  "allowed_actions": ["read provided event records", "summarize observed anomalies"],
+  "forbidden_actions": ["alter event records", "change system settings"],
+  "required_evidence": ["record identifiers", "anomaly summary"],
+  "required_manifest": null,
+  "human_gate": "NONE",
+  "predicted_worker_capability": "audit",
+  "unknowns": [],
+  "assumptions": ["record timestamps use one time zone"],
+  "next_safe_step": "Review the event records in chronological order"
+}

@@ -1,0 +1,16 @@
+{
+  "schema_version": "intake.v0",
+  "request_id": "positive-26",
+  "human_request": "Perform a read-only audit of a supplied scope boundary list",
+  "task_class": "AUDIT",
+  "risk_tags": [],
+  "allowed_actions": ["read the boundary list", "identify inconsistent entries", "report findings"],
+  "forbidden_actions": ["edit the boundary list", "apply policy changes"],
+  "required_evidence": ["entry references", "finding summary"],
+  "required_manifest": null,
+  "human_gate": "NONE",
+  "predicted_worker_capability": "audit",
+  "unknowns": [],
+  "assumptions": ["the list is a static export"],
+  "next_safe_step": "Inspect each listed boundary and record inconsistencies"
+}

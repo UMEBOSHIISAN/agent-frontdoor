@@ -1,0 +1,16 @@
+{
+  "schema_version": "intake.v0",
+  "request_id": "positive-06",
+  "human_request": "Review a request to deploy a release candidate to a shared environment",
+  "task_class": "OPERATIONS",
+  "risk_tags": ["deploy"],
+  "allowed_actions": ["review deployment prerequisites", "report missing approvals"],
+  "forbidden_actions": ["deploy the release candidate", "alter environment settings"],
+  "required_evidence": ["deployment target", "approval status"],
+  "required_manifest": "deployment-request.txt",
+  "human_gate": "BLOCKING",
+  "predicted_worker_capability": "operations",
+  "unknowns": ["whether the shared environment is available"],
+  "assumptions": [],
+  "next_safe_step": "Wait for the human to confirm the deployment target and approval"
+}

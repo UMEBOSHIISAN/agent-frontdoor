@@ -1,0 +1,16 @@
+{
+  "schema_version": "intake.v0",
+  "request_id": "positive-05",
+  "human_request": "Prepare a production deployment request for human review",
+  "task_class": "OPERATIONS",
+  "risk_tags": ["deploy", "production"],
+  "allowed_actions": ["prepare a deployment checklist", "inspect release evidence"],
+  "forbidden_actions": ["deploy without approval", "change unrelated services"],
+  "required_evidence": ["release identifier", "verification checklist"],
+  "required_manifest": "release-manifest.txt",
+  "human_gate": "BLOCKING",
+  "predicted_worker_capability": "operations",
+  "unknowns": [],
+  "assumptions": ["the release candidate already exists"],
+  "next_safe_step": "Wait for explicit human approval before any deployment action"
+}

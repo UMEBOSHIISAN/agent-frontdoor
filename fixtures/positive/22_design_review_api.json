@@ -1,0 +1,16 @@
+{
+  "schema_version": "intake.v0",
+  "request_id": "positive-22",
+  "human_request": "Evaluate a draft interface design without implementation",
+  "task_class": "DESIGN_REVIEW",
+  "risk_tags": [],
+  "allowed_actions": ["review interface definitions", "identify compatibility risks"],
+  "forbidden_actions": ["write implementation code", "expand the proposed scope"],
+  "required_evidence": ["compatibility findings", "open design questions"],
+  "required_manifest": null,
+  "human_gate": "NONE",
+  "predicted_worker_capability": "design-review",
+  "unknowns": ["whether older clients require support"],
+  "assumptions": [],
+  "next_safe_step": "Report the interface risks and unresolved questions"
+}

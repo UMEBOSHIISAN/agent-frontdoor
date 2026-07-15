@@ -1,0 +1,16 @@
+{
+  "schema_version": "intake.v0",
+  "request_id": "positive-20",
+  "human_request": "Implement a bounded validation fix in one configuration parser",
+  "task_class": "IMPLEMENTATION",
+  "risk_tags": [],
+  "allowed_actions": ["inspect the parser tests", "modify the bounded parser", "run the focused test"],
+  "forbidden_actions": ["change environment settings", "refactor unrelated code"],
+  "required_evidence": ["regression test", "focused test result"],
+  "required_manifest": "parser-change-manifest.txt",
+  "human_gate": "CONFIRM",
+  "predicted_worker_capability": "implementation",
+  "unknowns": [],
+  "assumptions": ["the input format is already documented"],
+  "next_safe_step": "Modify only the bounded parser after confirming the failing test"
+}

@@ -1,0 +1,16 @@
+{
+  "schema_version": "intake.v0",
+  "request_id": "positive-28",
+  "human_request": "Review a proposed data flow for boundary clarity",
+  "task_class": "DESIGN_REVIEW",
+  "risk_tags": [],
+  "allowed_actions": ["inspect the data flow description", "identify unclear boundaries", "report review findings"],
+  "forbidden_actions": ["implement the data flow", "change the proposal"],
+  "required_evidence": ["boundary observations", "unresolved design questions"],
+  "required_manifest": null,
+  "human_gate": "NONE",
+  "predicted_worker_capability": "design-review",
+  "unknowns": [],
+  "assumptions": ["the proposal describes every component"],
+  "next_safe_step": "Review the stated boundaries and summarize unclear transitions"
+}

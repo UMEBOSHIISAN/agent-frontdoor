@@ -1,0 +1,16 @@
+{
+  "schema_version": "intake.v0",
+  "request_id": "positive-10",
+  "human_request": "Review a scheduled task timing change without applying it",
+  "task_class": "CODE_REVIEW",
+  "risk_tags": ["scheduler"],
+  "allowed_actions": ["inspect the scheduled timing proposal", "report timing conflicts"],
+  "forbidden_actions": ["apply the schedule", "start scheduled work"],
+  "required_evidence": ["timing proposal", "conflict report"],
+  "required_manifest": null,
+  "human_gate": "BLOCKING",
+  "predicted_worker_capability": "code-review",
+  "unknowns": [],
+  "assumptions": ["the proposal is not active"],
+  "next_safe_step": "Report the review and wait for human approval"
+}

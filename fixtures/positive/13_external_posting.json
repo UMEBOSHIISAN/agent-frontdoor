@@ -1,0 +1,16 @@
+{
+  "schema_version": "intake.v0",
+  "request_id": "positive-13",
+  "human_request": "Prepare an external posting request for human approval",
+  "task_class": "CONTENT_DRAFT",
+  "risk_tags": ["external_publish"],
+  "allowed_actions": ["draft the announcement", "prepare a publication checklist"],
+  "forbidden_actions": ["post externally", "publish without approval"],
+  "required_evidence": ["approved wording", "target audience"],
+  "required_manifest": "publication-checklist.txt",
+  "human_gate": "BLOCKING",
+  "predicted_worker_capability": "content-draft",
+  "unknowns": [],
+  "assumptions": ["the announcement topic is approved"],
+  "next_safe_step": "Wait for explicit human approval before external posting"
+}

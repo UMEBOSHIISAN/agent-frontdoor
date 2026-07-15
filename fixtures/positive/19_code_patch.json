@@ -1,0 +1,16 @@
+{
+  "schema_version": "intake.v0",
+  "request_id": "positive-19",
+  "human_request": "Patch one parser defect within the named module",
+  "task_class": "IMPLEMENTATION",
+  "risk_tags": [],
+  "allowed_actions": ["read the affected module", "patch the named defect", "run local tests"],
+  "forbidden_actions": ["refactor unrelated modules", "change public behavior beyond the defect"],
+  "required_evidence": ["failing test before the patch", "passing test after the patch"],
+  "required_manifest": "changed-files.txt",
+  "human_gate": "CONFIRM",
+  "predicted_worker_capability": "implementation",
+  "unknowns": [],
+  "assumptions": ["the defect has a reproducible test"],
+  "next_safe_step": "Patch only the named defect and collect test evidence"
+}

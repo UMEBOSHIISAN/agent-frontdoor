@@ -1,0 +1,16 @@
+{
+  "schema_version": "intake.v0",
+  "request_id": "positive-18",
+  "human_request": "Assess a request to promote a proposal to approved authority",
+  "task_class": "AUDIT",
+  "risk_tags": ["authority_promotion"],
+  "allowed_actions": ["inspect the approval record", "report missing authority evidence"],
+  "forbidden_actions": ["promote the proposal", "change permission records"],
+  "required_evidence": ["approval record", "authority boundary summary"],
+  "required_manifest": null,
+  "human_gate": "BLOCKING",
+  "predicted_worker_capability": "audit",
+  "unknowns": ["whether the approver has confirmed the proposal"],
+  "assumptions": [],
+  "next_safe_step": "Ask the human to verify the approval record before promotion"
+}

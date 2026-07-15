@@ -1,0 +1,16 @@
+{
+  "schema_version": "intake.v0",
+  "request_id": "positive-25",
+  "human_request": "Install only one named validation extension from a local package",
+  "task_class": "INSTALLATION",
+  "risk_tags": [],
+  "allowed_actions": ["inspect the local package", "install the named extension only"],
+  "forbidden_actions": ["install additional extensions", "redesign validation architecture"],
+  "required_evidence": ["extension name", "local verification result"],
+  "required_manifest": "extension-install-manifest.txt",
+  "human_gate": "CONFIRM",
+  "predicted_worker_capability": "installation",
+  "unknowns": [],
+  "assumptions": ["the local package has already been reviewed"],
+  "next_safe_step": "Confirm the extension identifier before the bounded installation"
+}

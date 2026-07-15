@@ -1,0 +1,16 @@
+{
+  "schema_version": "intake.v0",
+  "request_id": "positive-30",
+  "human_request": "Review cleanup candidates in a generated artifact report",
+  "task_class": "CODE_REVIEW",
+  "risk_tags": ["cleanup_adjacent"],
+  "allowed_actions": ["read the artifact report", "classify retention candidates", "report cleanup options"],
+  "forbidden_actions": ["delete generated files", "perform destructive cleanup"],
+  "required_evidence": ["candidate list", "retention rationale"],
+  "required_manifest": null,
+  "human_gate": "NONE",
+  "predicted_worker_capability": "code-review",
+  "unknowns": [],
+  "assumptions": ["the report contains generated artifacts only"],
+  "next_safe_step": "Summarize cleanup options for human review"
+}

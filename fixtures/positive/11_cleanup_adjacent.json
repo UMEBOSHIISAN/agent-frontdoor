@@ -1,0 +1,16 @@
+{
+  "schema_version": "intake.v0",
+  "request_id": "positive-11",
+  "human_request": "Plan cleanup of generated preview artifacts for later review",
+  "task_class": "OPERATIONS",
+  "risk_tags": ["cleanup_adjacent"],
+  "allowed_actions": ["list generated preview artifacts", "prepare a cleanup recommendation"],
+  "forbidden_actions": ["delete artifacts", "perform destructive cleanup"],
+  "required_evidence": ["bounded artifact list", "retention notes"],
+  "required_manifest": null,
+  "human_gate": "NONE",
+  "predicted_worker_capability": "operations",
+  "unknowns": [],
+  "assumptions": ["all artifacts are generated outputs"],
+  "next_safe_step": "Report the bounded artifact list for review"
+}

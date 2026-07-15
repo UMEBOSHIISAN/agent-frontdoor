@@ -147,6 +147,8 @@ _UNKNOWN_MUTATION_FORMS = (
     "rmdir",
     "unlink",
     "shred",
+    "erase",
+    "wipe",
     "chmod",
     "chown",
     "approve",
@@ -311,6 +313,8 @@ def test_unsafe_keyword_inflections_require_blocking(
         "rmdir the old directory",
         "unlink the old archive",
         "shred the obsolete export",
+        "erase archived records",
+        "wipe generated artifacts",
         "chmod 600 the credential file",
         "chown the application files",
         "Approve this proposal for execution",
@@ -323,6 +327,21 @@ def test_unsafe_command_and_authority_aliases_require_blocking(
     valid_card.update(human_request=human_request, human_gate="NONE")
 
     assert "blocking_gate_required" in issue_codes(validate_card(valid_card))
+
+
+@pytest.mark.parametrize(
+    "human_request",
+    [
+        "Review the approved local design document without implementing it",
+        "Research the authorized public API documentation",
+    ],
+)
+def test_descriptive_authority_words_do_not_require_blocking(
+    valid_card, human_request
+):
+    valid_card.update(human_request=human_request, human_gate="NONE")
+
+    assert validate_card(valid_card).valid
 
 
 @pytest.mark.parametrize(

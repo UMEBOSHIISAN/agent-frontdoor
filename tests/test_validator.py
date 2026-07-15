@@ -14,6 +14,138 @@ from frontdoor.validator import (
 )
 
 
+_UNKNOWN_MUTATION_FORMS = (
+    "write",
+    "writes",
+    "writing",
+    "wrote",
+    "written",
+    "edit",
+    "edits",
+    "editing",
+    "edited",
+    "modify",
+    "modifies",
+    "modifying",
+    "modified",
+    "update",
+    "updates",
+    "updating",
+    "updated",
+    "change",
+    "changes",
+    "changing",
+    "changed",
+    "create",
+    "creates",
+    "creating",
+    "created",
+    "delete",
+    "deletes",
+    "deleting",
+    "deleted",
+    "remove",
+    "removes",
+    "removing",
+    "removed",
+    "purge",
+    "purges",
+    "purging",
+    "purged",
+    "destroy",
+    "destroys",
+    "destroying",
+    "destroyed",
+    "deploy",
+    "deploys",
+    "deploying",
+    "deployed",
+    "deployment",
+    "deployments",
+    "publish",
+    "publishes",
+    "publishing",
+    "published",
+    "execute",
+    "executes",
+    "executing",
+    "executed",
+    "run",
+    "runs",
+    "running",
+    "ran",
+    "install",
+    "installs",
+    "installing",
+    "installed",
+    "configure",
+    "configures",
+    "configuring",
+    "configured",
+    "mutate",
+    "mutates",
+    "mutating",
+    "mutated",
+    "apply",
+    "applies",
+    "applying",
+    "applied",
+    "commit",
+    "commits",
+    "committing",
+    "committed",
+    "push",
+    "pushes",
+    "pushing",
+    "pushed",
+    "send",
+    "sends",
+    "sending",
+    "sent",
+    "post",
+    "posts",
+    "posting",
+    "posted",
+    "upload",
+    "uploads",
+    "uploading",
+    "uploaded",
+    "rename",
+    "renames",
+    "renaming",
+    "renamed",
+    "move",
+    "moves",
+    "moving",
+    "moved",
+    "copy",
+    "copies",
+    "copying",
+    "copied",
+    "touch",
+    "touches",
+    "touching",
+    "touched",
+    "replace",
+    "replaces",
+    "replacing",
+    "replaced",
+    "truncate",
+    "truncates",
+    "truncating",
+    "truncated",
+    "append",
+    "appends",
+    "appending",
+    "appended",
+    "overwrite",
+    "overwrites",
+    "overwriting",
+    "overwrote",
+    "overwritten",
+)
+
+
 @pytest.fixture
 def valid_card():
     return {
@@ -158,6 +290,30 @@ def test_unsafe_keyword_inflections_require_blocking(
     valid_card, human_request
 ):
     valid_card.update(human_request=human_request, human_gate="CONFIRM")
+
+    assert "blocking_gate_required" in issue_codes(validate_card(valid_card))
+
+
+@pytest.mark.parametrize(
+    "human_request",
+    [
+        "Plan a future deployment",
+        "Plan future deployments",
+        "Post the draft externally",
+        "Posts the draft externally",
+        "Posted the draft externally",
+        "Posting the draft externally",
+        "Externally post the draft",
+        "Create an external post",
+        "Create an external posting",
+        "Create an external publication",
+        "Create external publications",
+    ],
+)
+def test_deployment_and_external_publication_require_blocking(
+    valid_card, human_request
+):
+    valid_card.update(human_request=human_request, human_gate="NONE")
 
     assert "blocking_gate_required" in issue_codes(validate_card(valid_card))
 
@@ -314,6 +470,28 @@ def test_unknown_rejects_safe_next_step_followed_by_mutation(valid_card):
     assert not result.valid
     assert "unknown_mutation_forbidden" in issue_codes(result)
     assert "$.next_safe_step" in {issue.path for issue in result.issues}
+
+
+@pytest.mark.parametrize("mutation", _UNKNOWN_MUTATION_FORMS)
+@pytest.mark.parametrize(
+    ("field", "safe_prefix", "expected_path"),
+    [
+        ("allowed_actions", "read files then", "$.allowed_actions[0]"),
+        ("next_safe_step", "Inspect files then", "$.next_safe_step"),
+    ],
+)
+def test_unknown_rejects_every_mutation_form_after_safe_leading_verb(
+    valid_card, mutation, field, safe_prefix, expected_path
+):
+    make_unknown(valid_card)
+    value = f"{safe_prefix} {mutation} the target"
+    valid_card[field] = [value] if field == "allowed_actions" else value
+
+    result = validate_card(valid_card)
+
+    assert not result.valid
+    assert "unknown_mutation_forbidden" in issue_codes(result)
+    assert expected_path in {issue.path for issue in result.issues}
 
 
 def test_non_unknown_implementation_can_mix_read_and_write(valid_card):

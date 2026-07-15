@@ -54,7 +54,7 @@ _BLOCKING_RISK_TAGS = frozenset(
 _UNSAFE_PATTERNS = tuple(
     re.compile(pattern)
     for pattern in (
-        r"\bdeploy(?:ment|ed|ing|s)?\b",
+        r"\bdeploy(?:s|ed|ing|ments?)?\b",
         r"\bprod(?:uction)?\b",
         r"\b(?:scheduler|schedule|scheduled|scheduling|cron)\b",
         r"\b(?:secrets?|credentials?|passwords?|api (?:keys?|tokens?)|"
@@ -65,7 +65,9 @@ _UNSAFE_PATTERNS = tuple(
         r"purg(?:e|es|ed|ing)|remove|removal|removing|removed|"
         r"destructive (?:cleanup|clean up))\b",
         r"\b(?:ssot|source of truth)\b",
-        r"\b(?:publish|published|publishing|external publish|go live)\b",
+        r"\b(?:publish(?:es|ed|ing)?|go live)\b",
+        r"\b(?:external(?:ly)? (?:post(?:s|ed|ing)?|publications?)|"
+        r"post(?:s|ed|ing)?(?: \w+){0,4} externally)\b",
         r"\b(?:authority promotion|promote|promoted|promoting|"
         r"grant authority|grant permission|elevate permission)\b",
     )
@@ -97,7 +99,9 @@ _UNKNOWN_MUTATION_PATTERN = re.compile(
     r"delet\w*|remov\w*|purg\w*|destroy\w*|deploy\w*|publish\w*|"
     r"execut\w*|run|runs|running|ran|install\w*|configur\w*|mutat\w*|"
     r"apply|applies|applied|applying|commit\w*|push\w*|send|sends|sending|"
-    r"sent|post\w*|upload\w*)\b"
+    r"sent|post\w*|upload\w*|renam\w*|mov(?:e|es|ed|ing)|"
+    r"cop(?:y|ies|ied|ying)|touch\w*|replac\w*|truncat\w*|append\w*|"
+    r"overwrit\w*|overwrote)\b"
 )
 
 

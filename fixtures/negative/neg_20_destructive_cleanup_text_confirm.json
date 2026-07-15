@@ -1,0 +1,20 @@
+{
+  "schema_version": "intake.v0",
+  "request_id": "negative-20",
+  "human_request": "Perform destructive cleanup of generated artifacts.",
+  "task_class": "OPERATIONS",
+  "risk_tags": [],
+  "allowed_actions": [
+    "inspect named inputs"
+  ],
+  "forbidden_actions": [
+    "mutate unrelated files"
+  ],
+  "required_evidence": [],
+  "required_manifest": null,
+  "human_gate": "CONFIRM",
+  "predicted_worker_capability": "operations",
+  "unknowns": [],
+  "assumptions": [],
+  "next_safe_step": "Inspect the named inputs"
+}

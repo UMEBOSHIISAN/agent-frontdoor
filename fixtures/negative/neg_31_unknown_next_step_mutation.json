@@ -1,0 +1,22 @@
+{
+  "schema_version": "intake.v0",
+  "request_id": "negative-31",
+  "human_request": "Clarify the unclear request.",
+  "task_class": "UNKNOWN",
+  "risk_tags": [],
+  "allowed_actions": [
+    "ask for clarification"
+  ],
+  "forbidden_actions": [
+    "mutate files"
+  ],
+  "required_evidence": [],
+  "required_manifest": null,
+  "human_gate": "BLOCKING",
+  "predicted_worker_capability": "none-until-clarified",
+  "unknowns": [
+    "The requested outcome is unclear"
+  ],
+  "assumptions": [],
+  "next_safe_step": "Install package"
+}

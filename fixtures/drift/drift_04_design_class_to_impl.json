@@ -1,0 +1,46 @@
+{
+  "before": {
+    "schema_version": "intake.v0",
+    "request_id": "drift-04-before",
+    "human_request": "Review the requested scope.",
+    "task_class": "DESIGN_REVIEW",
+    "risk_tags": [],
+    "allowed_actions": [
+      "review proposed design"
+    ],
+    "forbidden_actions": [
+      "mutate unrelated files"
+    ],
+    "required_evidence": [],
+    "required_manifest": null,
+    "human_gate": "NONE",
+    "predicted_worker_capability": "design-review",
+    "unknowns": [],
+    "assumptions": [],
+    "next_safe_step": "Inspect the named inputs"
+  },
+  "after": {
+    "schema_version": "intake.v0",
+    "request_id": "drift-04-after",
+    "human_request": "Review the requested scope.",
+    "task_class": "IMPLEMENTATION",
+    "risk_tags": [],
+    "allowed_actions": [
+      "review proposed design"
+    ],
+    "forbidden_actions": [
+      "mutate unrelated files"
+    ],
+    "required_evidence": [],
+    "required_manifest": null,
+    "human_gate": "NONE",
+    "predicted_worker_capability": "implementation",
+    "unknowns": [],
+    "assumptions": [],
+    "next_safe_step": "Inspect the named inputs"
+  },
+  "label": "drift",
+  "expected_codes": [
+    "design_to_implementation"
+  ]
+}

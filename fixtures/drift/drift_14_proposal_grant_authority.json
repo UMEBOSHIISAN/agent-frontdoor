@@ -1,0 +1,46 @@
+{
+  "before": {
+    "schema_version": "intake.v0",
+    "request_id": "drift-14-before",
+    "human_request": "Review the requested scope.",
+    "task_class": "DESIGN_REVIEW",
+    "risk_tags": [],
+    "allowed_actions": [
+      "prepare proposal for review"
+    ],
+    "forbidden_actions": [
+      "mutate unrelated files"
+    ],
+    "required_evidence": [],
+    "required_manifest": null,
+    "human_gate": "NONE",
+    "predicted_worker_capability": "design-review",
+    "unknowns": [],
+    "assumptions": [],
+    "next_safe_step": "Inspect the named inputs"
+  },
+  "after": {
+    "schema_version": "intake.v0",
+    "request_id": "drift-14-after",
+    "human_request": "Review the requested scope.",
+    "task_class": "DESIGN_REVIEW",
+    "risk_tags": [],
+    "allowed_actions": [
+      "prepare proposal for review"
+    ],
+    "forbidden_actions": [
+      "mutate unrelated files"
+    ],
+    "required_evidence": [],
+    "required_manifest": null,
+    "human_gate": "BLOCKING",
+    "predicted_worker_capability": "design-review",
+    "unknowns": [],
+    "assumptions": [],
+    "next_safe_step": "Grant authority"
+  },
+  "label": "drift",
+  "expected_codes": [
+    "proposal_to_authority_promotion"
+  ]
+}

@@ -1,0 +1,44 @@
+{
+  "before": {
+    "schema_version": "intake.v0",
+    "request_id": "drift-17-before",
+    "human_request": "Review the requested scope.",
+    "task_class": "AUDIT",
+    "risk_tags": [],
+    "allowed_actions": [
+      "read one named file"
+    ],
+    "forbidden_actions": [
+      "mutate unrelated files"
+    ],
+    "required_evidence": [],
+    "required_manifest": null,
+    "human_gate": "NONE",
+    "predicted_worker_capability": "audit",
+    "unknowns": [],
+    "assumptions": [],
+    "next_safe_step": "Report findings"
+  },
+  "after": {
+    "schema_version": "intake.v0",
+    "request_id": "drift-17-after",
+    "human_request": "Review the requested scope.",
+    "task_class": "AUDIT",
+    "risk_tags": [],
+    "allowed_actions": [
+      "read two named files"
+    ],
+    "forbidden_actions": [
+      "mutate unrelated files"
+    ],
+    "required_evidence": [],
+    "required_manifest": null,
+    "human_gate": "NONE",
+    "predicted_worker_capability": "audit",
+    "unknowns": [],
+    "assumptions": [],
+    "next_safe_step": "Report findings"
+  },
+  "label": "safe",
+  "expected_codes": []
+}

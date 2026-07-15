@@ -1,0 +1,44 @@
+{
+  "before": {
+    "schema_version": "intake.v0",
+    "request_id": "drift-18-before",
+    "human_request": "Review the requested scope.",
+    "task_class": "DESIGN_REVIEW",
+    "risk_tags": [],
+    "allowed_actions": [
+      "review proposal v1"
+    ],
+    "forbidden_actions": [
+      "mutate unrelated files"
+    ],
+    "required_evidence": [],
+    "required_manifest": null,
+    "human_gate": "NONE",
+    "predicted_worker_capability": "design-review",
+    "unknowns": [],
+    "assumptions": [],
+    "next_safe_step": "Report design findings"
+  },
+  "after": {
+    "schema_version": "intake.v0",
+    "request_id": "drift-18-after",
+    "human_request": "Review the requested scope.",
+    "task_class": "DESIGN_REVIEW",
+    "risk_tags": [],
+    "allowed_actions": [
+      "review proposal v2"
+    ],
+    "forbidden_actions": [
+      "mutate unrelated files"
+    ],
+    "required_evidence": [],
+    "required_manifest": null,
+    "human_gate": "NONE",
+    "predicted_worker_capability": "design-review",
+    "unknowns": [],
+    "assumptions": [],
+    "next_safe_step": "Report design findings"
+  },
+  "label": "safe",
+  "expected_codes": []
+}

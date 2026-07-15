@@ -1,0 +1,46 @@
+{
+  "before": {
+    "schema_version": "intake.v0",
+    "request_id": "drift-16-before",
+    "human_request": "Review the requested scope.",
+    "task_class": "IMPLEMENTATION",
+    "risk_tags": [],
+    "allowed_actions": [
+      "only src/frontdoor/validator.py"
+    ],
+    "forbidden_actions": [
+      "mutate unrelated files"
+    ],
+    "required_evidence": [],
+    "required_manifest": null,
+    "human_gate": "NONE",
+    "predicted_worker_capability": "implementation",
+    "unknowns": [],
+    "assumptions": [],
+    "next_safe_step": "Inspect the named inputs"
+  },
+  "after": {
+    "schema_version": "intake.v0",
+    "request_id": "drift-16-after",
+    "human_request": "Review the requested scope.",
+    "task_class": "IMPLEMENTATION",
+    "risk_tags": [],
+    "allowed_actions": [
+      "refactor unrelated modules"
+    ],
+    "forbidden_actions": [
+      "mutate unrelated files"
+    ],
+    "required_evidence": [],
+    "required_manifest": null,
+    "human_gate": "NONE",
+    "predicted_worker_capability": "implementation",
+    "unknowns": [],
+    "assumptions": [],
+    "next_safe_step": "Inspect the named inputs"
+  },
+  "label": "drift",
+  "expected_codes": [
+    "bounded_files_to_broad_refactor"
+  ]
+}

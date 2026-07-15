@@ -1,0 +1,20 @@
+{
+  "schema_version": "intake.v0",
+  "request_id": "negative-03",
+  "human_request": "Audit the named files and report findings.",
+  "task_class": "AUDIT",
+  "risk_tags": [],
+  "allowed_actions": [
+    "read named files"
+  ],
+  "forbidden_actions": [
+    "read named files"
+  ],
+  "required_evidence": [],
+  "required_manifest": null,
+  "human_gate": "NONE",
+  "predicted_worker_capability": "audit",
+  "unknowns": [],
+  "assumptions": [],
+  "next_safe_step": "Inspect the named inputs"
+}

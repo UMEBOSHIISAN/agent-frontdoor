@@ -1,0 +1,20 @@
+{
+  "schema_version": "intake.v0",
+  "request_id": "negative-38",
+  "human_request": "Research the documented alternatives.",
+  "task_class": "RESEARCH",
+  "risk_tags": "unknown",
+  "allowed_actions": [
+    "inspect named inputs"
+  ],
+  "forbidden_actions": [
+    "mutate unrelated files"
+  ],
+  "required_evidence": [],
+  "required_manifest": null,
+  "human_gate": "NONE",
+  "predicted_worker_capability": "research",
+  "unknowns": [],
+  "assumptions": [],
+  "next_safe_step": "Inspect the named inputs"
+}

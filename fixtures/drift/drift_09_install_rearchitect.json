@@ -1,0 +1,46 @@
+{
+  "before": {
+    "schema_version": "intake.v0",
+    "request_id": "drift-09-before",
+    "human_request": "Review the requested scope.",
+    "task_class": "INSTALLATION",
+    "risk_tags": [],
+    "allowed_actions": [
+      "install pinned dependency only"
+    ],
+    "forbidden_actions": [
+      "mutate unrelated files"
+    ],
+    "required_evidence": [],
+    "required_manifest": null,
+    "human_gate": "NONE",
+    "predicted_worker_capability": "installation",
+    "unknowns": [],
+    "assumptions": [],
+    "next_safe_step": "Inspect the named inputs"
+  },
+  "after": {
+    "schema_version": "intake.v0",
+    "request_id": "drift-09-after",
+    "human_request": "Review the requested scope.",
+    "task_class": "INSTALLATION",
+    "risk_tags": [],
+    "allowed_actions": [
+      "rearchitect the architecture"
+    ],
+    "forbidden_actions": [
+      "mutate unrelated files"
+    ],
+    "required_evidence": [],
+    "required_manifest": null,
+    "human_gate": "NONE",
+    "predicted_worker_capability": "installation",
+    "unknowns": [],
+    "assumptions": [],
+    "next_safe_step": "Inspect the named inputs"
+  },
+  "label": "drift",
+  "expected_codes": [
+    "install_to_architecture_migration"
+  ]
+}

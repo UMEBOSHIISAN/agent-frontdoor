@@ -1,0 +1,48 @@
+{
+  "before": {
+    "schema_version": "intake.v0",
+    "request_id": "drift-13-before",
+    "human_request": "Review the requested scope.",
+    "task_class": "DESIGN_REVIEW",
+    "risk_tags": [],
+    "allowed_actions": [
+      "review proposal"
+    ],
+    "forbidden_actions": [
+      "mutate unrelated files"
+    ],
+    "required_evidence": [],
+    "required_manifest": null,
+    "human_gate": "NONE",
+    "predicted_worker_capability": "design-review",
+    "unknowns": [],
+    "assumptions": [],
+    "next_safe_step": "Review proposal only"
+  },
+  "after": {
+    "schema_version": "intake.v0",
+    "request_id": "drift-13-after",
+    "human_request": "Review the requested scope.",
+    "task_class": "DESIGN_REVIEW",
+    "risk_tags": [
+      "authority_promotion"
+    ],
+    "allowed_actions": [
+      "review proposal"
+    ],
+    "forbidden_actions": [
+      "mutate unrelated files"
+    ],
+    "required_evidence": [],
+    "required_manifest": null,
+    "human_gate": "BLOCKING",
+    "predicted_worker_capability": "design-review",
+    "unknowns": [],
+    "assumptions": [],
+    "next_safe_step": "Review proposal only"
+  },
+  "label": "drift",
+  "expected_codes": [
+    "proposal_to_authority_promotion"
+  ]
+}

@@ -1,0 +1,20 @@
+{
+  "schema_version": "intake.v0",
+  "request_id": "negative-16",
+  "human_request": "Analyze the invoice charges and decide what to do.",
+  "task_class": "DATA_ANALYSIS",
+  "risk_tags": [],
+  "allowed_actions": [
+    "inspect named inputs"
+  ],
+  "forbidden_actions": [
+    "mutate unrelated files"
+  ],
+  "required_evidence": [],
+  "required_manifest": null,
+  "human_gate": "CONFIRM",
+  "predicted_worker_capability": "data-analysis",
+  "unknowns": [],
+  "assumptions": [],
+  "next_safe_step": "Inspect the named inputs"
+}

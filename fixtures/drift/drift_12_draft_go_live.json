@@ -1,0 +1,46 @@
+{
+  "before": {
+    "schema_version": "intake.v0",
+    "request_id": "drift-12-before",
+    "human_request": "Review the requested scope.",
+    "task_class": "CONTENT_DRAFT",
+    "risk_tags": [],
+    "allowed_actions": [
+      "draft local announcement"
+    ],
+    "forbidden_actions": [
+      "mutate unrelated files"
+    ],
+    "required_evidence": [],
+    "required_manifest": null,
+    "human_gate": "NONE",
+    "predicted_worker_capability": "content-draft",
+    "unknowns": [],
+    "assumptions": [],
+    "next_safe_step": "Prepare local draft"
+  },
+  "after": {
+    "schema_version": "intake.v0",
+    "request_id": "drift-12-after",
+    "human_request": "Review the requested scope.",
+    "task_class": "CONTENT_DRAFT",
+    "risk_tags": [],
+    "allowed_actions": [
+      "draft local announcement"
+    ],
+    "forbidden_actions": [
+      "mutate unrelated files"
+    ],
+    "required_evidence": [],
+    "required_manifest": null,
+    "human_gate": "BLOCKING",
+    "predicted_worker_capability": "content-draft",
+    "unknowns": [],
+    "assumptions": [],
+    "next_safe_step": "Go live"
+  },
+  "label": "drift",
+  "expected_codes": [
+    "draft_to_external_publish"
+  ]
+}

@@ -1,0 +1,20 @@
+{
+  "schema_version": "intake.v0",
+  "request_id": "negative-33",
+  "human_request": "Patch the named parser file.",
+  "task_class": "PATCH",
+  "risk_tags": [],
+  "allowed_actions": [
+    "inspect named inputs"
+  ],
+  "forbidden_actions": [
+    "mutate unrelated files"
+  ],
+  "required_evidence": [],
+  "required_manifest": null,
+  "human_gate": "NONE",
+  "predicted_worker_capability": "implementation",
+  "unknowns": [],
+  "assumptions": [],
+  "next_safe_step": "Inspect the named inputs"
+}

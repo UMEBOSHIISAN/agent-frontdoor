@@ -1,0 +1,22 @@
+{
+  "schema_version": "intake.v0",
+  "request_id": "negative-21",
+  "human_request": "Patch the canonical registry entry.",
+  "task_class": "IMPLEMENTATION",
+  "risk_tags": [
+    "ssot_mutation"
+  ],
+  "allowed_actions": [
+    "inspect named inputs"
+  ],
+  "forbidden_actions": [
+    "mutate unrelated files"
+  ],
+  "required_evidence": [],
+  "required_manifest": null,
+  "human_gate": "NONE",
+  "predicted_worker_capability": "implementation",
+  "unknowns": [],
+  "assumptions": [],
+  "next_safe_step": "Inspect the named inputs"
+}

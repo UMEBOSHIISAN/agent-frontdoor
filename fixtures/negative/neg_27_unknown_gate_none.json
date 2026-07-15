@@ -1,0 +1,22 @@
+{
+  "schema_version": "intake.v0",
+  "request_id": "negative-27",
+  "human_request": "Please handle this unclear request.",
+  "task_class": "UNKNOWN",
+  "risk_tags": [],
+  "allowed_actions": [
+    "ask for clarification"
+  ],
+  "forbidden_actions": [
+    "mutate files"
+  ],
+  "required_evidence": [],
+  "required_manifest": null,
+  "human_gate": "NONE",
+  "predicted_worker_capability": "none-until-clarified",
+  "unknowns": [
+    "The requested outcome is unclear"
+  ],
+  "assumptions": [],
+  "next_safe_step": "Ask the human to clarify the request"
+}

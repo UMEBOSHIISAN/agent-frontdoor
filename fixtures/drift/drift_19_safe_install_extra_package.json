@@ -1,0 +1,44 @@
+{
+  "before": {
+    "schema_version": "intake.v0",
+    "request_id": "drift-19-before",
+    "human_request": "Review the requested scope.",
+    "task_class": "INSTALLATION",
+    "risk_tags": [],
+    "allowed_actions": [
+      "install one local package"
+    ],
+    "forbidden_actions": [
+      "mutate unrelated files"
+    ],
+    "required_evidence": [],
+    "required_manifest": null,
+    "human_gate": "NONE",
+    "predicted_worker_capability": "installation",
+    "unknowns": [],
+    "assumptions": [],
+    "next_safe_step": "Inspect package metadata"
+  },
+  "after": {
+    "schema_version": "intake.v0",
+    "request_id": "drift-19-after",
+    "human_request": "Review the requested scope.",
+    "task_class": "INSTALLATION",
+    "risk_tags": [],
+    "allowed_actions": [
+      "install two local packages"
+    ],
+    "forbidden_actions": [
+      "mutate unrelated files"
+    ],
+    "required_evidence": [],
+    "required_manifest": null,
+    "human_gate": "NONE",
+    "predicted_worker_capability": "installation",
+    "unknowns": [],
+    "assumptions": [],
+    "next_safe_step": "Inspect package metadata"
+  },
+  "label": "safe",
+  "expected_codes": []
+}

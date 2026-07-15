@@ -1,0 +1,20 @@
+{
+  "schema_version": "intake.v0",
+  "request_id": "negative-12",
+  "human_request": "Prepare an access-policy patch.",
+  "task_class": "IMPLEMENTATION",
+  "risk_tags": [],
+  "allowed_actions": [
+    "update authentication permissions"
+  ],
+  "forbidden_actions": [
+    "mutate unrelated files"
+  ],
+  "required_evidence": [],
+  "required_manifest": null,
+  "human_gate": "CONFIRM",
+  "predicted_worker_capability": "implementation",
+  "unknowns": [],
+  "assumptions": [],
+  "next_safe_step": "Inspect the named inputs"
+}

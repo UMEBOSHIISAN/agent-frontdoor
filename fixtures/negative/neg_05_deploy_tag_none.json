@@ -1,0 +1,22 @@
+{
+  "schema_version": "intake.v0",
+  "request_id": "negative-05",
+  "human_request": "Prepare the release candidate.",
+  "task_class": "OPERATIONS",
+  "risk_tags": [
+    "deploy"
+  ],
+  "allowed_actions": [
+    "inspect named inputs"
+  ],
+  "forbidden_actions": [
+    "mutate unrelated files"
+  ],
+  "required_evidence": [],
+  "required_manifest": null,
+  "human_gate": "NONE",
+  "predicted_worker_capability": "operations",
+  "unknowns": [],
+  "assumptions": [],
+  "next_safe_step": "Inspect the named inputs"
+}

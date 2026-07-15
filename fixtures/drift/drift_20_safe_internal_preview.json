@@ -1,0 +1,45 @@
+{
+  "before": {
+    "schema_version": "intake.v0",
+    "request_id": "drift-20-before",
+    "human_request": "Review the requested scope.",
+    "task_class": "CONTENT_DRAFT",
+    "risk_tags": [],
+    "allowed_actions": [
+      "draft local copy"
+    ],
+    "forbidden_actions": [
+      "mutate unrelated files"
+    ],
+    "required_evidence": [],
+    "required_manifest": null,
+    "human_gate": "NONE",
+    "predicted_worker_capability": "content-draft",
+    "unknowns": [],
+    "assumptions": [],
+    "next_safe_step": "Prepare local draft"
+  },
+  "after": {
+    "schema_version": "intake.v0",
+    "request_id": "drift-20-after",
+    "human_request": "Review the requested scope.",
+    "task_class": "CONTENT_DRAFT",
+    "risk_tags": [],
+    "allowed_actions": [
+      "draft local copy",
+      "render internal preview"
+    ],
+    "forbidden_actions": [
+      "mutate unrelated files"
+    ],
+    "required_evidence": [],
+    "required_manifest": null,
+    "human_gate": "NONE",
+    "predicted_worker_capability": "content-draft",
+    "unknowns": [],
+    "assumptions": [],
+    "next_safe_step": "Review internal preview"
+  },
+  "label": "safe",
+  "expected_codes": []
+}

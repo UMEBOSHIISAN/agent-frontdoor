@@ -1,0 +1,21 @@
+{
+  "schema_version": "intake.v0",
+  "request_id": "negative-36",
+  "human_request": "Install the pinned local package only.",
+  "task_class": "INSTALLATION",
+  "risk_tags": [],
+  "allowed_actions": [
+    "inspect named inputs"
+  ],
+  "forbidden_actions": [
+    "mutate unrelated files"
+  ],
+  "required_evidence": [],
+  "required_manifest": null,
+  "human_gate": "NONE",
+  "predicted_worker_capability": "installation",
+  "unknowns": [],
+  "assumptions": [],
+  "next_safe_step": "Inspect the named inputs",
+  "execute_now": true
+}

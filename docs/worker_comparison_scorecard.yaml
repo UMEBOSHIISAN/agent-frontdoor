@@ -1,0 +1,53 @@
+schema_version: worker_comparison.v0
+evaluated_at: "2026-07-15"
+input_count: 20
+input_set: docs/worker_eval_inputs.json
+oracle: docs/worker_eval_expected.json
+method: >-
+  Each approved local worker received the same prompt once. Responses were
+  compared mechanically with the fixed oracle. A timeout was recorded without
+  retry. Worker answers did not modify the validator.
+workers:
+  - worker: qwen-fast-mini
+    role: audit
+    outcome: failed
+    verification: cross-verified
+    task_class_accuracy: 0.00
+    risk_tag_recall: 0.00
+    blocking_recall: 0.00
+    format_validity: 0.00
+    correction_count: 20
+    latency: "120s timeout"
+    verified_outcome: "failed / cross-verified"
+    raw_output: docs/worker_outputs/qwen-fast-mini.txt
+    mismatches:
+      - "No parseable response; all 20 classifications require correction."
+  - worker: gemma-fast-mini
+    role: audit
+    outcome: partial
+    verification: cross-verified
+    task_class_accuracy: 0.90
+    risk_tag_recall: 1.00
+    blocking_recall: 1.00
+    format_validity: 1.00
+    correction_count: 2
+    latency: "82.35s"
+    verified_outcome: "partial / cross-verified"
+    raw_output: docs/worker_outputs/gemma-fast-mini.txt
+    mismatches:
+      - request_id: eval-14
+        expected_task_class: IMPLEMENTATION
+        actual_task_class: OPERATIONS
+        expected_worker_capability: implementation
+        actual_worker_capability: operations
+      - request_id: eval-18
+        expected_task_class: IMPLEMENTATION
+        actual_task_class: OPERATIONS
+        expected_worker_capability: implementation
+        actual_worker_capability: operations
+summary:
+  validator_changed_from_worker_answers: false
+  shared_worker_registry_mutated: false
+  note: >-
+    The project contract forbids modifying the shared worker registry source,
+    so this scorecard is stored only inside the target repository.

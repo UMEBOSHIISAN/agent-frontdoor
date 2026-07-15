@@ -1,0 +1,169 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Agent Frontdoor v0.1",
+  "description": "Pre-flight contract for AI agent task dispatch. Validates task classification, risk assessment, authority requirements, and worker assignment before any agent action is taken.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "task_id",
+    "timestamp",
+    "input_summary",
+    "task_class",
+    "risk_tags",
+    "predicted_worker",
+    "predicted_confidence",
+    "allowed_actions",
+    "forbidden_actions",
+    "required_manifest",
+    "human_gate"
+  ],
+  "properties": {
+    "schema": {
+      "type": "string",
+      "const": "agent-frontdoor.v0.1",
+      "description": "Schema identifier and version"
+    },
+    "task_id": {
+      "type": "string",
+      "description": "Unique task identifier. Recommended format: YYYYMMDD_slug"
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 timestamp of intake"
+    },
+    "input_summary": {
+      "type": "string",
+      "maxLength": 500,
+      "description": "Short summary of the task request (max 500 chars)"
+    },
+    "task_class": {
+      "type": "string",
+      "description": "Task classification. Determines routing and gate requirements.",
+      "enum": [
+        "READ_ONLY_AUDIT",
+        "STATUS_CLASSIFICATION",
+        "DESIGN_REVIEW",
+        "IMPLEMENTATION",
+        "TEST_VALIDATION",
+        "CLEANUP_PLANNING",
+        "RETENTION_DECISION",
+        "DELETE_ARCHIVE_REQUEST",
+        "DELETE_ARCHIVE_APPROVED",
+        "DELETE_ARCHIVE_EXECUTION",
+        "DEPLOYMENT",
+        "SECURITY_POLICY",
+        "HOOK_SANDBOX",
+        "SSOT_MUTATION",
+        "WORKER_DISPATCH",
+        "UNKNOWN"
+      ]
+    },
+    "task_subclass": {
+      "type": ["string", "null"],
+      "description": "Optional finer-grained classification within task_class"
+    },
+    "risk_tags": {
+      "type": "array",
+      "description": "Risk signals that affect routing and gate requirements. Multiple tags may apply.",
+      "items": {
+        "type": "string",
+        "enum": [
+          "cleanup_adjacent",
+          "deletion_sensitive",
+          "retention_decision",
+          "manifest_required",
+          "authority_promotion_risk",
+          "scope_drift_risk",
+          "worker_substitution_risk",
+          "ssot_mutation_risk",
+          "hook_sandbox_risk",
+          "scheduler_risk",
+          "deploy_risk",
+          "secret_risk",
+          "execution_gate_required",
+          "human_approval_required",
+          "stale_authority_risk"
+        ]
+      }
+    },
+    "predicted_worker": {
+      "type": "array",
+      "items": { "type": "string" },
+      "minItems": 1,
+      "description": "Predicted worker capability labels (e.g. 'local-classifier-worker', 'architect-review-worker', 'implementation-worker', 'none-until-approval')"
+    },
+    "predicted_confidence": {
+      "type": "string",
+      "enum": ["low", "medium", "high"],
+      "description": "Confidence in task_class and predicted_worker assignment"
+    },
+    "allowed_actions": {
+      "type": "array",
+      "items": { "type": "string" },
+      "minItems": 1,
+      "description": "Explicit list of actions the worker is permitted to take"
+    },
+    "forbidden_actions": {
+      "type": "array",
+      "items": { "type": "string" },
+      "minItems": 1,
+      "description": "Explicit list of actions the worker must not take"
+    },
+    "required_evidence": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Evidence items that must be present before the task can proceed"
+    },
+    "required_manifest": {
+      "type": "string",
+      "enum": ["none", "dedupe_manifest", "diff_manifest", "execution_manifest", "approval_manifest"],
+      "description": "Type of manifest required before execution"
+    },
+    "human_gate": {
+      "type": "string",
+      "enum": ["none", "required", "blocking"],
+      "description": "Human approval requirement. 'blocking' means the task cannot proceed without explicit human sign-off."
+    },
+    "actual_worker": {
+      "type": ["array", "null"],
+      "items": { "type": "string" },
+      "description": "Actual worker(s) used after dispatch. Null if not yet dispatched."
+    },
+    "substitution_reason": {
+      "type": ["string", "null"],
+      "description": "Reason if actual_worker differs from predicted_worker"
+    },
+    "routing_deviation": {
+      "type": "boolean",
+      "description": "True if actual_worker differs from predicted_worker"
+    },
+    "boundary_drift": {
+      "type": "boolean",
+      "description": "True if the worker exceeded the allowed_actions boundary"
+    },
+    "boundary_drift_reason": {
+      "type": ["string", "null"],
+      "description": "Description of boundary drift if it occurred"
+    },
+    "unknowns": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Unresolved uncertainties at intake time"
+    },
+    "assumptions": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Assumptions made during classification that require verification"
+    },
+    "next_safe_step": {
+      "type": "string",
+      "description": "Recommended next action given current task state"
+    },
+    "ledger_note": {
+      "type": "string",
+      "description": "Free-form note for ledger/audit purposes"
+    }
+  }
+}

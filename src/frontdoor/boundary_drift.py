@@ -24,8 +24,12 @@ class DriftReport:
 
 
 _MUTATION_PATTERN = re.compile(
-    r"\b(?:apply|change|create|edit|implement|modify|mutate|patch|refactor|"
-    r"replace|update|write)(?:d|ing|s)?\b"
+    r"\b(?:appl(?:y|ies|ied|ying)|chang(?:e|es|ed|ing)|"
+    r"creat(?:e|es|ed|ing)|edit(?:s|ed|ing)?|"
+    r"implement(?:s|ed|ing)?|modif(?:y|ies|ied|ying)|"
+    r"mutat(?:e|es|ed|ing)|patch(?:es|ed|ing)?|"
+    r"refactor(?:s|ed|ing)?|replac(?:e|es|ed|ing)|"
+    r"updat(?:e|es|ed|ing)|writ(?:e|es|ing|ten)|wrote)\b"
 )
 _ARCHITECTURE_MIGRATION_PATTERN = re.compile(
     r"\b(?:architecture (?:migration|redesign|refactor)|"
@@ -67,7 +71,7 @@ _BROAD_SCOPE_PATTERNS = tuple(
 
 def _normalize_text(value: str) -> str:
     return " ".join(
-        part for part in re.split(r"[^\w]+", value.casefold()) if part
+        part for part in re.split(r"[^\w/.]+", value.casefold()) if part
     )
 
 

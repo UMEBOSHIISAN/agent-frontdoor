@@ -157,3 +157,47 @@ def test_safe_expansion_has_no_drift_and_inputs_are_not_mutated():
     assert detect_boundary_drift(before, after) == DriftReport(False, ())
     assert before == original_before
     assert after == original_after
+
+
+@pytest.mark.parametrize(
+    "action",
+    [
+        "recommend that source files be edited",
+        "recommend that the design be implemented",
+        "recommend that the module be patched",
+        "recommend that the configuration be modified",
+        "recommend that the report be written",
+    ],
+)
+def test_audit_to_mutation_detects_recommendation_inflections(action):
+    before = _card(allowed_actions=["read source files"])
+    after = _card(allowed_actions=[action])
+
+    report = detect_boundary_drift(before, after)
+
+    assert report.drifted
+    assert "audit_to_mutation" in {
+        finding.code for finding in report.findings
+    }
+
+
+def test_bounded_path_to_broad_refactor_survives_normalization():
+    before = _card(
+        task_class="IMPLEMENTATION",
+        predicted_worker_capability="implementation",
+        allowed_actions=["only src/frontdoor/cli.py"],
+        next_safe_step="Inspect the requested scope",
+    )
+    after = _card(
+        task_class="IMPLEMENTATION",
+        predicted_worker_capability="implementation",
+        allowed_actions=["perform a broad refactor"],
+        next_safe_step="Review the requested expansion",
+    )
+
+    report = detect_boundary_drift(before, after)
+
+    assert report.drifted
+    assert "bounded_files_to_broad_refactor" in {
+        finding.code for finding in report.findings
+    }

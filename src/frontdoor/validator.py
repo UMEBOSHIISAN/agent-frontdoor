@@ -57,11 +57,13 @@ _UNSAFE_PATTERNS = tuple(
         r"\bdeploy(?:ment|ed|ing|s)?\b",
         r"\bprod(?:uction)?\b",
         r"\b(?:scheduler|schedule|scheduled|scheduling|cron)\b",
-        r"\b(?:secret|credentials?|passwords?|api keys?|access tokens?)\b",
+        r"\b(?:secrets?|credentials?|passwords?|api (?:keys?|tokens?)|"
+        r"access tokens?)\b",
         r"\b(?:auth|authentication|authorization|logins?|permissions?)\b",
         r"\b(?:billing|invoices?|payments?|charges?)\b",
-        r"\b(?:delete|deletion|deleting|deleted|destroy|purge|"
-        r"remove|removal|removing|removed|cleanup|clean up)\b",
+        r"\b(?:delete|deletion|deleting|deleted|destroy(?:s|ed|ing)?|"
+        r"purg(?:e|es|ed|ing)|remove|removal|removing|removed|"
+        r"destructive (?:cleanup|clean up))\b",
         r"\b(?:ssot|source of truth)\b",
         r"\b(?:publish|published|publishing|external publish|go live)\b",
         r"\b(?:authority promotion|promote|promoted|promoting|"
@@ -69,12 +71,26 @@ _UNSAFE_PATTERNS = tuple(
     )
 )
 
-_MUTATION_PATTERN = re.compile(
-    r"\b(?:writ\w*|wrote|edit\w*|modif\w*|updat\w*|chang\w*|creat\w*|"
-    r"delet\w*|remov\w*|purg\w*|destroy\w*|deploy\w*|publish\w*|"
-    r"execut\w*|run|runs|running|ran|install\w*|configur\w*|mutat\w*|"
-    r"apply|applies|applied|applying|commit\w*|push\w*|send|sends|sending|"
-    r"sent|post\w*|upload\w*)\b"
+_UNKNOWN_SAFE_VERBS = frozenset(
+    {
+        "ask",
+        "clarify",
+        "read",
+        "inspect",
+        "review",
+        "report",
+        "analyze",
+        "classify",
+        "list",
+        "summarize",
+        "identify",
+        "describe",
+        "explain",
+        "compare",
+        "validate",
+        "check",
+        "wait",
+    }
 )
 
 
@@ -119,8 +135,9 @@ def _contains_unsafe_keyword(value: str) -> bool:
     return any(pattern.search(text) for pattern in _UNSAFE_PATTERNS)
 
 
-def _contains_mutation(value: str) -> bool:
-    return bool(_MUTATION_PATTERN.search(_searchable_text(value)))
+def _is_unknown_action_safe(value: str) -> bool:
+    words = _searchable_text(value).split()
+    return bool(words) and words[0] in _UNKNOWN_SAFE_VERBS
 
 
 def _semantic_issues(card: Mapping[str, Any]) -> list[ValidationIssue]:
@@ -183,7 +200,11 @@ def _semantic_issues(card: Mapping[str, Any]) -> list[ValidationIssue]:
             )
 
         unknowns = card.get("unknowns")
-        if not isinstance(unknowns, list) or not unknowns:
+        has_stated_unknown = isinstance(unknowns, list) and any(
+            isinstance(unknown, str) and unknown.strip()
+            for unknown in unknowns
+        )
+        if not has_stated_unknown:
             issues.append(
                 ValidationIssue(
                     code="unknown_details_required",
@@ -194,20 +215,29 @@ def _semantic_issues(card: Mapping[str, Any]) -> list[ValidationIssue]:
 
         if isinstance(allowed_actions, list):
             for index, action in enumerate(allowed_actions):
-                if isinstance(action, str) and _contains_mutation(action):
+                if isinstance(action, str) and not _is_unknown_action_safe(action):
                     issues.append(
                         ValidationIssue(
                             code="unknown_mutation_forbidden",
-                            message="UNKNOWN tasks cannot allow mutation actions.",
+                            message=(
+                                "UNKNOWN tasks may only allow explicitly "
+                                "non-mutating actions."
+                            ),
                             path=f"$.allowed_actions[{index}]",
                         )
                     )
 
-        if isinstance(next_safe_step, str) and _contains_mutation(next_safe_step):
+        if (
+            isinstance(next_safe_step, str)
+            and not _is_unknown_action_safe(next_safe_step)
+        ):
             issues.append(
                 ValidationIssue(
                     code="unknown_mutation_forbidden",
-                    message="UNKNOWN tasks cannot name a mutating next step.",
+                    message=(
+                        "UNKNOWN tasks may only name an explicitly "
+                        "non-mutating next step."
+                    ),
                     path="$.next_safe_step",
                 )
             )

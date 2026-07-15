@@ -144,6 +144,43 @@ def test_unsafe_keyword_matching_is_case_insensitive(valid_card):
     assert "blocking_gate_required" in issue_codes(validate_card(valid_card))
 
 
+@pytest.mark.parametrize(
+    "human_request",
+    [
+        "Rotate all secrets",
+        "Rotate the API token",
+        "Rotate the API tokens",
+        "Start destroying obsolete records",
+        "Begin purging obsolete records",
+    ],
+)
+def test_unsafe_keyword_inflections_require_blocking(
+    valid_card, human_request
+):
+    valid_card.update(human_request=human_request, human_gate="CONFIRM")
+
+    assert "blocking_gate_required" in issue_codes(validate_card(valid_card))
+
+
+def test_cleanup_adjacent_language_does_not_require_blocking(valid_card):
+    valid_card.update(
+        human_request="Plan cleanup of generated artifacts",
+        risk_tags=["cleanup_adjacent"],
+        human_gate="NONE",
+    )
+
+    assert validate_card(valid_card).valid
+
+
+def test_destructive_cleanup_language_requires_blocking(valid_card):
+    valid_card.update(
+        human_request="Perform destructive cleanup of old logs",
+        human_gate="CONFIRM",
+    )
+
+    assert "blocking_gate_required" in issue_codes(validate_card(valid_card))
+
+
 def test_forbidden_actions_are_not_scanned_for_unsafe_intent(valid_card):
     valid_card["forbidden_actions"] = [
         "deploy_to_production",
@@ -181,8 +218,27 @@ def test_unknown_requires_at_least_one_unknown(valid_card):
     )
 
 
-@pytest.mark.parametrize("action", ["modify_config", "writing files"])
-def test_unknown_forbids_mutation_actions(valid_card, action):
+def test_unknown_requires_at_least_one_nonblank_unknown(valid_card):
+    make_unknown(valid_card)
+    valid_card["unknowns"] = ["", "   "]
+
+    assert "unknown_details_required" in issue_codes(
+        validate_card(valid_card)
+    )
+
+
+@pytest.mark.parametrize(
+    "action",
+    [
+        "rename_files",
+        "move_files",
+        "copy_files",
+        "touch_file",
+        "replace_config",
+        "truncate_log",
+    ],
+)
+def test_unknown_rejects_actions_outside_safe_allowlist(valid_card, action):
     make_unknown(valid_card)
     valid_card["allowed_actions"] = [action]
 
@@ -191,13 +247,49 @@ def test_unknown_forbids_mutation_actions(valid_card, action):
     )
 
 
-def test_unknown_forbids_mutating_next_step(valid_card):
+@pytest.mark.parametrize(
+    "action",
+    [
+        "ask_human",
+        "clarify_request",
+        "read_files",
+        "inspect_files",
+        "review_input",
+        "report_findings",
+        "analyze_data",
+        "classify_request",
+        "list_files",
+        "summarize_input",
+        "identify_unknowns",
+        "describe_state",
+        "explain_issue",
+        "compare_inputs",
+        "validate_schema",
+        "check_status",
+        "wait_for_human",
+    ],
+)
+def test_unknown_accepts_explicitly_safe_actions(valid_card, action):
     make_unknown(valid_card)
-    valid_card["next_safe_step"] = "Write the requested configuration"
+    valid_card["allowed_actions"] = [action]
+
+    assert validate_card(valid_card).valid
+
+
+def test_unknown_rejects_next_step_outside_safe_allowlist(valid_card):
+    make_unknown(valid_card)
+    valid_card["next_safe_step"] = "Move the requested files"
 
     assert "unknown_mutation_forbidden" in issue_codes(
         validate_card(valid_card)
     )
+
+
+def test_unknown_accepts_next_step_from_safe_allowlist(valid_card):
+    make_unknown(valid_card)
+    valid_card["next_safe_step"] = "Inspect the requested files"
+
+    assert validate_card(valid_card).valid
 
 
 def test_same_normalized_action_cannot_be_allowed_and_forbidden(valid_card):

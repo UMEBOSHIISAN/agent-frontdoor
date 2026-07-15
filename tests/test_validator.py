@@ -276,6 +276,19 @@ def test_unknown_accepts_explicitly_safe_actions(valid_card, action):
     assert validate_card(valid_card).valid
 
 
+def test_unknown_rejects_safe_action_followed_by_mutation(valid_card):
+    make_unknown(valid_card)
+    valid_card["allowed_actions"] = ["read files then write changes"]
+
+    result = validate_card(valid_card)
+
+    assert not result.valid
+    assert "unknown_mutation_forbidden" in issue_codes(result)
+    assert "$.allowed_actions[0]" in {
+        issue.path for issue in result.issues
+    }
+
+
 def test_unknown_rejects_next_step_outside_safe_allowlist(valid_card):
     make_unknown(valid_card)
     valid_card["next_safe_step"] = "Move the requested files"
@@ -288,6 +301,28 @@ def test_unknown_rejects_next_step_outside_safe_allowlist(valid_card):
 def test_unknown_accepts_next_step_from_safe_allowlist(valid_card):
     make_unknown(valid_card)
     valid_card["next_safe_step"] = "Inspect the requested files"
+
+    assert validate_card(valid_card).valid
+
+
+def test_unknown_rejects_safe_next_step_followed_by_mutation(valid_card):
+    make_unknown(valid_card)
+    valid_card["next_safe_step"] = "Inspect files then modify source"
+
+    result = validate_card(valid_card)
+
+    assert not result.valid
+    assert "unknown_mutation_forbidden" in issue_codes(result)
+    assert "$.next_safe_step" in {issue.path for issue in result.issues}
+
+
+def test_non_unknown_implementation_can_mix_read_and_write(valid_card):
+    valid_card.update(
+        task_class="IMPLEMENTATION",
+        predicted_worker_capability="implementation",
+        allowed_actions=["read files then write changes"],
+        next_safe_step="Write the bounded changes",
+    )
 
     assert validate_card(valid_card).valid
 

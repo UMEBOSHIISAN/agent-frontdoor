@@ -92,6 +92,13 @@ _UNKNOWN_SAFE_VERBS = frozenset(
         "wait",
     }
 )
+_UNKNOWN_MUTATION_PATTERN = re.compile(
+    r"\b(?:writ\w*|wrote|edit\w*|modif\w*|updat\w*|chang\w*|creat\w*|"
+    r"delet\w*|remov\w*|purg\w*|destroy\w*|deploy\w*|publish\w*|"
+    r"execut\w*|run|runs|running|ran|install\w*|configur\w*|mutat\w*|"
+    r"apply|applies|applied|applying|commit\w*|push\w*|send|sends|sending|"
+    r"sent|post\w*|upload\w*)\b"
+)
 
 
 def _json_path(parts: Any) -> str:
@@ -136,8 +143,13 @@ def _contains_unsafe_keyword(value: str) -> bool:
 
 
 def _is_unknown_action_safe(value: str) -> bool:
-    words = _searchable_text(value).split()
-    return bool(words) and words[0] in _UNKNOWN_SAFE_VERBS
+    text = _searchable_text(value)
+    words = text.split()
+    return (
+        bool(words)
+        and words[0] in _UNKNOWN_SAFE_VERBS
+        and not _UNKNOWN_MUTATION_PATTERN.search(text)
+    )
 
 
 def _semantic_issues(card: Mapping[str, Any]) -> list[ValidationIssue]:

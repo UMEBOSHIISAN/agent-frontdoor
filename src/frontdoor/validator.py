@@ -59,17 +59,20 @@ _UNSAFE_PATTERNS = tuple(
         r"\b(?:scheduler|schedule|scheduled|scheduling|cron)\b",
         r"\b(?:secrets?|credentials?|passwords?|api (?:keys?|tokens?)|"
         r"access tokens?)\b",
-        r"\b(?:auth|authentication|authorization|logins?|permissions?)\b",
+        r"\b(?:auth|authentication|authorization|logins?|permissions?|"
+        r"chmod|chown)\b",
         r"\b(?:billing|invoices?|payments?|charges?)\b",
         r"\b(?:delete|deletion|deleting|deleted|destroy(?:s|ed|ing)?|"
         r"purg(?:e|es|ed|ing)|remove|removal|removing|removed|"
+        r"rm|rmdir|unlink|shred|"
         r"destructive (?:cleanup|clean up))\b",
         r"\b(?:ssot|source of truth)\b",
         r"\b(?:publish(?:es|ed|ing)?|go live)\b",
         r"\b(?:external(?:ly)? (?:post(?:s|ed|ing)?|publications?)|"
         r"post(?:s|ed|ing)?(?: \w+){0,4} externally)\b",
         r"\b(?:authority promotion|promote|promoted|promoting|"
-        r"grant authority|grant permission|elevate permission)\b",
+        r"grant authority|grant permission|elevate permission|"
+        r"approv(?:e|es|ed|ing)|authoriz(?:e|es|ed|ing))\b",
     )
 )
 
@@ -101,7 +104,8 @@ _UNKNOWN_MUTATION_PATTERN = re.compile(
     r"apply|applies|applied|applying|commit\w*|push\w*|send|sends|sending|"
     r"sent|post\w*|upload\w*|renam\w*|mov(?:e|es|ed|ing)|"
     r"cop(?:y|ies|ied|ying)|touch\w*|replac\w*|truncat\w*|append\w*|"
-    r"overwrit\w*|overwrote)\b"
+    r"overwrit\w*|overwrote|rm|rmdir|unlink|shred|chmod|chown|"
+    r"approv\w*|authoriz\w*|grant\w*|elevat\w*)\b"
 )
 
 

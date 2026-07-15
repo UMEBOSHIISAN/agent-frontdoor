@@ -143,6 +143,16 @@ _UNKNOWN_MUTATION_FORMS = (
     "overwriting",
     "overwrote",
     "overwritten",
+    "rm",
+    "rmdir",
+    "unlink",
+    "shred",
+    "chmod",
+    "chown",
+    "approve",
+    "authorize",
+    "grant",
+    "elevate",
 )
 
 
@@ -290,6 +300,27 @@ def test_unsafe_keyword_inflections_require_blocking(
     valid_card, human_request
 ):
     valid_card.update(human_request=human_request, human_gate="CONFIRM")
+
+    assert "blocking_gate_required" in issue_codes(validate_card(valid_card))
+
+
+@pytest.mark.parametrize(
+    "human_request",
+    [
+        "rm old files",
+        "rmdir the old directory",
+        "unlink the old archive",
+        "shred the obsolete export",
+        "chmod 600 the credential file",
+        "chown the application files",
+        "Approve this proposal for execution",
+        "Authorize the task for execution",
+    ],
+)
+def test_unsafe_command_and_authority_aliases_require_blocking(
+    valid_card, human_request
+):
+    valid_card.update(human_request=human_request, human_gate="NONE")
 
     assert "blocking_gate_required" in issue_codes(validate_card(valid_card))
 

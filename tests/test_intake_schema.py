@@ -8,6 +8,7 @@ import pytest
 
 ROOT = Path(__file__).parent.parent
 SCHEMA_PATH = ROOT / "schema" / "intake.v0.json"
+PYPROJECT_PATH = ROOT / "pyproject.toml"
 
 EXPECTED_CORE_FIELDS = {
     "schema_version",
@@ -111,3 +112,7 @@ def test_intake_schema_has_exact_core_contract(schema):
     for field in ("required_evidence", "unknowns", "assumptions"):
         assert schema["properties"][field]["type"] == "array"
         assert schema["properties"][field]["items"]["type"] == "string"
+
+
+def test_package_supports_python_3_10_and_newer():
+    assert 'requires-python = ">=3.10"' in PYPROJECT_PATH.read_text()

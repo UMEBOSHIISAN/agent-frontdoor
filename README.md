@@ -192,10 +192,3 @@ from frontdoor.validator import load_card, validate_card
 `load_card` reads one local JSON file and returns the loaded value plus a typed
 validation result. `validate_card` and `detect_boundary_drift` are deterministic
 and do not mutate their inputs.
-
-## Legacy schema
-
-`schema/agent-frontdoor.v0.1.json` is retained as historical reference only. It
-uses a different field model and is not consumed by the current package, CLI, or
-validator. New cards must use `schema/intake.v0.json` and
-`schema_version: intake.v0`.

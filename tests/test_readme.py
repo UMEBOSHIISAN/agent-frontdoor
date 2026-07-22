@@ -131,10 +131,9 @@ def test_readme_documents_exits_metrics_and_safety_boundaries() -> None:
         assert boundary in text
 
 
-def test_readme_marks_legacy_schema_as_historical_without_stale_counts() -> None:
+def test_readme_has_no_legacy_schema_references_or_stale_counts() -> None:
     text = _text()
-    assert "`schema/agent-frontdoor.v0.1.json`" in text
-    assert "historical reference only" in text
+    assert "agent-frontdoor.v0.1" not in text
     assert not re.search(r"\b\d+\s+tests?\s+pass(?:ed)?\b", text, re.IGNORECASE)
     assert "READ_ONLY_AUDIT" not in text
     assert "predicted_worker`" not in text

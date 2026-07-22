@@ -1,6 +1,8 @@
 """Direct, subprocess-free tests for the read-only Frontdoor CLI."""
 
 import json
+import runpy
+import sys
 
 import pytest
 
@@ -88,7 +90,24 @@ def test_single_card_commands_return_one_for_loaded_invalid_card(
     assert main([command, str(path)]) == 1
     captured = capsys.readouterr()
     assert captured.out == ""
-    assert captured.err == "INVALID task: schema_error at $.request_id\n"
+    prefix = "INVALID task: schema_error at $.request_id: "
+    assert captured.err.startswith(prefix)
+    assert len(captured.err) > len(prefix)
+
+
+def test_emit_failures_includes_human_readable_message(
+    tmp_path, capsys, valid_card
+):
+    valid_card["risk_tags"] = ["deploy"]
+    path = _write_json(tmp_path, "invalid.json", valid_card)
+
+    assert main(["validate", str(path)]) == 1
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert captured.err == (
+        "INVALID task: blocking_gate_required at $.human_gate: "
+        "Unsafe or unknown work requires human_gate BLOCKING.\n"
+    )
 
 
 @pytest.mark.parametrize("command", ["validate", "card", "explain"])
@@ -108,7 +127,9 @@ def test_single_card_commands_return_two_for_input_errors(
     assert main([command, str(path)]) == 2
     captured = capsys.readouterr()
     assert captured.out == ""
-    assert captured.err == f"ERROR task: {expected_code} at $\n"
+    prefix = f"ERROR task: {expected_code} at $: "
+    assert captured.err.startswith(prefix)
+    assert len(captured.err) > len(prefix)
 
 
 def test_check_drift_returns_zero_for_unchanged_valid_cards(
@@ -166,9 +187,11 @@ def test_check_drift_returns_one_when_either_loaded_card_is_invalid(
     assert main(["check-drift", str(before), str(after)]) == 1
     captured = capsys.readouterr()
     assert captured.out == ""
-    assert captured.err == (
-        f"INVALID {invalid_position}: schema_error at $.request_id\n"
+    prefix = (
+        f"INVALID {invalid_position}: schema_error at $.request_id: "
     )
+    assert captured.err.startswith(prefix)
+    assert len(captured.err) > len(prefix)
 
 
 @pytest.mark.parametrize(
@@ -198,9 +221,9 @@ def test_check_drift_returns_two_when_either_input_cannot_be_loaded(
     assert main(["check-drift", str(before), str(after)]) == 2
     captured = capsys.readouterr()
     assert captured.out == ""
-    assert captured.err == (
-        f"ERROR {failed_position}: {expected_code} at $\n"
-    )
+    prefix = f"ERROR {failed_position}: {expected_code} at $: "
+    assert captured.err.startswith(prefix)
+    assert len(captured.err) > len(prefix)
 
 
 def test_check_drift_validates_both_inputs_before_returning(
@@ -212,7 +235,27 @@ def test_check_drift_validates_both_inputs_before_returning(
     assert main(["check-drift", str(before), str(after)]) == 2
     captured = capsys.readouterr()
     assert captured.out == ""
-    assert captured.err == (
-        "ERROR before: input_read_error at $\n"
-        "ERROR after: input_json_error at $\n"
+    lines = captured.err.splitlines()
+    prefixes = (
+        "ERROR before: input_read_error at $: ",
+        "ERROR after: input_json_error at $: ",
     )
+    assert len(lines) == len(prefixes)
+    for line, prefix in zip(lines, prefixes, strict=True):
+        assert line.startswith(prefix)
+        assert len(line) > len(prefix)
+
+
+@pytest.mark.filterwarnings(
+    "ignore:'frontdoor.cli' found in sys.modules:RuntimeWarning"
+)
+def test_module_execution_invokes_main(tmp_path, valid_card, monkeypatch):
+    path = _write_json(tmp_path, "task.json", valid_card)
+    monkeypatch.setattr(
+        sys, "argv", ["agent-frontdoor", "validate", str(path)]
+    )
+
+    with pytest.raises(SystemExit) as excinfo:
+        runpy.run_module("frontdoor.cli", run_name="__main__")
+
+    assert excinfo.value.code == 0

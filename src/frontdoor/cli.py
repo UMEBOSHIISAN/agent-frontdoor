@@ -51,7 +51,7 @@ def _emit_failures(
     for label, issue in issues:
         prefix = "ERROR" if issue.code in _INPUT_ERROR_CODES else "INVALID"
         print(
-            f"{prefix} {label}: {issue.code} at {issue.path}",
+            f"{prefix} {label}: {issue.code} at {issue.path}: {issue.message}",
             file=sys.stderr,
         )
     return 2 if has_input_error else 1
@@ -111,3 +111,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     if arguments.command == "check-drift":
         return _run_check_drift(arguments.before, arguments.after)
     return _run_single_card(arguments.command, arguments.path)
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

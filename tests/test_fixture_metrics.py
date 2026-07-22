@@ -65,6 +65,7 @@ CATEGORY_BY_POSITIVE_FILENAME = {
     "28_design_review_dataflow.json": "design review",
     "29_research_task_feasibility.json": "research task",
     "30_cleanup_adjacent_artifacts.json": "cleanup adjacent",
+    "31_data_analysis_production_logs.json": "deploy request",
 }
 
 CATEGORY_BY_NEGATIVE_FILENAME = {
@@ -108,6 +109,7 @@ CATEGORY_BY_NEGATIVE_FILENAME = {
     "neg_38_research_risks_not_array.json": "research task",
     "neg_39_design_missing_forbidden.json": "design review",
     "neg_40_patch_nonstring_action.json": "code patch",
+    "neg_41_code_review_delete_tag_none.json": "cleanup adjacent",
 }
 
 EXPECTED_NEGATIVE_CODES = {
@@ -163,6 +165,7 @@ EXPECTED_NEGATIVE_CODES = {
     "neg_38_research_risks_not_array.json": {"schema_error"},
     "neg_39_design_missing_forbidden.json": {"schema_error"},
     "neg_40_patch_nonstring_action.json": {"schema_error"},
+    "neg_41_code_review_delete_tag_none.json": {"blocking_gate_required"},
 }
 
 BLOCKING_GATE_EXPECTATIONS = {
@@ -191,6 +194,7 @@ BLOCKING_GATE_EXPECTATIONS = {
             "neg_24_external_post_text_confirm.json",
             "neg_25_authority_tag_none.json",
             "neg_26_authority_text_confirm.json",
+            "neg_41_code_review_delete_tag_none.json",
         )
     },
     "neg_15_billing_tag_none.json": {
@@ -215,6 +219,21 @@ UNKNOWN_FAIL_SAFE_EXPECTATIONS = {
     },
     "neg_32_unknown_tag_confirm.json": {"unknown_requires_blocking"},
 }
+
+TASK_CLASSES = frozenset(
+    {
+        "RESEARCH",
+        "DESIGN_REVIEW",
+        "IMPLEMENTATION",
+        "CODE_REVIEW",
+        "AUDIT",
+        "CONTENT_DRAFT",
+        "DATA_ANALYSIS",
+        "INSTALLATION",
+        "OPERATIONS",
+        "UNKNOWN",
+    }
+)
 
 EXPECTED_DRIFT_CODES = {
     "drift_01_audit_class_to_impl.json": {"audit_to_mutation"},
@@ -439,6 +458,26 @@ def test_every_positive_fixture_is_valid() -> None:
         if not result.valid:
             invalid[path.name] = [issue.code for issue in result.issues]
     assert not invalid, f"positive fixtures must all validate: {invalid}"
+
+
+def test_every_task_class_has_positive_and_negative_coverage() -> None:
+    positive_classes = {
+        card.get("task_class")
+        for path in POSITIVE.glob("*.json")
+        if isinstance((card := _load_json(path)), dict)
+    }
+    negative_classes = {
+        card.get("task_class")
+        for path in NEGATIVE.glob("*.json")
+        if isinstance((card := _load_json(path)), dict)
+    }
+    missing_positive = TASK_CLASSES - positive_classes
+    missing_negative = TASK_CLASSES - negative_classes
+    assert not missing_positive and not missing_negative, (
+        f"task-class fixture coverage missing; "
+        f"positive={sorted(missing_positive)}, "
+        f"negative={sorted(missing_negative)}"
+    )
 
 
 def test_negative_issue_code_mapping_is_complete_and_exact() -> None:

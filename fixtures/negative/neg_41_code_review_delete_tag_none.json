@@ -1,0 +1,28 @@
+{
+  "schema_version": "intake.v0",
+  "request_id": "negative-41",
+  "human_request": "Review the proposed deletion of obsolete code files.",
+  "task_class": "CODE_REVIEW",
+  "risk_tags": [
+    "delete"
+  ],
+  "allowed_actions": [
+    "Review the proposed deletion",
+    "Report whether the obsolete code files are safe to remove"
+  ],
+  "forbidden_actions": [
+    "Delete files",
+    "Modify code"
+  ],
+  "required_evidence": [
+    "A review report identifying the files proposed for deletion and any dependencies"
+  ],
+  "required_manifest": null,
+  "human_gate": "NONE",
+  "predicted_worker_capability": "code-review",
+  "unknowns": [],
+  "assumptions": [
+    "The review is read-only"
+  ],
+  "next_safe_step": "Inspect the proposed deletion and report findings without changing files"
+}

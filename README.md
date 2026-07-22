@@ -14,8 +14,9 @@ messy human request
 -> human-readable explanation
 ```
 
-The current contract is `schema/intake.v0.json`, a JSON Schema Draft 2020-12
-document plus deterministic semantic checks in the validator.
+The current contract is `src/frontdoor/schema/intake.v0.json` (installed as
+package data), a JSON Schema Draft 2020-12 document plus deterministic semantic
+checks in the validator.
 
 ## Safety boundary
 

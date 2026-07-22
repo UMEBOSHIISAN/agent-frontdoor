@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass
+from importlib import resources
 import json
 from os import PathLike
 from pathlib import Path
@@ -30,8 +31,11 @@ class ValidationResult:
     issues: tuple[ValidationIssue, ...]
 
 
-_SCHEMA_PATH = Path(__file__).resolve().parents[2] / "schema" / "intake.v0.json"
-_SCHEMA = json.loads(_SCHEMA_PATH.read_text(encoding="utf-8"))
+_SCHEMA = json.loads(
+    resources.files("frontdoor")
+    .joinpath("schema/intake.v0.json")
+    .read_text(encoding="utf-8")
+)
 _VALIDATOR = Draft202012Validator(_SCHEMA)
 
 _BLOCKING_RISK_TAGS = frozenset(

@@ -7,7 +7,7 @@ import pytest
 
 
 ROOT = Path(__file__).parent.parent
-SCHEMA_PATH = ROOT / "schema" / "intake.v0.json"
+SCHEMA_PATH = ROOT / "src" / "frontdoor" / "schema" / "intake.v0.json"
 PYPROJECT_PATH = ROOT / "pyproject.toml"
 
 EXPECTED_CORE_FIELDS = {

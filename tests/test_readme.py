@@ -109,7 +109,7 @@ def test_readme_check_drift_examples_are_runnable() -> None:
 
 def test_readme_documents_current_intake_contract() -> None:
     text = _text()
-    assert "`schema/intake.v0.json`" in text
+    assert "`src/frontdoor/schema/intake.v0.json`" in text
     for field in CORE_FIELDS:
         assert f"`{field}`" in text
     for task_class in TASK_CLASSES:

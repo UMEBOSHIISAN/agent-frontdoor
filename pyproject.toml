@@ -7,6 +7,7 @@ name = "agent-frontdoor"
 version = "0.1.0"
 description = "Fail-closed preflight validation for bounded AI task cards"
 readme = "README.md"
+license = {text = "MIT"}
 requires-python = ">=3.10"
 dependencies = ["jsonschema>=4"]
 

@@ -1,0 +1,20 @@
+{
+  "schema_version": "intake.v0",
+  "request_id": "drift-01-before",
+  "human_request": "Review the requested scope.",
+  "task_class": "AUDIT",
+  "risk_tags": [],
+  "allowed_actions": [
+    "read named files"
+  ],
+  "forbidden_actions": [
+    "mutate unrelated files"
+  ],
+  "required_evidence": [],
+  "required_manifest": null,
+  "human_gate": "NONE",
+  "predicted_worker_capability": "audit",
+  "unknowns": [],
+  "assumptions": [],
+  "next_safe_step": "Inspect the named inputs"
+}

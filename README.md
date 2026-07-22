@@ -33,18 +33,31 @@ The CLI reads local JSON files and writes deterministic results to standard outp
 or standard error. A task card describes boundaries for another system; it does
 not grant that system permission to act.
 
-## Local installation without dependency download
+## Installation
 
-Prerequisites are Python 3.10 or newer, setuptools, and `jsonschema>=4` already
-available locally. The following commands disable dependency and build-isolation
-downloads:
+Python 3.10 or newer is required. The standard installation resolves
+`jsonschema>=4` from PyPI, and the `test` extra installs pytest:
+
+```bash
+python3 -m venv .venv
+.venv/bin/python -m pip install -e ".[test]"
+```
+
+Agent Frontdoor itself requires no network access at runtime. Network access is
+used only to retrieve dependencies during installation.
+
+### Offline installation
+
+For an offline installation, Python 3.10 or newer, setuptools, and
+`jsonschema>=4` must already be available locally. The following commands disable
+dependency and build-isolation downloads:
 
 ```bash
 python3 -m venv --system-site-packages .venv
 .venv/bin/python -m pip install --no-deps --no-build-isolation -e .
 ```
 
-No network access is required by Agent Frontdoor itself.
+Pytest must also already be available locally to run the test suite offline.
 
 ## CLI
 
@@ -154,6 +167,15 @@ The comparator uses deterministic lexical heuristics over validated task classes
 risk-tag additions, allowed actions, and `next_safe_step`. It never mutates either
 card.
 
+The split card examples can be passed directly to the CLI:
+
+```bash
+.venv/bin/agent-frontdoor check-drift examples/drift_before.json examples/drift_after.json
+# exit 3: reports audit_to_mutation
+.venv/bin/agent-frontdoor check-drift examples/safe_before.json examples/safe_after.json
+# exit 0: prints NO DRIFT
+```
+
 ## Fixtures and hard metrics
 
 Synthetic fixtures live under:
@@ -161,6 +183,10 @@ Synthetic fixtures live under:
 - `fixtures/positive/` for complete valid cards;
 - `fixtures/negative/` for named fail-closed cases;
 - `fixtures/drift/` for labeled before/after envelopes and safe controls.
+
+The `fixtures/drift/*.json` files are labeled test envelopes containing
+`before`, `after`, `label`, and `expected_codes`; they are not direct CLI inputs.
+Use the split cards under `examples/` for directly runnable CLI examples.
 
 Run the hard corpus and source-safety contracts with:
 

@@ -341,15 +341,10 @@ def _parse_wheel(path: Path) -> dict[str, object]:
                 _safe_zip_name(item) for item in names
             ):
                 raise BuildError(f"unsafe wheel contents: {path.name}")
-            metadata_names = [
-                item for item in names if item.endswith(".dist-info/METADATA")
-            ]
-            wheel_names = [
-                item for item in names if item.endswith(".dist-info/WHEEL")
-            ]
-            record_names = [
-                item for item in names if item.endswith(".dist-info/RECORD")
-            ]
+            dist_root = f"{name.replace('-', '_')}-{version}.dist-info/"
+            metadata_names = [item for item in names if item == dist_root + "METADATA"]
+            wheel_names = [item for item in names if item == dist_root + "WHEEL"]
+            record_names = [item for item in names if item == dist_root + "RECORD"]
             if not (
                 len(metadata_names) == len(wheel_names) == len(record_names) == 1
             ):

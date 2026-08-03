@@ -435,7 +435,7 @@ def test_build_friend_pack_is_deterministic_and_outputs_two_files(
         ),
         (
             "agent_frontdoor-0.1.0.dist-info/METADATA",
-            b"Metadata-Version: 2.1\nRequires-Dist: jsonschema>=4\nrequires-dist: evil-package\n",
+            b"Metadata-Version: 2.1\nName: agent-frontdoor\nVersion: 0.1.0\nLicense: MIT\nRequires-Dist: jsonschema>=4\nrequires-dist: evil-package\n",
             "dependency metadata",
         ),
     ],

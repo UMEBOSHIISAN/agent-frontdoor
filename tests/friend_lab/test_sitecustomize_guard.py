@@ -278,6 +278,35 @@ def test_rename_from_inside_to_outside_is_denied_and_recorded(
     ]
 
 
+def test_dir_fd_cannot_redirect_relative_write_outside_root(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "lab-root"
+    root.mkdir()
+    ledger = root / "audit.jsonl"
+    outside_directory = tmp_path / "outside-directory"
+    outside_directory.mkdir()
+    escaped = outside_directory / "escaped.txt"
+    result = run_guarded_code(
+        root,
+        ledger,
+        "dir-fd-outside-write",
+        "import os; "
+        "os.chdir(os.environ['FRIEND_LAB_ROOT']); "
+        "directory_fd = os.open(os.environ['OUTSIDE_DIRECTORY'], os.O_RDONLY); "
+        "file_fd = os.open('escaped.txt', os.O_WRONLY | os.O_CREAT, 0o600, "
+        "dir_fd=directory_fd); "
+        "os.close(file_fd); os.close(directory_fd)",
+        OUTSIDE_DIRECTORY=str(outside_directory),
+    )
+
+    assert result.returncode != 0
+    assert not escaped.exists()
+    assert records(ledger) == [
+        {"phase": "dir-fd-outside-write", "operation_class": "outside-write"}
+    ]
+
+
 def test_ledger_records_have_exact_closed_fields(tmp_path: Path) -> None:
     result, ledger_records = run_guarded_script(
         tmp_path, "sanitized-control", WRITE_PROBE

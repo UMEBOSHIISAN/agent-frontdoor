@@ -387,6 +387,17 @@ def test_source_archive_rejects_forbidden_directory(path: str) -> None:
     assert any("forbidden archive path" in item for item in result.errors)
 
 
+def test_source_archive_rejects_empty_forbidden_directory() -> None:
+    entries = source_entries() + [
+        TarEntry(f"{SOURCE_ROOT}/.claude", kind="dir")
+    ]
+
+    result = verify_source(tar_bytes(entries), records_for(entries))
+
+    assert result.ok is False
+    assert any("forbidden archive path" in item for item in result.errors)
+
+
 @pytest.mark.parametrize(
     ("data", "category"),
     [

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
+import builtins
 import gzip
 import hashlib
 import io
@@ -10,8 +11,10 @@ from pathlib import Path
 import shutil
 import subprocess
 import sys
+import time
 from types import SimpleNamespace
 import tarfile
+import zipfile
 
 from jsonschema import Draft202012Validator
 import pytest
@@ -60,6 +63,75 @@ def _member(path: str, data: bytes, mode: int = 0o644) -> dict[str, object]:
     }
 
 
+def _wheel_bytes(
+    name: str,
+    version: str,
+    tag: str,
+    package_payloads: dict[str, bytes] | None = None,
+) -> bytes:
+    stream = io.BytesIO()
+    dist_info = f"{name.replace('-', '_')}-{version}.dist-info"
+    metadata = (
+        "Metadata-Version: 2.1\n"
+        f"Name: {name}\n"
+        f"Version: {version}\n"
+        "License: MIT\n"
+    ).encode("utf-8")
+    wheel = (
+        "Wheel-Version: 1.0\n"
+        "Generator: friend-lab-test\n"
+        "Root-Is-Purelib: true\n"
+        f"Tag: {tag}\n"
+    ).encode("utf-8")
+    members = dict(package_payloads or {})
+    members.update(
+        {
+            f"{dist_info}/METADATA": metadata,
+            f"{dist_info}/WHEEL": wheel,
+            f"{dist_info}/RECORD": b"",
+        }
+    )
+    with zipfile.ZipFile(stream, "w", compression=zipfile.ZIP_STORED) as archive:
+        for relative, data in sorted(members.items()):
+            archive.writestr(relative, data)
+    return stream.getvalue()
+
+
+def _replace_wheel_member(
+    pack_root: Path, filename: str, member: str, payload: bytes
+) -> None:
+    wheel_path = pack_root / "wheelhouse" / filename
+    with zipfile.ZipFile(wheel_path) as archive:
+        members = {
+            item.filename: archive.read(item)
+            for item in archive.infolist()
+            if not item.is_dir()
+        }
+    members[member] = payload
+    stream = io.BytesIO()
+    with zipfile.ZipFile(stream, "w", compression=zipfile.ZIP_STORED) as archive:
+        for relative, data in sorted(members.items()):
+            archive.writestr(relative, data)
+    wheel_data = stream.getvalue()
+    wheel_manifest_path = pack_root / "wheelhouse/wheelhouse-manifest.json"
+    wheel_manifest = json.loads(wheel_manifest_path.read_text(encoding="utf-8"))
+    for record in wheel_manifest["wheels"]:
+        if record["filename"] == filename:
+            record["size"] = len(wheel_data)
+            record["sha256"] = _sha256(wheel_data)
+            break
+    else:  # pragma: no cover - fixture construction guard
+        raise AssertionError(f"missing wheel record: {filename}")
+    _replace_pack_payload(
+        pack_root, f"wheelhouse/{filename}", wheel_data
+    )
+    _replace_pack_payload(
+        pack_root,
+        "wheelhouse/wheelhouse-manifest.json",
+        _json_bytes(wheel_manifest),
+    )
+
+
 def _privacy_control() -> bytes:
     return (
         "absolute-user-path=/Users/synthetic-receiver/private.txt\n"
@@ -96,6 +168,7 @@ class FakeRunner:
 
     def __init__(self) -> None:
         self.called_classes: list[str] = []
+        self.calls: list[tuple[str, tuple[str, ...], dict[str, str]]] = []
         self.exit_statuses: dict[str, int] = {}
         self.timeouts: set[str] = set()
         self.output_caps: set[str] = set()
@@ -105,6 +178,7 @@ class FakeRunner:
         self.nondeterministic_status: set[str] = set()
         self.extra_guard_after: str | None = None
         self.undeclared_after: str | None = None
+        self.installed_private_after: str | None = None
 
     @staticmethod
     def _base(command_class: str) -> str:
@@ -120,8 +194,9 @@ class FakeRunner:
         timeout_seconds: float,
         output_budget_bytes: int,
     ) -> acceptance.CommandResult:
-        del argv, cwd, timeout_seconds, output_budget_bytes
+        del cwd, timeout_seconds, output_budget_bytes
         self.called_classes.append(command_class)
+        self.calls.append((command_class, tuple(argv), dict(env)))
         base = self._base(command_class)
         if command_class in self.control_events:
             operation = (
@@ -152,6 +227,21 @@ class FakeRunner:
             or command_class.startswith("negative-")
         ) else 0
         status = self.exit_statuses.get(command_class, default_status)
+        if status == 0 and command_class in {"source-install", "wheel-install"}:
+            run_root = Path(env["FRIEND_LAB_ROOT"])
+            environment = (
+                "source-venv" if command_class == "source-install" else "wheel-venv"
+            )
+            installed = (
+                run_root
+                / environment
+                / "lib/python3.12/site-packages/frontdoor"
+            )
+            shutil.copytree(run_root / "source/src/frontdoor", installed)
+            if self.installed_private_after == command_class:
+                (installed / "private_receiver.py").write_text(
+                    "API_KEY=sk-privatevalue123\n", encoding="utf-8"
+                )
         if base in self.nondeterministic_status and command_class.endswith(
             "-repeat"
         ):
@@ -238,7 +328,14 @@ def acceptance_request(
         else:
             tag = "py3-none-any"
         filename = f"{name.replace('-', '_')}-{version}-{tag}.whl"
-        data = f"synthetic wheel {name}\n".encode("ascii")
+        package_payloads = None
+        if name == "agent-frontdoor":
+            package_payloads = {
+                path.removeprefix("src/"): data
+                for path, (data, _mode) in source_entries.items()
+                if path.startswith("src/frontdoor/")
+            }
+        data = _wheel_bytes(name, version, tag, package_payloads)
         wheel_payloads[filename] = data
         python_tag, abi_tag, platform_tag = tag.split("-")
         wheel_records.append(
@@ -385,6 +482,47 @@ def test_happy_local_flow_writes_schema_valid_receipt(
     assert not tuple(Draft202012Validator(schema).iter_errors(receipt))
 
 
+def test_source_install_requests_test_extra_before_pytest_collection(
+    acceptance_request: acceptance.AcceptanceRequest,
+) -> None:
+    fake = FakeRunner()
+
+    acceptance.run_acceptance(acceptance_request, command_runner=fake)
+
+    source_install = next(
+        argv for command_class, argv, _env in fake.calls
+        if command_class == "source-install"
+    )
+    assert source_install[-1].endswith("/source[test]")
+    assert fake.called_classes.index("source-install") < fake.called_classes.index(
+        "test-collect"
+    )
+
+
+def test_isolated_environment_does_not_forward_receiver_credentials(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    run_root = tmp_path / "run"
+    pack_root = tmp_path / "pack"
+    run_root.mkdir()
+    pack_root.mkdir()
+    ledger = run_root / "audit.jsonl"
+    ledger.write_bytes(b"")
+    monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "must-not-cross-boundary")
+    monkeypatch.setenv("GH_TOKEN", "must-not-cross-boundary")
+    monkeypatch.setenv("SSH_AUTH_SOCK", "/private/receiver/agent.sock")
+    monkeypatch.setenv("PYTHONSTARTUP", "/private/receiver/startup.py")
+
+    env = acceptance._create_isolated_environment(run_root, pack_root, ledger)
+
+    assert "AWS_SECRET_ACCESS_KEY" not in env
+    assert "GH_TOKEN" not in env
+    assert "SSH_AUTH_SOCK" not in env
+    assert "PYTHONSTARTUP" not in env
+    assert env["PATH"] == os.defpath
+    assert env["HOME"].startswith(str(run_root))
+
+
 def test_remote_flow_is_capped_with_gap(
     acceptance_request: acceptance.AcceptanceRequest,
 ) -> None:
@@ -464,6 +602,56 @@ def test_invalid_wheelhouse_semantics_stop_before_controls(
 
     assert receipt["final_classification"] == "NOT_READY"
     assert fake.called_classes == []
+
+
+@pytest.mark.parametrize(
+    ("member", "payload"),
+    [
+        ("frontdoor/__init__.py", b"__version__='0.1.1'\n"),
+        ("frontdoor/private_receiver.py", b"API_KEY=sk-privatevalue123\n"),
+    ],
+)
+def test_unbound_or_private_agent_wheel_stops_before_controls(
+    acceptance_request: acceptance.AcceptanceRequest,
+    member: str,
+    payload: bytes,
+) -> None:
+    wheel_manifest = json.loads(
+        (
+            acceptance_request.pack_root
+            / "wheelhouse/wheelhouse-manifest.json"
+        ).read_text(encoding="utf-8")
+    )
+    filename = next(
+        item["filename"]
+        for item in wheel_manifest["wheels"]
+        if item["name"] == "agent-frontdoor"
+    )
+    _replace_wheel_member(
+        acceptance_request.pack_root, filename, member, payload
+    )
+    fake = FakeRunner()
+
+    receipt = acceptance.run_acceptance(
+        acceptance_request, command_runner=fake
+    )
+
+    assert receipt["final_classification"] == "NOT_READY"
+    assert fake.called_classes == []
+
+
+def test_private_installed_package_stops_before_tests(
+    acceptance_request: acceptance.AcceptanceRequest,
+) -> None:
+    fake = FakeRunner()
+    fake.installed_private_after = "wheel-install"
+
+    receipt = acceptance.run_acceptance(
+        acceptance_request, command_runner=fake
+    )
+
+    assert receipt["final_classification"] == "NOT_READY"
+    assert "test-collect" not in fake.called_classes
 
 
 def test_write_control_not_firing_stops_before_socket_control(
@@ -650,6 +838,31 @@ def test_receipt_write_failure_returns_not_ready_without_retry(
     assert calls == 1
 
 
+def test_receipt_validation_stays_strict_without_host_jsonschema(
+    acceptance_request: acceptance.AcceptanceRequest,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    receipt = acceptance.run_acceptance(
+        acceptance_request, command_runner=FakeRunner()
+    )
+    receipt["final_classification"] = "INVALID"
+    real_import = builtins.__import__
+
+    def no_jsonschema(name: str, *args: object, **kwargs: object) -> object:
+        if name == "jsonschema" or name.startswith("jsonschema."):
+            raise ImportError("synthetic missing jsonschema")
+        return real_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", no_jsonschema)
+
+    with pytest.raises(acceptance.AcceptanceError, match="schema validation"):
+        acceptance._validate_receipt(
+            receipt,
+            acceptance_request.pack_root
+            / "schemas/friend_acceptance_receipt.v1.json",
+        )
+
+
 @pytest.mark.parametrize(
     ("failure_kind", "field"),
     [("timeout", "timeouts"), ("cap", "output_caps")],
@@ -719,6 +932,42 @@ def test_bounded_runner_kills_timed_out_process_group(tmp_path: Path) -> None:
     assert result.exit_status == -1
     assert len(tuple((run_root / "evidence").glob("*.stdout"))) == 1
     assert len(tuple((run_root / "evidence").glob("*.stderr"))) == 1
+
+
+def test_bounded_runner_kills_sigterm_ignoring_descendant_with_pipes(
+    tmp_path: Path,
+) -> None:
+    run_root = tmp_path / "run"
+    run_root.mkdir()
+    runner = acceptance.BoundedCommandRunner(
+        run_root, terminate_grace_seconds=0.05
+    )
+    child_code = (
+        "import signal,time; "
+        "signal.signal(signal.SIGTERM, signal.SIG_IGN); "
+        "print('child-ready', flush=True); "
+        "time.sleep(2)"
+    )
+    leader_code = (
+        "import subprocess,sys,time; "
+        f"subprocess.Popen([sys.executable, '-c', {child_code!r}]); "
+        "time.sleep(30)"
+    )
+
+    started = time.monotonic()
+    result = runner.run(
+        "descendant-timeout-control",
+        (sys.executable, "-c", leader_code),
+        cwd=run_root,
+        env=dict(os.environ),
+        timeout_seconds=0.05,
+        output_budget_bytes=1024,
+    )
+    elapsed = time.monotonic() - started
+
+    assert result.timed_out is True
+    assert result.exit_status == -1
+    assert elapsed < 0.75
 
 
 def test_bounded_runner_kills_at_output_cap(tmp_path: Path) -> None:

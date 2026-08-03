@@ -104,6 +104,16 @@ def _write_wheel(
         f"Tag: {tag}\n"
     )
     with zipfile.ZipFile(path, "w", compression=zipfile.ZIP_STORED) as archive:
+        if name == "agent-frontdoor":
+            package_root = PROJECT_ROOT / "src/frontdoor"
+            for source in sorted(package_root.rglob("*")):
+                if (
+                    source.is_file()
+                    and "__pycache__" not in source.parts
+                    and source.suffix != ".pyc"
+                ):
+                    relative = source.relative_to(package_root).as_posix()
+                    archive.writestr(f"frontdoor/{relative}", source.read_bytes())
         archive.writestr(f"{dist_info}/METADATA", metadata)
         archive.writestr(f"{dist_info}/WHEEL", wheel)
         archive.writestr(f"{dist_info}/RECORD", "")
@@ -121,6 +131,23 @@ def _make_wheelhouse(
         tag = rpds_tag if name == "rpds-py" else "py3-none-any"
         _write_wheel(wheelhouse, name, version, tag=tag)
     return wheelhouse
+
+
+def _replace_wheel_member(path: Path, member: str, payload: bytes) -> None:
+    with zipfile.ZipFile(path) as archive:
+        members = {
+            item.filename: archive.read(item)
+            for item in archive.infolist()
+            if not item.is_dir()
+        }
+    members[member] = payload
+    replacement = path.with_suffix(".replacement")
+    with zipfile.ZipFile(
+        replacement, "w", compression=zipfile.ZIP_STORED
+    ) as archive:
+        for name, data in sorted(members.items()):
+            archive.writestr(name, data)
+    replacement.replace(path)
 
 
 def _write_lock(
@@ -380,6 +407,46 @@ def test_build_friend_pack_is_deterministic_and_outputs_two_files(
             names = {item.name for item in nested.getmembers()}
     assert not any("tools/friend_lab" in name for name in names)
     assert not any("tests/friend_lab" in name for name in names)
+
+
+@pytest.mark.parametrize(
+    ("member", "payload", "message"),
+    [
+        (
+            "frontdoor/__init__.py",
+            b"__version__ = 'private-wheel-only-change'\n",
+            "source binding",
+        ),
+        (
+            "frontdoor/private_receiver.py",
+            b"API_KEY=sk-privatevalue123\n",
+            "privacy",
+        ),
+        (
+            "agent_frontdoor-0.1.0.dist-info/private.txt",
+            b"/Users/umeboshi/private\n",
+            "privacy",
+        ),
+    ],
+)
+def test_build_friend_pack_rejects_unbound_or_private_agent_wheel(
+    public_repo: Path,
+    tmp_path: Path,
+    target: builder.TargetTuple,
+    member: str,
+    payload: bytes,
+    message: str,
+) -> None:
+    wheelhouse = _make_wheelhouse(tmp_path)
+    agent_wheel = next(wheelhouse.glob("agent_frontdoor-*.whl"))
+    _replace_wheel_member(agent_wheel, member, payload)
+    _write_lock(wheelhouse, target)
+    target_json = _write_target(tmp_path / "target.json", target)
+
+    with pytest.raises(builder.BuildError, match=message):
+        builder.build_friend_pack(
+            public_repo, wheelhouse, target_json, tmp_path / "output"
+        )
 
 
 def test_build_friend_pack_rejects_nonempty_output_leaf(

@@ -343,12 +343,12 @@ def _inspect_archive(
 
             prefix = required_root + "/"
             for member in structurally_safe:
-                if member.isdir():
+                if member.name == required_root and member.isdir():
                     continue
                 if not member.name.startswith(prefix):
                     errors.append(f"unsafe archive member: {member.name}")
                     continue
-                relative = member.name[len(prefix) :]
+                relative = member.name[len(prefix) :].rstrip("/")
                 if not relative or _forbidden_relative_path(relative):
                     errors.append(f"forbidden archive path: {relative}")
                     continue
@@ -357,6 +357,8 @@ def _inspect_archive(
                     f"privacy {category} in path: {relative}"
                     for category in path_hits
                 )
+                if member.isdir():
+                    continue
                 extracted = archive.extractfile(member)
                 if extracted is None:
                     errors.append(f"archive member unreadable: {relative}")

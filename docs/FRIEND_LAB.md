@@ -51,9 +51,12 @@ in memory. It never calls filesystem extraction.
 Choose a new, empty, receiver-owned path and bind it explicitly:
 
 ```bash
+export FRIEND_TRANSFER_ROOT="$PWD"
 export FRIEND_TEMP_ROOT='<FRIEND_TEMP_ROOT>'
 mkdir "$FRIEND_TEMP_ROOT"
 tar -xzf agent-frontdoor-friend-pack-0.1.0.tar.gz -C "$FRIEND_TEMP_ROOT"
+export FRIEND_PACK_ROOT="$FRIEND_TEMP_ROOT/agent-frontdoor-friend-pack-0.1.0"
+export FRIEND_RUN_ROOT="$FRIEND_TEMP_ROOT/friend-lab-run"
 ```
 
 The leaf must not already exist, be a symbolic link, contain files, or resolve
@@ -68,16 +71,35 @@ The lab carries three synthetic controls bound by the outer manifest:
 - one deliberate out-of-root write attempt;
 - one deliberate socket operation attempt.
 
-Run the controls before package installation. Acceptance is invalid unless the
+The packaged runner performs these controls before package installation; do not
+run or waive them separately. Acceptance is invalid unless the
 privacy scanner detects every declared category and the audit guard records both
 deliberate probes. Record that control ledger as the baseline. The controls are
-test evidence, not exceptions granted to Agent Frontdoor.
+test evidence, not exceptions granted to Agent Frontdoor. The single runner
+invocation in step 5 executes steps 4 through 11 once, without retry.
 
 ## 5. Confirm physical network disconnect
 
-For a local run, the receiver confirms that network connectivity is physically
-disabled after the bounded reachability probe and before either environment is
-created. The runner observes attempts but does not disable adapters itself.
+For a local run, the receiver physically disables network connectivity before
+invoking the runner. The runner confirms that the bounded reachability probe
+fails before either environment is created; it does not disable adapters itself.
+
+From the transfer directory, run the exact packaged entrypoint. The run-root
+leaf must not already exist:
+
+```bash
+python3 "$FRIEND_PACK_ROOT/lab/acceptance_runner.py" \
+  --pack "$FRIEND_TRANSFER_ROOT/agent-frontdoor-friend-pack-0.1.0.tar.gz" \
+  --detached-verifier "$FRIEND_TRANSFER_ROOT/verify_handoff_archive.py" \
+  --pack-root "$FRIEND_PACK_ROOT" \
+  --run-root "$FRIEND_RUN_ROOT" \
+  --expected-pack-sha256 "$EXPECTED_PACK_SHA256" \
+  --expected-source-sha256 "$EXPECTED_SOURCE_SHA256" \
+  --expected-verifier-sha256 "$EXPECTED_VERIFIER_SHA256" \
+  --execution-mode local \
+  --verifier-role receiver-human \
+  --network-disconnected-confirmed
+```
 
 A remote SSH run cannot independently confirm physical disconnect and therefore
 cannot earn `PRIVATE_HANDOFF_READY`. Even when every other check passes, it is
@@ -85,26 +107,16 @@ capped at `PRIVATE_HANDOFF_READY_WITH_GAPS`.
 
 ## 6. Verify source and wheel environments
 
-Create two fresh environments beneath the disposable root: one for the verified
-source archive and one for the exact Agent Frontdoor wheel. Neither environment
-may inherit global packages.
+The runner creates two fresh environments beneath `FRIEND_RUN_ROOT`: one for the
+verified source archive and one for the exact Agent Frontdoor wheel. Neither
+inherits global packages. It installs the source with its `[test]` extra and the
+exact locked backend using `--no-index`, `--find-links`, and
+`--no-build-isolation`, then source-binds and privacy-scans both installed
+package trees before running them.
 
-Use only the included wheelhouse:
-
-```bash
-python3 -m venv "$FRIEND_TEMP_ROOT/source-venv"
-"$FRIEND_TEMP_ROOT/source-venv/bin/python" -m pip install \
-  --no-index --find-links "$FRIEND_TEMP_ROOT/wheelhouse" \
-  setuptools wheel
-"$FRIEND_TEMP_ROOT/source-venv/bin/python" -m pip install \
-  --no-index --find-links "$FRIEND_TEMP_ROOT/wheelhouse" \
-  --no-build-isolation -e "$FRIEND_TEMP_ROOT/source"
-```
-
-Repeat with the wheel environment using the exact manifest-listed Agent
-Frontdoor wheel and `--no-index`. A missing wheel, sdist, tag mismatch, backend
-version mismatch, or unlisted file stops the run. Do not download or compile a
-replacement.
+The only package input is `FRIEND_PACK_ROOT/wheelhouse`. A missing wheel, sdist,
+tag mismatch, backend version mismatch, unlisted file, private wheel member, or
+source/wheel mismatch stops the run. Do not download or compile a replacement.
 
 ## 7. Run tests and samples
 
@@ -159,14 +171,14 @@ credential, prompt, model output, raw command, raw output, or source content.
 
 ## 11. Uninstall and write the receipt
 
-Uninstall Agent Frontdoor from both environments and confirm the CLI is absent:
+The runner uninstalls Agent Frontdoor from both environments and confirms the
+CLI is absent. On success it writes exactly one receipt here:
 
 ```bash
-"$FRIEND_TEMP_ROOT/source-venv/bin/python" -m pip uninstall -y agent-frontdoor
-"$FRIEND_TEMP_ROOT/wheel-venv/bin/python" -m pip uninstall -y agent-frontdoor
+test -f "$FRIEND_RUN_ROOT/friend-acceptance-receipt.json"
 ```
 
-Write exactly one schema-valid receipt inside the disposable root. Classification
+The receipt is schema-valid and remains inside the disposable root. Classification
 is mechanical:
 
 - `PRIVATE_HANDOFF_READY`: every phase passed in a local receiver run with

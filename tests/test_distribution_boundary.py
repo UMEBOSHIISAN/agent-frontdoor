@@ -44,6 +44,15 @@ def test_friend_lab_manual_has_ordered_attended_acceptance_phases() -> None:
     assert "--no-build-isolation" in text
     assert "--system-site-packages" not in text
     assert "--upgrade-deps" not in text
+    assert (
+        'export FRIEND_PACK_ROOT="$FRIEND_TEMP_ROOT/'
+        'agent-frontdoor-friend-pack-0.1.0"'
+    ) in text
+    assert '"$FRIEND_PACK_ROOT/lab/acceptance_runner.py"' in text
+    assert '--pack-root "$FRIEND_PACK_ROOT"' in text
+    assert '--run-root "$FRIEND_RUN_ROOT"' in text
+    assert "$FRIEND_TEMP_ROOT/wheelhouse" not in text
+    assert "$FRIEND_TEMP_ROOT/source" not in text
 
 
 def test_friend_lab_manual_has_no_real_receiver_or_private_location() -> None:

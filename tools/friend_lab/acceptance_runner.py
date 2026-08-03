@@ -19,6 +19,7 @@ import tarfile
 import tempfile
 import time
 from typing import Literal, Mapping, Protocol, Sequence
+import zipfile
 
 try:
     from tools.verify_handoff_archive import (
@@ -147,21 +148,30 @@ class BoundedCommandRunner:
         return returncode
 
     def _stop_group(self, process: subprocess.Popen[bytes]) -> None:
-        if process.poll() is not None:
-            process.wait()
-            return
+        process_group = process.pid
         try:
-            os.killpg(process.pid, signal.SIGTERM)
+            os.killpg(process_group, signal.SIGTERM)
         except ProcessLookupError:
             process.wait()
             return
-        try:
-            process.wait(timeout=self._grace)
-        except subprocess.TimeoutExpired:
+
+        deadline = time.monotonic() + self._grace
+        while time.monotonic() < deadline:
             try:
-                os.killpg(process.pid, signal.SIGKILL)
-            except ProcessLookupError:
+                os.killpg(process_group, 0)
+            except (ProcessLookupError, PermissionError):
+                break
+            time.sleep(min(0.01, max(0.0, deadline - time.monotonic())))
+        else:
+            try:
+                os.killpg(process_group, signal.SIGKILL)
+            except (ProcessLookupError, PermissionError):
                 pass
+
+        try:
+            process.wait(timeout=max(self._grace, 0.1))
+        except subprocess.TimeoutExpired:
+            process.kill()
             process.wait()
 
     def run(
@@ -185,6 +195,7 @@ class BoundedCommandRunner:
         deadline = time.monotonic() + timeout_seconds
         timed_out = False
         output_capped = False
+        group_stopped = False
         buffers = {"stdout": bytearray(), "stderr": bytearray()}
         streams: dict[int, tuple[str, object]] = {}
         selector = selectors.DefaultSelector()
@@ -221,7 +232,9 @@ class BoundedCommandRunner:
                 remaining = deadline - time.monotonic()
                 if remaining <= 0:
                     timed_out = True
-                    self._stop_group(process)
+                    if not group_stopped:
+                        self._stop_group(process)
+                        group_stopped = True
                 events = selector.select(max(0.0, min(remaining, 0.1)))
                 for key, _mask in events:
                     stream = key.fileobj
@@ -238,7 +251,9 @@ class BoundedCommandRunner:
                     if len(chunk) > room:
                         buffers[label].extend(chunk[: max(0, room)])
                         output_capped = True
-                        self._stop_group(process)
+                        if not group_stopped:
+                            self._stop_group(process)
+                            group_stopped = True
                     else:
                         buffers[label].extend(chunk)
                 if process.poll() is not None and not events:
@@ -255,8 +270,9 @@ class BoundedCommandRunner:
                             selector.unregister(stream)
                             streams.pop(stream.fileno(), None)
                 if timed_out or output_capped:
-                    if process.poll() is None:
+                    if not group_stopped:
                         self._stop_group(process)
+                        group_stopped = True
             process.wait()
         finally:
             selector.close()
@@ -292,6 +308,7 @@ class _PackContext:
     public_revision: str
     platform: dict[str, str]
     agent_wheel: str
+    agent_package_payloads: dict[str, bytes]
     setuptools_version: str
     wheel_version: str
 
@@ -354,10 +371,76 @@ def _actual_pack_files(pack_root: Path) -> dict[str, Path]:
     return actual
 
 
+def _safe_zip_name(name: str) -> bool:
+    path = PurePosixPath(name)
+    return bool(
+        name
+        and not name.startswith("/")
+        and "\\" not in name
+        and path.parts
+        and all(part not in {"", ".", ".."} for part in path.parts)
+    )
+
+
+def _agent_wheel_payloads(path: Path) -> dict[str, bytes]:
+    payloads: dict[str, bytes] = {}
+    try:
+        with zipfile.ZipFile(path) as archive:
+            infos = archive.infolist()
+            names = [item.filename for item in infos]
+            if len(names) != len(set(names)) or not all(
+                _safe_zip_name(name) for name in names
+            ):
+                raise AcceptanceError("agent wheel contents invalid")
+            for item in infos:
+                name = item.filename
+                if item.is_dir():
+                    continue
+                relative = PurePosixPath(name)
+                if relative.suffix.lower() in {".so", ".dylib", ".dll", ".pyd"}:
+                    raise AcceptanceError("agent wheel native member forbidden")
+                data = archive.read(item)
+                if scan_forbidden_text(relative, data):
+                    raise AcceptanceError("agent wheel privacy validation failed")
+                if name.startswith("frontdoor/"):
+                    payloads[name] = data
+    except (OSError, KeyError, ValueError, zipfile.BadZipFile) as exc:
+        if isinstance(exc, AcceptanceError):
+            raise
+        raise AcceptanceError("agent wheel unreadable") from exc
+    if not payloads:
+        raise AcceptanceError("agent wheel package empty")
+    return payloads
+
+
+def _source_package_payloads(source_path: Path) -> dict[str, bytes]:
+    payloads: dict[str, bytes] = {}
+    prefix = f"{SOURCE_ROOT_NAME}/src/frontdoor/"
+    try:
+        with tarfile.open(
+            fileobj=io.BytesIO(_read_regular(source_path)), mode="r:gz"
+        ) as archive:
+            for member in archive.getmembers():
+                if not member.isfile() or not member.name.startswith(prefix):
+                    continue
+                extracted = archive.extractfile(member)
+                if extracted is None:
+                    raise AcceptanceError("source package member unreadable")
+                relative = member.name[len(prefix) :]
+                payloads[f"frontdoor/{relative}"] = extracted.read()
+    except (OSError, EOFError, ValueError, tarfile.TarError) as exc:
+        if isinstance(exc, AcceptanceError):
+            raise
+        raise AcceptanceError("source package unreadable") from exc
+    if not payloads:
+        raise AcceptanceError("source package empty")
+    return payloads
+
+
 def _validate_wheelhouse(
     pack_root: Path,
     wheel_manifest: dict[str, object],
-) -> tuple[dict[str, object], str, str, str]:
+) -> tuple[dict[str, object], str, dict[str, bytes], str, str]:
     target = wheel_manifest.get("target")
     wheels = wheel_manifest.get("wheels")
     backend = wheel_manifest.get("build_backend")
@@ -481,9 +564,14 @@ def _validate_wheelhouse(
     }
     if backend != expected_backend:
         raise AcceptanceError("build backend lock mismatch")
+    agent_filename = str(agent["filename"])
+    agent_payloads = _agent_wheel_payloads(
+        pack_root / "wheelhouse" / agent_filename
+    )
     return (
         target,
-        str(agent["filename"]),
+        agent_filename,
+        agent_payloads,
         str(setuptools["version"]),
         str(wheel["version"]),
     )
@@ -562,9 +650,11 @@ def _validate_pack_root(pack_root: Path) -> _PackContext:
         or source_manifest.get("public_revision") != public_revision
     ):
         raise AcceptanceError("public revision mismatch")
-    target, agent_wheel, setuptools_version, wheel_version = (
+    target, agent_wheel, agent_payloads, setuptools_version, wheel_version = (
         _validate_wheelhouse(pack_root, wheel_manifest)
     )
+    if agent_payloads != _source_package_payloads(source_path):
+        raise AcceptanceError("agent wheel source binding mismatch")
     return _PackContext(
         manifest=manifest,
         source_manifest=source_manifest,
@@ -581,6 +671,7 @@ def _validate_pack_root(pack_root: Path) -> _PackContext:
             "pip_version": str(target["pip_version"]),
         },
         agent_wheel=agent_wheel,
+        agent_package_payloads=agent_payloads,
         setuptools_version=setuptools_version,
         wheel_version=wheel_version,
     )
@@ -646,7 +737,14 @@ def _create_isolated_environment(
         path.mkdir(parents=True, exist_ok=False)
     pip_config = environment_root / "pip.conf"
     pip_config.write_bytes(b"")
-    env = dict(os.environ)
+    env = {
+        "PATH": os.defpath,
+        "LANG": "C",
+        "LC_ALL": "C",
+        "TZ": "UTC",
+        "PYTHONHASHSEED": "0",
+        "PYTHONUTF8": "1",
+    }
     env.update({name: str(path) for name, path in paths.items()})
     env.update(
         {
@@ -734,6 +832,36 @@ def _scan_tree(root: Path) -> tuple[str, ...]:
             continue
         hits.update(scan_forbidden_text(relative, data))
     return tuple(sorted(hits))
+
+
+def _installed_agent_payloads(venv: Path) -> dict[str, bytes]:
+    candidates = tuple(
+        path
+        for path in (venv / "lib").glob("python*/site-packages/frontdoor")
+        if path.is_dir() and not path.is_symlink()
+    )
+    if len(candidates) != 1:
+        raise AcceptanceError("installed agent package missing or ambiguous")
+    package_root = candidates[0]
+    payloads: dict[str, bytes] = {}
+    for path in package_root.rglob("*"):
+        if path.is_symlink() or (not path.is_file() and not path.is_dir()):
+            raise AcceptanceError("installed agent package contains unsafe member")
+        if not path.is_file():
+            continue
+        relative = PurePosixPath(path.relative_to(package_root).as_posix())
+        if relative.suffix.lower() in {".so", ".dylib", ".dll", ".pyd"}:
+            raise AcceptanceError("installed agent package contains native member")
+        try:
+            data = path.read_bytes()
+        except OSError as exc:
+            raise AcceptanceError("installed agent package unreadable") from exc
+        if scan_forbidden_text(relative, data):
+            raise AcceptanceError("installed agent package privacy validation failed")
+        payloads[f"frontdoor/{relative.as_posix()}"] = data
+    if not payloads:
+        raise AcceptanceError("installed agent package empty")
+    return payloads
 
 
 def _static_source_ok(source_root: Path) -> bool:
@@ -975,6 +1103,7 @@ def _fallback_context(request: AcceptanceRequest) -> _PackContext:
             "pip_version": "UNKNOWN",
         },
         agent_wheel="missing.whl",
+        agent_package_payloads={},
         setuptools_version="UNKNOWN",
         wheel_version="UNKNOWN",
     )
@@ -1017,17 +1146,182 @@ def _receipt(
 
 def _validate_receipt(receipt: dict[str, object], schema_path: Path) -> None:
     schema = _load_json(schema_path)
-    try:
-        from jsonschema import Draft202012Validator
-    except ImportError:
-        required = schema.get("required")
-        if not isinstance(required, list) or set(receipt) != set(required):
-            raise AcceptanceError("receipt schema validation unavailable")
-        if receipt.get("schema_version") != "friend-acceptance-receipt.v1":
-            raise AcceptanceError("receipt schema validation failed")
-        return
-    errors = tuple(Draft202012Validator(schema).iter_errors(receipt))
-    if errors:
+    receipt_fields = {
+        "schema_version",
+        "package_version",
+        "public_revision",
+        "pack_sha256",
+        "source_archive_sha256",
+        "source_manifest_sha256",
+        "verifier_sha256",
+        "platform",
+        "digest_equality",
+        "controls",
+        "steps",
+        "collected_test_count",
+        "deterministic_output_hashes",
+        "uninstall_result",
+        "final_classification",
+        "verifier_role",
+        "gaps",
+    }
+    required = schema.get("required")
+    properties = schema.get("properties")
+    if (
+        schema.get("additionalProperties") is not False
+        or not isinstance(required, list)
+        or set(required) != receipt_fields
+        or not isinstance(properties, dict)
+        or set(properties) != receipt_fields
+        or set(receipt) != receipt_fields
+    ):
+        raise AcceptanceError("receipt schema validation failed")
+
+    safe_label = lambda value: (
+        isinstance(value, str) and _SAFE_LABEL.fullmatch(value) is not None
+    )
+    sha256 = lambda value: (
+        isinstance(value, str) and _HEX64.fullmatch(value) is not None
+    )
+    integer = lambda value: isinstance(value, int) and not isinstance(value, bool)
+    pass_states = {"PASS", "FAIL", "NOT_RUN"}
+
+    platform = receipt.get("platform")
+    platform_ok = bool(
+        isinstance(platform, dict)
+        and set(platform)
+        == {"os_version", "architecture", "python_version", "pip_version"}
+        and isinstance(platform.get("os_version"), str)
+        and re.fullmatch(
+            r"[A-Za-z0-9][A-Za-z0-9 ._()+-]{0,63}",
+            str(platform.get("os_version")),
+        )
+        and all(
+            safe_label(platform.get(name))
+            for name in ("architecture", "python_version", "pip_version")
+        )
+    )
+    equality = receipt.get("digest_equality")
+    equality_ok = bool(
+        isinstance(equality, dict)
+        and set(equality) == {"pack", "source", "verifier"}
+        and all(type(equality.get(name)) is bool for name in equality)
+    )
+    controls = receipt.get("controls")
+    controls_ok = bool(
+        isinstance(controls, dict)
+        and set(controls)
+        == {
+            "network_disconnect",
+            "socket_guard",
+            "write_guard",
+            "privacy_scan",
+            "secret_scan",
+            "post_control_socket_events",
+            "post_control_write_events",
+        }
+        and controls.get("network_disconnect")
+        in {"CONFIRMED", "NOT_CONFIRMED", "REMOTE_UNAVAILABLE"}
+        and all(
+            controls.get(name) in pass_states
+            for name in ("socket_guard", "write_guard", "privacy_scan", "secret_scan")
+        )
+        and all(
+            integer(controls.get(name)) and int(controls[name]) >= 0
+            for name in ("post_control_socket_events", "post_control_write_events")
+        )
+    )
+
+    steps = receipt.get("steps")
+    steps_ok = isinstance(steps, list) and bool(steps)
+    if steps_ok:
+        for step in steps:
+            if not (
+                isinstance(step, dict)
+                and set(step)
+                == {
+                    "phase",
+                    "command_class",
+                    "exit_status",
+                    "result",
+                    "stdout_sha256",
+                    "stderr_sha256",
+                }
+                and safe_label(step.get("phase"))
+                and safe_label(step.get("command_class"))
+                and integer(step.get("exit_status"))
+                and -1 <= int(step["exit_status"]) <= 255
+                and step.get("result") in pass_states
+                and sha256(step.get("stdout_sha256"))
+                and sha256(step.get("stderr_sha256"))
+            ):
+                steps_ok = False
+                break
+
+    deterministic = receipt.get("deterministic_output_hashes")
+    deterministic_ok = isinstance(deterministic, list)
+    if deterministic_ok:
+        for item in deterministic:
+            if not (
+                isinstance(item, dict)
+                and set(item)
+                == {
+                    "command_class",
+                    "exit_status",
+                    "stdout_sha256",
+                    "stderr_sha256",
+                }
+                and safe_label(item.get("command_class"))
+                and integer(item.get("exit_status"))
+                and 0 <= int(item["exit_status"]) <= 255
+                and sha256(item.get("stdout_sha256"))
+                and sha256(item.get("stderr_sha256"))
+            ):
+                deterministic_ok = False
+                break
+
+    gaps = receipt.get("gaps")
+    gaps_ok = bool(
+        isinstance(gaps, list)
+        and all(isinstance(item, str) for item in gaps)
+        and len(gaps) == len(set(gaps))
+        and all(item in _GAP_ORDER for item in gaps)
+    )
+    if not all(
+        (
+            receipt.get("schema_version") == "friend-acceptance-receipt.v1",
+            receipt.get("package_version") == PACKAGE_VERSION,
+            isinstance(receipt.get("public_revision"), str)
+            and re.fullmatch(r"[0-9a-f]{40}", str(receipt["public_revision"]))
+            is not None,
+            all(
+                sha256(receipt.get(name))
+                for name in (
+                    "pack_sha256",
+                    "source_archive_sha256",
+                    "source_manifest_sha256",
+                    "verifier_sha256",
+                )
+            ),
+            platform_ok,
+            equality_ok,
+            controls_ok,
+            steps_ok,
+            integer(receipt.get("collected_test_count"))
+            and int(receipt["collected_test_count"]) >= 0,
+            deterministic_ok,
+            receipt.get("uninstall_result") in pass_states,
+            receipt.get("final_classification")
+            in {
+                "PRIVATE_HANDOFF_READY",
+                "PRIVATE_HANDOFF_READY_WITH_GAPS",
+                "NOT_READY",
+            },
+            receipt.get("verifier_role")
+            in {"receiver-human", "receiver-agent", "independent-reviewer"},
+            gaps_ok,
+        )
+    ):
         raise AcceptanceError("receipt schema validation failed")
 
 
@@ -1399,7 +1693,7 @@ def run_acceptance(
                 "--find-links",
                 str(wheelhouse),
                 "--no-build-isolation",
-                str(source_root),
+                f"{source_root}[test]",
             ),
             request.run_root,
             180.0,
@@ -1439,6 +1733,24 @@ def run_acceptance(
                 verifier_sha256=detached_sha,
                 digest_equality=digest_equality,
             )
+
+    try:
+        installed_packages_ok = all(
+            _installed_agent_payloads(venv) == context.agent_package_payloads
+            for venv in (source_venv, wheel_venv)
+        )
+    except AcceptanceError:
+        installed_packages_ok = False
+    state.add_internal("installed-package-boundary", installed_packages_ok)
+    if not installed_packages_ok:
+        state.gaps.add("CONTROL_FAILURE")
+        return _finish(
+            state,
+            context,
+            pack_sha256=pack_sha,
+            verifier_sha256=detached_sha,
+            digest_equality=digest_equality,
+        )
 
     collect_argv = (
         str(source_python),

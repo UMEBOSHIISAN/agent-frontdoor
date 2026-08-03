@@ -116,29 +116,65 @@ def _open_is_write(args: tuple[object, ...]) -> bool:
     return False
 
 
-def _write_paths(event: str, args: tuple[object, ...]) -> tuple[object, ...]:
+def _dir_fd(args: tuple[object, ...], index: int) -> int | None:
+    if len(args) <= index or args[index] in {None, -1}:
+        return None
+    value = args[index]
+    return value if isinstance(value, int) and not isinstance(value, bool) else -2
+
+
+def _write_paths(
+    event: str, args: tuple[object, ...]
+) -> tuple[tuple[object, int | None], ...]:
     if event == "open":
-        return (args[0],) if args and _open_is_write(args) else ()
+        return ((args[0], None),) if args and _open_is_write(args) else ()
     if event in {"os.rename", "os.replace", "os.link"}:
-        return args[:2]
+        return (
+            (args[0], _dir_fd(args, 2)),
+            (args[1], _dir_fd(args, 3)),
+        )
     if event in {"os.symlink", "shutil.copyfile", "shutil.copymode", "shutil.copystat"}:
-        return (args[1],) if len(args) > 1 else (None,)
+        directory_fd = _dir_fd(args, 2) if event == "os.symlink" else None
+        return ((args[1], directory_fd),) if len(args) > 1 else ((None, None),)
     if event in {
         "os.remove",
         "os.unlink",
         "os.rmdir",
-        "os.mkdir",
-        "os.chmod",
-        "os.chown",
-        "os.utime",
         "os.truncate",
         "shutil.rmtree",
     }:
-        return (args[0],) if args else (None,)
+        directory_fd = _dir_fd(args, 1) if event.startswith("os.") else None
+        return ((args[0], directory_fd),) if args else ((None, None),)
+    if event == "os.mkdir":
+        return ((args[0], _dir_fd(args, 2)),) if args else ((None, None),)
+    if event == "os.chmod":
+        return ((args[0], _dir_fd(args, 2)),) if args else ((None, None),)
+    if event == "os.chown":
+        return ((args[0], _dir_fd(args, 3)),) if args else ((None, None),)
+    if event == "os.utime":
+        return ((args[0], _dir_fd(args, 3)),) if args else ((None, None),)
     return ()
 
 
-def _resolve_event_path(value: object) -> Path | None:
+def _directory_for_fd(directory_fd: int | None) -> Path | None:
+    if directory_fd is None:
+        return Path.cwd()
+    if directory_fd < 0:
+        return None
+    for prefix in (Path("/dev/fd"), Path("/proc/self/fd")):
+        candidate = prefix / str(directory_fd)
+        try:
+            resolved = candidate.resolve(strict=True)
+        except (OSError, RuntimeError):
+            continue
+        if resolved.is_dir():
+            return resolved
+    return None
+
+
+def _resolve_event_path(
+    value: object, directory_fd: int | None = None
+) -> Path | None:
     if isinstance(value, int):
         return None
     try:
@@ -151,7 +187,10 @@ def _resolve_event_path(value: object) -> Path | None:
         return None
     path = Path(raw)
     if not path.is_absolute():
-        path = Path.cwd() / path
+        directory = _directory_for_fd(directory_fd)
+        if directory is None:
+            return None
+        path = directory / path
     try:
         if path.exists() or path.is_symlink():
             return path.resolve(strict=True)
@@ -161,8 +200,8 @@ def _resolve_event_path(value: object) -> Path | None:
         return None
 
 
-def _inside_root(value: object) -> bool:
-    resolved = _resolve_event_path(value)
+def _inside_root(value: object, directory_fd: int | None = None) -> bool:
+    resolved = _resolve_event_path(value, directory_fd)
     if resolved is None:
         return False
     try:
@@ -172,9 +211,31 @@ def _inside_root(value: object) -> bool:
     return True
 
 
-def _all_inside_root(paths: Iterable[object]) -> bool:
+def _all_inside_root(paths: Iterable[tuple[object, int | None]]) -> bool:
     observed = tuple(paths)
-    return bool(observed) and all(_inside_root(item) for item in observed)
+    return bool(observed) and all(
+        _inside_root(item, directory_fd) for item, directory_fd in observed
+    )
+
+
+_ORIGINAL_OS_OPEN = os.open
+
+
+def _guarded_os_open(
+    path: object,
+    flags: int,
+    mode: int = 0o777,
+    *,
+    dir_fd: int | None = None,
+) -> int:
+    write_args = (path, None, flags)
+    if dir_fd is not None and _open_is_write(write_args):
+        resolved = _resolve_event_path(path, dir_fd)
+        if resolved is None or not _inside_root(resolved):
+            _record("outside-write")
+            raise PermissionError("friend-lab outside write blocked")
+        return _ORIGINAL_OS_OPEN(resolved, flags, mode)
+    return _ORIGINAL_OS_OPEN(path, flags, mode, dir_fd=dir_fd)
 
 
 def _audit(event: str, args: tuple[object, ...]) -> None:
@@ -190,3 +251,4 @@ def _audit(event: str, args: tuple[object, ...]) -> None:
 
 
 sys.addaudithook(_audit)
+os.open = _guarded_os_open

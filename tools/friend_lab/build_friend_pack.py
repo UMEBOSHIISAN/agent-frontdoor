@@ -21,6 +21,7 @@ import zipfile
 
 from tools.verify_handoff_archive import (
     MemberRecord,
+    scan_forbidden_text,
     verify_friend_pack,
     verify_source_archive_bytes,
 )
@@ -407,6 +408,81 @@ def _parse_wheel(path: Path) -> dict[str, object]:
     }
 
 
+def _agent_wheel_payloads(path: Path) -> dict[str, bytes]:
+    payloads: dict[str, bytes] = {}
+    try:
+        with zipfile.ZipFile(path) as archive:
+            infos = archive.infolist()
+            names = [item.filename for item in infos]
+            if len(names) != len(set(names)):
+                raise BuildError("agent wheel contains duplicate members")
+            for item in infos:
+                name = item.filename
+                if not _safe_zip_name(name):
+                    raise BuildError("agent wheel contains unsafe member")
+                if item.is_dir():
+                    continue
+                relative = PurePosixPath(name)
+                if relative.suffix.lower() in {".so", ".dylib", ".dll", ".pyd"}:
+                    raise BuildError("agent wheel contains native member")
+                data = archive.read(item)
+                if scan_forbidden_text(relative, data):
+                    raise BuildError("agent wheel privacy validation failed")
+                if name.startswith("frontdoor/"):
+                    payloads[name] = data
+    except (OSError, KeyError, ValueError, zipfile.BadZipFile) as exc:
+        if isinstance(exc, BuildError):
+            raise
+        raise BuildError("agent wheel package unreadable") from exc
+    if not payloads:
+        raise BuildError("agent wheel package is empty")
+    return payloads
+
+
+def _source_package_payloads(source_data: bytes) -> dict[str, bytes]:
+    prefix = f"{SOURCE_ROOT}/src/frontdoor/"
+    payloads: dict[str, bytes] = {}
+    try:
+        with tarfile.open(fileobj=io.BytesIO(source_data), mode="r:gz") as archive:
+            for item in archive.getmembers():
+                if not item.isfile() or not item.name.startswith(prefix):
+                    continue
+                extracted = archive.extractfile(item)
+                if extracted is None:
+                    raise BuildError("source package member unreadable")
+                relative = item.name[len(prefix) :]
+                payloads[f"frontdoor/{relative}"] = extracted.read()
+    except (OSError, EOFError, ValueError, tarfile.TarError) as exc:
+        if isinstance(exc, BuildError):
+            raise
+        raise BuildError("source package unreadable") from exc
+    if not payloads:
+        raise BuildError("source package is empty")
+    return payloads
+
+
+def _validate_agent_wheel_source_binding(
+    wheelhouse: Path,
+    wheel_manifest: dict[str, object],
+    source_data: bytes,
+) -> None:
+    wheels = wheel_manifest.get("wheels")
+    if not isinstance(wheels, list):
+        raise BuildError("wheelhouse manifest invalid")
+    agent_records = [
+        item for item in wheels
+        if isinstance(item, dict) and item.get("name") == "agent-frontdoor"
+    ]
+    if len(agent_records) != 1:
+        raise BuildError("agent wheel record invalid")
+    filename = agent_records[0].get("filename")
+    if not isinstance(filename, str) or PurePosixPath(filename).name != filename:
+        raise BuildError("agent wheel record invalid")
+    wheel_payloads = _agent_wheel_payloads(wheelhouse / filename)
+    if wheel_payloads != _source_package_payloads(source_data):
+        raise BuildError("agent wheel source binding mismatch")
+
+
 def _target_dict(target: TargetTuple) -> dict[str, object]:
     _validate_target(target)
     value = asdict(target)
@@ -683,6 +759,9 @@ def build_friend_pack(
         temporary_root = Path(temporary)
         source_data, source_records = build_source_archive(
             public_repo, temporary_root / "source.tar.gz"
+        )
+        _validate_agent_wheel_source_binding(
+            wheelhouse, wheel_manifest, source_data
         )
         if _public_revision(public_repo) != revision:
             raise BuildError("public revision changed during build")

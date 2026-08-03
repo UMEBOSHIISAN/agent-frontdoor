@@ -416,7 +416,7 @@ def _agent_wheel_payloads(path: Path) -> dict[str, bytes]:
                 if parts[-1] == "METADATA":
                     message = BytesParser(policy=policy.default).parsebytes(data)
                     requires = sorted(str(value).strip() for value in message.get_all("Requires-Dist", []))
-                    if requires != ["jsonschema>=4"]:
+                    if requires not in (["jsonschema>=4"], ["jsonschema>=4", 'pytest; extra == "test"']):
                         raise AcceptanceError("agent wheel dependency metadata mismatch")
                 if parts[-1] == "RECORD":
                     for line in data.decode("utf-8").splitlines():

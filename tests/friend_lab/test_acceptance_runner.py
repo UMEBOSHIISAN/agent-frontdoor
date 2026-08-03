@@ -76,6 +76,7 @@ def _wheel_bytes(
         f"Name: {name}\n"
         f"Version: {version}\n"
         "License: MIT\n"
+        + ("Requires-Dist: jsonschema>=4\n" if name == "agent-frontdoor" else "")
     ).encode("utf-8")
     wheel = (
         "Wheel-Version: 1.0\n"
@@ -349,7 +350,7 @@ def acceptance_request(
                 "abi_tags": [abi_tag],
                 "platform_tags": [platform_tag],
                 "license_fields": ["License: MIT"],
-                "requires_dist": [],
+                "requires_dist": ["jsonschema>=4"],
             }
         )
     wheel_manifest = {

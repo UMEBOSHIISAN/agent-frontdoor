@@ -5,6 +5,8 @@ from __future__ import annotations
 
 import argparse
 from dataclasses import dataclass
+from email import policy
+from email.parser import BytesParser
 import hashlib
 import io
 import json
@@ -411,11 +413,8 @@ def _agent_wheel_payloads(path: Path) -> dict[str, bytes]:
                 if scan_forbidden_text(relative, data):
                     raise AcceptanceError("agent wheel privacy validation failed")
                 if parts[-1] == "METADATA":
-                    requires = sorted(
-                        line.split(":", 1)[1].strip()
-                        for line in data.decode("utf-8").splitlines()
-                        if line.startswith("Requires-Dist:")
-                    )
+                    message = BytesParser(policy=policy.default).parsebytes(data)
+                    requires = sorted(str(value).strip() for value in message.get_all("Requires-Dist", []))
                     if requires != ["jsonschema>=4"]:
                         raise AcceptanceError("agent wheel dependency metadata mismatch")
                 if parts[-1] == "RECORD":

@@ -214,7 +214,7 @@ def make_friend_pack(
         + (b"user" + b"name=synthetic-user\n")
         + (b"10" + b".0.0.9\n")
         + (b"api_" + b"key=sk-" + b"syntheticvalue\n")
-        + (b"OPENAI_" + b"API_KEY=syntheticvalue\n")
+        + (b"OPENAI_" + b"API_" + b"KEY=syntheticvalue\n")
         + (b"tasks/" + b"worker_registry/synthetic\n")
     )
     source_manifest_bytes = json_bytes(source_manifest(records))
@@ -394,7 +394,10 @@ def test_source_archive_rejects_forbidden_directory(path: str) -> None:
         (b"user" + b"name=private-person\n", "user-or-host-identifier"),
         (b"address=10" + b".9.8.7\n", "ip-address"),
         (b"api_" + b"key=sk-" + b"secretvalue123\n", "credential-like"),
-        (b"OPENAI_" + b"API_KEY=nonempty\n", "environment-assignment"),
+        (
+            b"OPENAI_" + b"API_" + b"KEY=nonempty\n",
+            "environment-assignment",
+        ),
         (b"tasks/" + b"worker_registry/private.md\n", "private-operational-record"),
     ],
 )

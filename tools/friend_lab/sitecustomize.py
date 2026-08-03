@@ -1,0 +1,192 @@
+"""Fail-closed Python audit guard loaded only by the friend-lab runner."""
+
+from __future__ import annotations
+
+import json
+import os
+from pathlib import Path
+import re
+import sys
+from typing import Iterable
+
+
+_RECORDING = False
+
+
+def _required_environment(name: str) -> str:
+    value = os.environ.get(name)
+    if value is None or value == "":
+        raise SystemExit(f"friend-lab guard configuration missing: {name}")
+    return value
+
+
+def _load_root() -> tuple[Path, Path]:
+    raw = Path(_required_environment("FRIEND_LAB_ROOT"))
+    if not raw.is_absolute():
+        raise SystemExit("friend-lab root must be absolute")
+    if raw.is_symlink():
+        raise SystemExit("friend-lab root must not be a symlink")
+    try:
+        resolved = raw.resolve(strict=True)
+    except (OSError, RuntimeError) as exc:
+        raise SystemExit("friend-lab root is not resolvable") from exc
+    if not resolved.is_dir():
+        raise SystemExit("friend-lab root must be an existing directory")
+    return raw, resolved
+
+
+def _has_symlink_below_root(root: Path, target: Path) -> bool:
+    try:
+        relative = target.relative_to(root)
+    except ValueError:
+        return True
+    current = root
+    for component in relative.parts[:-1]:
+        current = current / component
+        if current.is_symlink():
+            return True
+    return target.is_symlink()
+
+
+def _load_ledger(raw_root: Path, resolved_root: Path) -> Path:
+    raw = Path(_required_environment("FRIEND_LAB_LEDGER"))
+    if not raw.is_absolute():
+        raise SystemExit("friend-lab ledger must be absolute")
+    if _has_symlink_below_root(raw_root, raw):
+        raise SystemExit("friend-lab ledger path must not contain symlinks")
+    try:
+        parent = raw.parent.resolve(strict=True)
+        resolved = parent / raw.name
+        resolved.relative_to(resolved_root)
+    except (OSError, RuntimeError, ValueError) as exc:
+        raise SystemExit("friend-lab ledger must resolve beneath root") from exc
+    if raw.exists() and not raw.is_file():
+        raise SystemExit("friend-lab ledger must be a regular file")
+    return resolved
+
+
+def _load_phase() -> str:
+    value = _required_environment("FRIEND_LAB_PHASE")
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._+-]{0,95}", value):
+        raise SystemExit("friend-lab phase is invalid")
+    return value
+
+
+_RAW_ROOT, _ROOT = _load_root()
+_LEDGER = _load_ledger(_RAW_ROOT, _ROOT)
+_PHASE = _load_phase()
+
+
+def _record(operation_class: str) -> None:
+    global _RECORDING
+    if _RECORDING:
+        return
+    _RECORDING = True
+    try:
+        with _LEDGER.open("a", encoding="utf-8") as stream:
+            stream.write(
+                json.dumps(
+                    {
+                        "phase": _PHASE,
+                        "operation_class": operation_class,
+                    },
+                    sort_keys=True,
+                    separators=(",", ":"),
+                )
+                + "\n"
+            )
+    finally:
+        _RECORDING = False
+
+
+def _open_is_write(args: tuple[object, ...]) -> bool:
+    mode = args[1] if len(args) > 1 else None
+    flags = args[2] if len(args) > 2 else None
+    if isinstance(mode, str) and any(item in mode for item in "wax+"):
+        return True
+    if isinstance(flags, int):
+        write_flags = (
+            os.O_WRONLY
+            | os.O_RDWR
+            | os.O_APPEND
+            | os.O_CREAT
+            | os.O_TRUNC
+        )
+        return bool(flags & write_flags)
+    return False
+
+
+def _write_paths(event: str, args: tuple[object, ...]) -> tuple[object, ...]:
+    if event == "open":
+        return (args[0],) if args and _open_is_write(args) else ()
+    if event in {"os.rename", "os.replace", "os.link"}:
+        return args[:2]
+    if event in {"os.symlink", "shutil.copyfile", "shutil.copymode", "shutil.copystat"}:
+        return (args[1],) if len(args) > 1 else (None,)
+    if event in {
+        "os.remove",
+        "os.unlink",
+        "os.rmdir",
+        "os.mkdir",
+        "os.chmod",
+        "os.chown",
+        "os.utime",
+        "os.truncate",
+        "shutil.rmtree",
+    }:
+        return (args[0],) if args else (None,)
+    return ()
+
+
+def _resolve_event_path(value: object) -> Path | None:
+    if isinstance(value, int):
+        return None
+    try:
+        raw = os.fspath(value)
+    except (TypeError, ValueError):
+        return None
+    if isinstance(raw, bytes):
+        raw = os.fsdecode(raw)
+    if not isinstance(raw, str) or not raw or "\x00" in raw:
+        return None
+    path = Path(raw)
+    if not path.is_absolute():
+        path = Path.cwd() / path
+    try:
+        if path.exists() or path.is_symlink():
+            return path.resolve(strict=True)
+        parent = path.parent.resolve(strict=True)
+        return parent / path.name
+    except (OSError, RuntimeError):
+        return None
+
+
+def _inside_root(value: object) -> bool:
+    resolved = _resolve_event_path(value)
+    if resolved is None:
+        return False
+    try:
+        resolved.relative_to(_ROOT)
+    except ValueError:
+        return False
+    return True
+
+
+def _all_inside_root(paths: Iterable[object]) -> bool:
+    observed = tuple(paths)
+    return bool(observed) and all(_inside_root(item) for item in observed)
+
+
+def _audit(event: str, args: tuple[object, ...]) -> None:
+    if _RECORDING:
+        return
+    if event.startswith("socket."):
+        _record("socket")
+        raise PermissionError("friend-lab socket operation blocked")
+    paths = _write_paths(event, args)
+    if paths and not _all_inside_root(paths):
+        _record("outside-write")
+        raise PermissionError("friend-lab outside write blocked")
+
+
+sys.addaudithook(_audit)

@@ -1,0 +1,186 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/agent-frontdoor/wheelhouse-manifest.v1.json",
+  "title": "Agent Frontdoor Wheelhouse Manifest v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "package_version",
+    "target",
+    "wheels",
+    "build_backend"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "wheelhouse-manifest.v1"
+    },
+    "package_version": {
+      "const": "0.1.0"
+    },
+    "target": {
+      "$ref": "#/$defs/target"
+    },
+    "wheels": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/wheel"
+      }
+    },
+    "build_backend": {
+      "$ref": "#/$defs/build_backend"
+    }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "safe_version": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._+-]*$"
+    },
+    "tag": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9_.-]+$"
+    },
+    "target": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "os_version",
+        "architecture",
+        "python_minor",
+        "abi_tag",
+        "platform_tags",
+        "pip_version"
+      ],
+      "properties": {
+        "os_version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9 ._()+-]*$"
+        },
+        "architecture": {
+          "$ref": "#/$defs/tag"
+        },
+        "python_minor": {
+          "type": "string",
+          "pattern": "^3\\.[0-9]{1,2}$"
+        },
+        "abi_tag": {
+          "$ref": "#/$defs/tag"
+        },
+        "platform_tags": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/tag"
+          }
+        },
+        "pip_version": {
+          "$ref": "#/$defs/safe_version"
+        }
+      }
+    },
+    "wheel": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "version",
+        "filename",
+        "size",
+        "sha256",
+        "python_tags",
+        "abi_tags",
+        "platform_tags",
+        "license_fields",
+        "requires_dist"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$"
+        },
+        "version": {
+          "$ref": "#/$defs/safe_version"
+        },
+        "filename": {
+          "type": "string",
+          "pattern": "^[^/\\s]+\\.whl$"
+        },
+        "size": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "python_tags": {
+          "$ref": "#/$defs/tags"
+        },
+        "abi_tags": {
+          "$ref": "#/$defs/tags"
+        },
+        "platform_tags": {
+          "$ref": "#/$defs/tags"
+        },
+        "license_fields": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "maxLength": 256,
+            "pattern": "^[^\\r\\n]*$"
+          }
+        },
+        "requires_dist": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "maxLength": 512,
+            "pattern": "^[^\\r\\n]*$"
+          }
+        }
+      }
+    },
+    "tags": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/tag"
+      }
+    },
+    "build_backend": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "version", "filename", "sha256"],
+      "properties": {
+        "name": {
+          "const": "setuptools"
+        },
+        "version": {
+          "$ref": "#/$defs/safe_version"
+        },
+        "filename": {
+          "type": "string",
+          "pattern": "^setuptools-[^/\\s]+\\.whl$"
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    }
+  }
+}

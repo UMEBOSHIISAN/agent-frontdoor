@@ -1,0 +1,235 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/agent-frontdoor/friend-acceptance-receipt.v1.json",
+  "title": "Agent Frontdoor Friend Acceptance Receipt v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "package_version",
+    "public_revision",
+    "pack_sha256",
+    "source_archive_sha256",
+    "source_manifest_sha256",
+    "verifier_sha256",
+    "platform",
+    "digest_equality",
+    "controls",
+    "steps",
+    "collected_test_count",
+    "deterministic_output_hashes",
+    "uninstall_result",
+    "final_classification",
+    "verifier_role",
+    "gaps"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "friend-acceptance-receipt.v1"
+    },
+    "package_version": {
+      "const": "0.1.0"
+    },
+    "public_revision": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "pack_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "source_archive_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "source_manifest_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "verifier_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "platform": {
+      "$ref": "#/$defs/platform"
+    },
+    "digest_equality": {
+      "$ref": "#/$defs/digest_equality"
+    },
+    "controls": {
+      "$ref": "#/$defs/controls"
+    },
+    "steps": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/step"
+      }
+    },
+    "collected_test_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "deterministic_output_hashes": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/output_hash"
+      }
+    },
+    "uninstall_result": {
+      "$ref": "#/$defs/pass_state"
+    },
+    "final_classification": {
+      "enum": [
+        "PRIVATE_HANDOFF_READY",
+        "PRIVATE_HANDOFF_READY_WITH_GAPS",
+        "NOT_READY"
+      ]
+    },
+    "verifier_role": {
+      "enum": [
+        "receiver-human",
+        "receiver-agent",
+        "independent-reviewer"
+      ]
+    },
+    "gaps": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "REMOTE_EXECUTION",
+          "NETWORK_DISCONNECT_UNCONFIRMED",
+          "DIGEST_MISMATCH",
+          "CONTROL_FAILURE",
+          "PHASE_FAILURE",
+          "PYTHON_FLOOR_UNVERIFIED",
+          "INCOMPLETE_EVIDENCE",
+          "NATIVE_COMPATIBILITY_GAP"
+        ]
+      }
+    }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "safe_label": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 96,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._+-]*$"
+    },
+    "platform": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "os_version",
+        "architecture",
+        "python_version",
+        "pip_version"
+      ],
+      "properties": {
+        "os_version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9 ._()+-]*$"
+        },
+        "architecture": {
+          "$ref": "#/$defs/safe_label"
+        },
+        "python_version": {
+          "$ref": "#/$defs/safe_label"
+        },
+        "pip_version": {
+          "$ref": "#/$defs/safe_label"
+        }
+      }
+    },
+    "digest_equality": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["pack", "source", "verifier"],
+      "properties": {
+        "pack": {"type": "boolean"},
+        "source": {"type": "boolean"},
+        "verifier": {"type": "boolean"}
+      }
+    },
+    "controls": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "network_disconnect",
+        "socket_guard",
+        "write_guard",
+        "privacy_scan",
+        "secret_scan",
+        "post_control_socket_events",
+        "post_control_write_events"
+      ],
+      "properties": {
+        "network_disconnect": {
+          "enum": ["CONFIRMED", "NOT_CONFIRMED", "REMOTE_UNAVAILABLE"]
+        },
+        "socket_guard": {"$ref": "#/$defs/pass_state"},
+        "write_guard": {"$ref": "#/$defs/pass_state"},
+        "privacy_scan": {"$ref": "#/$defs/pass_state"},
+        "secret_scan": {"$ref": "#/$defs/pass_state"},
+        "post_control_socket_events": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "post_control_write_events": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "pass_state": {
+      "enum": ["PASS", "FAIL", "NOT_RUN"]
+    },
+    "step": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "phase",
+        "command_class",
+        "exit_status",
+        "result",
+        "stdout_sha256",
+        "stderr_sha256"
+      ],
+      "properties": {
+        "phase": {"$ref": "#/$defs/safe_label"},
+        "command_class": {"$ref": "#/$defs/safe_label"},
+        "exit_status": {
+          "type": "integer",
+          "minimum": -1,
+          "maximum": 255
+        },
+        "result": {"$ref": "#/$defs/pass_state"},
+        "stdout_sha256": {"$ref": "#/$defs/sha256"},
+        "stderr_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "output_hash": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "command_class",
+        "exit_status",
+        "stdout_sha256",
+        "stderr_sha256"
+      ],
+      "properties": {
+        "command_class": {"$ref": "#/$defs/safe_label"},
+        "exit_status": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 255
+        },
+        "stdout_sha256": {"$ref": "#/$defs/sha256"},
+        "stderr_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    }
+  }
+}

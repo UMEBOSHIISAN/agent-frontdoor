@@ -1,0 +1,116 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/agent-frontdoor/friend-pack-manifest.v1.json",
+  "title": "Agent Frontdoor Friend Pack Manifest v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "package_version",
+    "public_revision",
+    "source_archive",
+    "verifier",
+    "privacy_control",
+    "self_exclusions",
+    "members"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "friend-pack-manifest.v1"
+    },
+    "package_version": {
+      "const": "0.1.0"
+    },
+    "public_revision": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "source_archive": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256", "regular_file_count", "manifest_path"],
+      "properties": {
+        "path": {
+          "const": "source/agent-frontdoor-0.1.0.tar.gz"
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "regular_file_count": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "manifest_path": {
+          "const": "source/source-manifest.json"
+        }
+      }
+    },
+    "verifier": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256"],
+      "properties": {
+        "path": {
+          "const": "verifier/verify_handoff_archive.py"
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "privacy_control": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256"],
+      "properties": {
+        "path": {
+          "const": "lab/controls/privacy_control.txt"
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "self_exclusions": {
+      "const": ["manifest.json", "manifest.sha256"]
+    },
+    "members": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/member"
+      }
+    }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "member": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "mode", "size", "sha256"],
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))[A-Za-z0-9._/-]+$"
+        },
+        "mode": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 511
+        },
+        "size": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    }
+  }
+}

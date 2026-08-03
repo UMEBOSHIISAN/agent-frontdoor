@@ -410,6 +410,19 @@ def _agent_wheel_payloads(path: Path) -> dict[str, bytes]:
                 data = archive.read(item)
                 if scan_forbidden_text(relative, data):
                     raise AcceptanceError("agent wheel privacy validation failed")
+                if parts[-1] == "METADATA":
+                    requires = sorted(
+                        line.split(":", 1)[1].strip()
+                        for line in data.decode("utf-8").splitlines()
+                        if line.startswith("Requires-Dist:")
+                    )
+                    if requires not in ([], ["jsonschema>=4"]):
+                        raise AcceptanceError("agent wheel dependency metadata mismatch")
+                if parts[-1] == "RECORD":
+                    for line in data.decode("utf-8").splitlines():
+                        member = line.split(",", 1)[0]
+                        if not _safe_zip_name(member):
+                            raise AcceptanceError("agent wheel RECORD path invalid")
                 if parts[-1] == "entry_points.txt" and data != b"[console_scripts]\nagent-frontdoor = frontdoor.cli:main\n":
                     raise AcceptanceError("agent wheel entry point mismatch")
                 if name.startswith("frontdoor/"):

@@ -425,7 +425,7 @@ def test_build_friend_pack_is_deterministic_and_outputs_two_files(
         (
             "agent_frontdoor-0.1.0.dist-info/private.txt",
             b"/Users/umeboshi/private\n",
-            "privacy",
+            "unexpected",
         ),
         (
             "evil.py",

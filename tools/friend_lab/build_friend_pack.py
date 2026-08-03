@@ -420,10 +420,11 @@ def _agent_wheel_payloads(path: Path) -> dict[str, bytes]:
                 relative = PurePosixPath(name)
                 parts = relative.parts
                 if not parts or (parts[0] != "frontdoor" and not (
-                    len(parts) == 2
+                    (len(parts) == 2
                     and parts[0].startswith("agent_frontdoor-")
                     and parts[0].endswith(".dist-info")
-                    and parts[1] in {"METADATA", "WHEEL", "RECORD", "entry_points.txt", "top_level.txt"}
+                    and parts[1] in {"METADATA", "WHEEL", "RECORD", "entry_points.txt", "top_level.txt"})
+                    or (len(parts) == 3 and parts[1] == "licenses" and parts[2] == "LICENSE")
                 )):
                     raise BuildError("agent wheel contains unexpected member")
                 if relative.suffix.lower() in {".so", ".dylib", ".dll", ".pyd"}:

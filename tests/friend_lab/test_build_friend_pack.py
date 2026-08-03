@@ -96,6 +96,7 @@ def _write_wheel(
         f"Name: {name}\n"
         f"Version: {version}\n"
         "License: MIT\n"
+        + ("Requires-Dist: jsonschema>=4\n" if name == "agent-frontdoor" else "")
     )
     wheel = (
         "Wheel-Version: 1.0\n"

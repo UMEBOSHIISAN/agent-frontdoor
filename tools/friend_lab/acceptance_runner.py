@@ -416,7 +416,7 @@ def _agent_wheel_payloads(path: Path) -> dict[str, bytes]:
                         for line in data.decode("utf-8").splitlines()
                         if line.startswith("Requires-Dist:")
                     )
-                    if requires not in ([], ["jsonschema>=4"]):
+                    if requires != ["jsonschema>=4"]:
                         raise AcceptanceError("agent wheel dependency metadata mismatch")
                 if parts[-1] == "RECORD":
                     for line in data.decode("utf-8").splitlines():

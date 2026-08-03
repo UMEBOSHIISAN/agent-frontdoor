@@ -2,6 +2,130 @@ This is not an agent runtime.
 This is not an autonomous router.
 This is a preflight contract and validator for safely preparing tasks for AI workers.
 
+![Agent Frontdoor](https://img.shields.io/badge/Agent%20Frontdoor-v0.1.0-111827)
+![Python](https://img.shields.io/badge/python-3.10%2B-3776ab)
+![Safety](https://img.shields.io/badge/runtime-fail--closed-16a34a)
+
+# Agent Frontdoor
+
+> Fail-closed preflight validation for bounded AI task cards.
+>
+> AIに仕事を渡す前に、依頼を境界付きタスクカードへ変換し、危険な拡張を止めるための読み取り専用OSSです。
+
+## What it is / これは何か
+
+Agent Frontdoor is the **front door before an AI worker**. It does not run an
+agent, choose a model, call an API, or grant authority. It turns an informal
+request into an explicit contract that a human can inspect before any other
+system acts.
+
+Agent Frontdoorは、AIワーカーの「入口」です。エージェントを実行せず、モデル選択・API呼び出し・自動ルーティング・権限付与も行いません。人間の依頼を、別システムが実行する前に確認できる契約へ変換します。
+
+```mermaid
+flowchart LR
+    A[Messy request\n雑な依頼] --> B[Task card\n境界付きカード]
+    B --> C{Validate\n検証}
+    C -->|BLOCKING / invalid| D[Stop\n停止]
+    C -->|valid| E[Human review\n人間確認]
+    E --> F[Optional downstream system\n別システムへ渡す]
+    F -. never controlled by .-> G[Agent / router / deployer]
+```
+
+## Safety promise / 安全境界
+
+The package is deliberately boring and local:
+
+- no execution, subprocess, socket, network, worker invocation, or routing;
+- no scheduler, hook, daemon, server, deployment, credential, or secret access;
+- no repair fallback, retry, automatic publish, or authority promotion;
+- input files are read locally; results are deterministic stdout/stderr output;
+- `UNKNOWN` and high-risk expansion fail closed with `BLOCKING`.
+
+このパッケージが**しないこと**を明示するのが重要です。入力を直したり、危険な依頼を実行したり、別のAIへ自動転送したりはしません。検証に失敗したら、成功したふりをせず停止します。
+
+## Core contract / 中核フロー
+
+```text
+request / 依頼
+  -> schema + semantic validation / スキーマ・意味検証
+  -> bounded task card / 境界付きタスクカード
+  -> card | explain / 人間が読める出力
+  -> optional check-drift / 変更による権限拡張の検出
+```
+
+The contract is versioned as `intake.v0` in
+[`src/frontdoor/schema/intake.v0.json`](src/frontdoor/schema/intake.v0.json).
+The public CLI and exit codes are stable; changing the schema version is an
+explicit compatibility decision.
+
+契約は `intake.v0` としてバージョン管理されています。スキーマを変える場合は、暗黙に挙動を変えず、互換性の判断として明示的に行います。
+
+## Quick start / 最短で試す
+
+```bash
+git clone <PUBLIC_REPOSITORY_URL> agent-frontdoor
+cd agent-frontdoor
+python3 -m venv .venv
+.venv/bin/python -m pip install -e ".[test]"
+.venv/bin/pytest -q
+.venv/bin/agent-frontdoor validate fixtures/positive/01_install_only.json
+.venv/bin/agent-frontdoor card fixtures/positive/01_install_only.json
+```
+
+Python 3.10以上が必要です。実行時のAgent Frontdoor自体はネットワークを使いません。ネットワークはインストール時の依存取得に限られます。完全オフラインの友人向け受入手順は [`docs/FRIEND_LAB.md`](docs/FRIEND_LAB.md) を参照してください。
+
+## When to use / 使う場面
+
+| Situation / 場面 | Frontdoor result / 出力 |
+|---|---|
+| A bounded implementation request / 境界付き実装依頼 | `IMPLEMENTATION` card |
+| A design or security review / 設計・安全レビュー | `DESIGN_REVIEW` or `AUDIT` |
+| An ambiguous or unsafe request / 曖昧・危険な依頼 | `UNKNOWN` + `BLOCKING` |
+| A proposed expansion after review / レビュー後の拡張 | `check-drift` reports drift |
+
+It is **not** a replacement for human judgment, a policy engine with authority,
+or a full agent harness. It is the small, inspectable contract at the boundary.
+
+人間の判断を置き換えるものでも、権限を持つポリシーエンジンでもありません。人間と実行系の間に置く、小さく検査可能な契約部品です。
+
+---
+
+## English documentation
+
+The sections below are the detailed English reference: installation, CLI,
+schema fields, gates, drift detection, fixtures, metrics, and uninstall.
+
+## 日本語ドキュメント
+
+### CLI
+
+```bash
+agent-frontdoor validate task.json       # 契約を検証
+agent-frontdoor card task.json           # 固定順のタスクカードを表示
+agent-frontdoor explain task.json        # 人間向け説明を表示
+agent-frontdoor check-drift before.json after.json
+```
+
+`validate` が成功して初めて `card` と `explain` が出力されます。`check-drift` は、レビュー後に許可範囲が広がっていないかを比較します。
+
+### ゲート
+
+- `NONE`: 追加確認なし
+- `CONFIRM`: 次の限定された手順の前に人間確認
+- `BLOCKING`: 人間が明示的に解決するまで停止
+
+deploy、production、scheduler、secret、auth、billing、delete、SSOT mutation、external publish、authority promotion は、原則 `BLOCKING` です。`UNKNOWN` も必ず停止側に倒れます。
+
+### 友人向け受入
+
+友人に渡す場合は、まずZIPと検証スクリプトのSHA-256を照合し、ネットワークを切断した状態で `docs/FRIEND_LAB.md` の手順を実行してください。受入試験はインストール、fixture、CLI、境界ガード、プライバシー検査、アンインストール、receiptを確認します。合格しても、友人の既存hook・settings・モデル・秘密情報を自動変更することはありません。
+
+### OSS公開の原則
+
+公開リポジトリには、秘密、実在ユーザー名、LANアドレス、個人パス、ローカルの履歴・memory・設定を含めません。友人固有の構成はアダプターとREADMEで説明し、本体コアへ混ぜません。
+
+---
+
 # Agent Frontdoor v0
 
 Agent Frontdoor converts a messy human request into a bounded task card, validates

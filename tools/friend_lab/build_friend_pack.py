@@ -405,6 +405,8 @@ def _parse_wheel(path: Path) -> dict[str, object]:
 
 def _agent_wheel_payloads(path: Path) -> dict[str, bytes]:
     payloads: dict[str, bytes] = {}
+    wheel_name, wheel_version, *_ = _split_wheel_filename(Path(path.name))
+    expected_dist = f"{wheel_name.replace('-', '_')}-{wheel_version}.dist-info"
     try:
         with zipfile.ZipFile(path) as archive:
             infos = archive.infolist()
@@ -421,10 +423,9 @@ def _agent_wheel_payloads(path: Path) -> dict[str, bytes]:
                 parts = relative.parts
                 if not parts or (parts[0] != "frontdoor" and not (
                     (len(parts) == 2
-                    and parts[0].startswith("agent_frontdoor-")
-                    and parts[0].endswith(".dist-info")
+                    and parts[0] == expected_dist
                     and parts[1] in {"METADATA", "WHEEL", "RECORD", "entry_points.txt", "top_level.txt"})
-                    or (len(parts) == 3 and parts[1] == "licenses" and parts[2] == "LICENSE")
+                    or (len(parts) == 3 and parts[0] == expected_dist and parts[1] == "licenses" and parts[2] == "LICENSE")
                 )):
                     raise BuildError("agent wheel contains unexpected member")
                 if relative.suffix.lower() in {".so", ".dylib", ".dll", ".pyd"}:
@@ -495,6 +496,17 @@ def _validate_agent_wheel_source_binding(
     if not isinstance(filename, str) or PurePosixPath(filename).name != filename:
         raise BuildError("agent wheel record invalid")
     wheel_payloads = _agent_wheel_payloads(wheelhouse / filename)
+    source_license = None
+    with tarfile.open(fileobj=io.BytesIO(source_data), mode="r:gz") as archive:
+        for member in archive.getmembers():
+            if member.name == f"{SOURCE_ROOT}/LICENSE" and member.isfile():
+                source_license = archive.extractfile(member).read()
+                break
+    wheel_path = wheelhouse / filename
+    with zipfile.ZipFile(wheel_path) as archive:
+        license_name = next((n for n in archive.namelist() if n.endswith(".dist-info/licenses/LICENSE")), None)
+        if license_name is not None and source_license is not None and archive.read(license_name) != source_license:
+            raise BuildError("agent wheel license binding mismatch")
     if wheel_payloads != _source_package_payloads(source_data):
         raise BuildError("agent wheel source binding mismatch")
 

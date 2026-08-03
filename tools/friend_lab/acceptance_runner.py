@@ -386,6 +386,11 @@ def _safe_zip_name(name: str) -> bool:
 
 def _agent_wheel_payloads(path: Path) -> dict[str, bytes]:
     payloads: dict[str, bytes] = {}
+    wheel_stem = path.name.removesuffix(".whl")
+    wheel_parts = wheel_stem.split("-")
+    if len(wheel_parts) < 2:
+        raise AcceptanceError("agent wheel filename invalid")
+    expected_dist = f"{wheel_parts[0]}-{wheel_parts[1]}.dist-info"
     try:
         with zipfile.ZipFile(path) as archive:
             infos = archive.infolist()
@@ -402,10 +407,9 @@ def _agent_wheel_payloads(path: Path) -> dict[str, bytes]:
                 parts = relative.parts
                 if not parts or (parts[0] != "frontdoor" and not (
                     (len(parts) == 2
-                    and parts[0].startswith("agent_frontdoor-")
-                    and parts[0].endswith(".dist-info")
+                    and parts[0] == expected_dist
                     and parts[1] in {"METADATA", "WHEEL", "RECORD", "entry_points.txt", "top_level.txt"})
-                    or (len(parts) == 3 and parts[1] == "licenses" and parts[2] == "LICENSE")
+                    or (len(parts) == 3 and parts[0] == expected_dist and parts[1] == "licenses" and parts[2] == "LICENSE")
                 )):
                     raise AcceptanceError("agent wheel contains unexpected member")
                 if relative.suffix.lower() in {".so", ".dylib", ".dll", ".pyd"}:

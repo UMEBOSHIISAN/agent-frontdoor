@@ -610,6 +610,10 @@ def test_invalid_wheelhouse_semantics_stop_before_controls(
     [
         ("frontdoor/__init__.py", b"__version__='0.1.1'\n"),
         ("frontdoor/private_receiver.py", b"API_KEY=sk-privatevalue123\n"),
+        (
+            "agent_frontdoor-0.1.0.dist-info/METADATA",
+            b"Metadata-Version: 2.1\nName: agent-frontdoor\nVersion: 0.1.0\nLicense: MIT\nRequires-Dist: jsonschema>=4\nrequires-dist: evil-package\n",
+        ),
     ],
 )
 def test_unbound_or_private_agent_wheel_stops_before_controls(

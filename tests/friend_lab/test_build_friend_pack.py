@@ -427,6 +427,11 @@ def test_build_friend_pack_is_deterministic_and_outputs_two_files(
             b"/Users/umeboshi/private\n",
             "privacy",
         ),
+        (
+            "evil.py",
+            b"def main(): pass\n",
+            "unexpected",
+        ),
     ],
 )
 def test_build_friend_pack_rejects_unbound_or_private_agent_wheel(

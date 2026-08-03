@@ -397,11 +397,21 @@ def _agent_wheel_payloads(path: Path) -> dict[str, bytes]:
                 if item.is_dir():
                     continue
                 relative = PurePosixPath(name)
+                parts = relative.parts
+                if not parts or (parts[0] != "frontdoor" and not (
+                    len(parts) == 2
+                    and parts[0].startswith("agent_frontdoor-")
+                    and parts[0].endswith(".dist-info")
+                    and parts[1] in {"METADATA", "WHEEL", "RECORD", "entry_points.txt", "top_level.txt"}
+                )):
+                    raise AcceptanceError("agent wheel contains unexpected member")
                 if relative.suffix.lower() in {".so", ".dylib", ".dll", ".pyd"}:
                     raise AcceptanceError("agent wheel native member forbidden")
                 data = archive.read(item)
                 if scan_forbidden_text(relative, data):
                     raise AcceptanceError("agent wheel privacy validation failed")
+                if parts[-1] == "entry_points.txt" and data != b"[console_scripts]\nagent-frontdoor = frontdoor.cli:main\n":
+                    raise AcceptanceError("agent wheel entry point mismatch")
                 if name.startswith("frontdoor/"):
                     payloads[name] = data
     except (OSError, KeyError, ValueError, zipfile.BadZipFile) as exc:

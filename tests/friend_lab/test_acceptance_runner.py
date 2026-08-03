@@ -350,7 +350,7 @@ def acceptance_request(
                 "abi_tags": [abi_tag],
                 "platform_tags": [platform_tag],
                 "license_fields": ["License: MIT"],
-                "requires_dist": ["jsonschema>=4"],
+                "requires_dist": ["jsonschema>=4"] if name == "agent-frontdoor" else [],
             }
         )
     wheel_manifest = {

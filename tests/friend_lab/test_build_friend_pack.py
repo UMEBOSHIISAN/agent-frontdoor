@@ -433,6 +433,11 @@ def test_build_friend_pack_is_deterministic_and_outputs_two_files(
             b"def main(): pass\n",
             "unexpected",
         ),
+        (
+            "agent_frontdoor-0.1.0.dist-info/METADATA",
+            b"Metadata-Version: 2.1\nRequires-Dist: jsonschema>=4\nrequires-dist: evil-package\n",
+            "dependency metadata",
+        ),
     ],
 )
 def test_build_friend_pack_rejects_unbound_or_private_agent_wheel(

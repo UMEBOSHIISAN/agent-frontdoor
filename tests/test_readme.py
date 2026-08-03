@@ -59,13 +59,27 @@ def test_readme_starts_with_required_contract() -> None:
     assert _text().splitlines()[:3] == REQUIRED_OPENING
 
 
-def test_readme_documents_offline_install_and_exact_cli_examples() -> None:
+def test_readme_documents_gate4_offline_boundary_and_exact_cli_examples() -> None:
     text = _text()
-    assert '.venv/bin/python -m pip install -e ".[test]"' in text
+    assert "AGENT_FRONTDOOR_REPOSITORY_URL" in text
     assert (
-        ".venv/bin/python -m pip install --no-deps --no-build-isolation -e ."
+        'git clone "$AGENT_FRONTDOOR_REPOSITORY_URL" agent-frontdoor'
         in text
     )
+    assert '.venv/bin/python -m pip install -e ".[test]"' in text
+    assert (
+        '.venv/bin/python -m pip install --no-index --find-links "$WHEELHOUSE" '
+        '--no-build-isolation -e ".[test]"'
+        in text
+    )
+    assert (
+        "agent-frontdoor validate fixtures/positive/01_install_only.json"
+        in text
+    )
+    assert "agent-frontdoor card fixtures/positive/01_install_only.json" in text
+    assert ".venv/bin/python -m pip uninstall -y agent-frontdoor" in text
+    assert "--system-site-packages" not in text
+    assert "--upgrade-deps" not in text
     assert (
         "agent-frontdoor check-drift examples/drift_before.json "
         "examples/drift_after.json"
@@ -77,6 +91,13 @@ def test_readme_documents_offline_install_and_exact_cli_examples() -> None:
         "agent-frontdoor check-drift before.json after.json",
     ):
         assert command in text
+
+
+def test_readme_documents_failure_meanings_without_a_stale_pass_claim() -> None:
+    text = _text()
+    for marker in ("`INVALID`", "`ERROR`", "`DRIFT`"):
+        assert marker in text
+    assert "docs/FRIEND_LAB.md" in text
 
 
 def test_readme_check_drift_examples_are_runnable() -> None:

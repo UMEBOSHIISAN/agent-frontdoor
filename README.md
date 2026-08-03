@@ -36,29 +36,46 @@ not grant that system permission to act.
 
 ## Installation
 
-Python 3.10 or newer is required. The standard installation resolves
-`jsonschema>=4` from PyPI, and the `test` extra installs pytest:
+Python 3.10 or newer is required. Supply the repository location explicitly;
+the install procedure never infers a private checkout or operator path. The
+standard installation may resolve `jsonschema>=4` and the `test` extra from
+PyPI:
 
 ```bash
+export AGENT_FRONTDOOR_REPOSITORY_URL='<PUBLIC_REPOSITORY_URL>'
+git clone "$AGENT_FRONTDOOR_REPOSITORY_URL" agent-frontdoor
+cd agent-frontdoor
 python3 -m venv .venv
 .venv/bin/python -m pip install -e ".[test]"
+.venv/bin/pytest -q
+.venv/bin/agent-frontdoor validate fixtures/positive/01_install_only.json
+.venv/bin/agent-frontdoor card fixtures/positive/01_install_only.json
 ```
 
 Agent Frontdoor itself requires no network access at runtime. Network access is
 used only to retrieve dependencies during installation.
 
+For the frozen-contract Gate 4 reproduction, create a fresh local bare
+repository from the reviewed public commit and set
+`AGENT_FRONTDOOR_REPOSITORY_URL` to its explicitly supplied `file://` URL. Use
+the same clone, install, full-test, `validate`, and `card` sequence above.
+
 ### Offline installation
 
-For an offline installation, Python 3.10 or newer, setuptools, and
-`jsonschema>=4` must already be available locally. The following commands disable
-dependency and build-isolation downloads:
+Do not reuse host or global packages for offline acceptance. Use only the
+hash-verified, receiver-specific wheelhouse from the friend pack. The complete
+attended procedure, detached verification order, controls, and receipt rules are
+in [`docs/FRIEND_LAB.md`](docs/FRIEND_LAB.md).
 
 ```bash
-python3 -m venv --system-site-packages .venv
-.venv/bin/python -m pip install --no-deps --no-build-isolation -e .
+export WHEELHOUSE='<VERIFIED_WHEELHOUSE>'
+python3 -m venv .venv
+.venv/bin/python -m pip install --no-index --find-links "$WHEELHOUSE" setuptools wheel
+.venv/bin/python -m pip install --no-index --find-links "$WHEELHOUSE" --no-build-isolation -e ".[test]"
 ```
 
-Pytest must also already be available locally to run the test suite offline.
+Missing or incompatible wheels are a hard stop. There is no index fallback,
+source-build fallback, retry, or host-package fallback.
 
 ## CLI
 
@@ -82,6 +99,11 @@ Exit codes are part of the CLI contract:
 - `1`: loaded card is invalid
 - `2`: input is unreadable or malformed JSON
 - `3`: boundary drift detected
+
+Output markers are equally strict: `INVALID` means a loaded card violated the
+contract, `ERROR` means an input could not be read or decoded, and `DRIFT` means
+a validated before/after pair crossed a named boundary. None of these results
+executes or repairs the task.
 
 For `check-drift`, an unreadable or malformed input takes exit-code precedence
 over a loaded-invalid card. Diagnostics go to standard error; successful output
@@ -205,6 +227,19 @@ The hard contracts require schema validity `1.00`, negative blocking recall
 `1.00`, fail-safe UNKNOWN behavior, boundary-drift recall of at least `0.95`, and
 zero forbidden execution, network, worker, routing, or source-write paths.
 These are test contracts, not claims about an unverified run.
+
+## Uninstall
+
+Remove the package from the active virtual environment without touching the
+source checkout or any other environment:
+
+```bash
+.venv/bin/python -m pip uninstall -y agent-frontdoor
+```
+
+Confirm that `.venv/bin/agent-frontdoor` is no longer available. Deleting a
+disposable test directory is a separate human action and is never performed by
+Agent Frontdoor.
 
 ## Programmatic interfaces
 

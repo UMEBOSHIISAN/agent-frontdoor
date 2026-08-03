@@ -1,6 +1,17 @@
 # Changelog
 
-## 0.1.0 (unreleased)
+## Unreleased
+
+- Added a standard-library standalone archive verifier for detached, outer-pack,
+  and nested-source integrity checks before extraction.
+- Defined a deterministic friend pack and closed public manifest/receipt
+  contracts for receiver-specific offline acceptance.
+- Added guarded friend-lab acceptance documentation and lab-only tooling
+  boundaries that do not expand the four-command runtime.
+- Corrected offline installation instructions to require an exact verified
+  wheelhouse without global-package or index fallback.
+
+## 0.1.0 (release candidate)
 
 Initial release candidate.
 

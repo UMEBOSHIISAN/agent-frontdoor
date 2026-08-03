@@ -385,6 +385,20 @@ def _validate_wheelhouse(
         or any(not isinstance(item, str) for item in platform_tags)
     ):
         raise AcceptanceError("wheelhouse target invalid")
+    if (
+        re.fullmatch(
+            r"[A-Za-z0-9][A-Za-z0-9 ._()+-]{0,63}",
+            str(target["os_version"]),
+        )
+        is None
+        or _SAFE_LABEL.fullmatch(str(target["architecture"])) is None
+        or re.fullmatch(r"3\.[0-9]{1,2}", str(target["python_minor"])) is None
+        or _SAFE_LABEL.fullmatch(str(target["abi_tag"])) is None
+        or _SAFE_LABEL.fullmatch(str(target["pip_version"])) is None
+        or len(platform_tags) != len(set(platform_tags))
+        or any(_SAFE_LABEL.fullmatch(item) is None for item in platform_tags)
+    ):
+        raise AcceptanceError("wheelhouse target invalid")
     required_record_fields = {
         "name",
         "version",
@@ -1088,11 +1102,15 @@ def _test_count(runner: CommandRunner) -> int:
         return value
     reader = getattr(runner, "stdout_bytes", None)
     if callable(reader):
-        data = reader("tests")
-        if isinstance(data, bytes):
-            matches = re.findall(rb"(?m)(\d+) passed(?:\s|$)", data)
-            if matches:
-                return int(matches[-1])
+        for command_class, pattern in (
+            ("test-collect", rb"(?m)(\d+) tests? collected(?:\s|$)"),
+            ("tests", rb"(?m)(\d+) passed(?:\s|$)"),
+        ):
+            data = reader(command_class)
+            if isinstance(data, bytes):
+                matches = re.findall(pattern, data)
+                if matches:
+                    return int(matches[-1])
     return 0
 
 
@@ -1422,6 +1440,46 @@ def run_acceptance(
                 digest_equality=digest_equality,
             )
 
+    collect_argv = (
+        str(source_python),
+        "-m",
+        "pytest",
+        "--collect-only",
+        "-q",
+        "-p",
+        "no:cacheprovider",
+        "-c",
+        os.devnull,
+        "tests",
+    )
+    if _run_phase(
+        state,
+        runner,
+        "test-collect",
+        collect_argv,
+        cwd=source_root,
+        env=env,
+        timeout_seconds=120.0,
+    ) is None:
+        return _finish(
+            state,
+            context,
+            pack_sha256=pack_sha,
+            verifier_sha256=detached_sha,
+            digest_equality=digest_equality,
+        )
+    state.collected_test_count = _test_count(runner)
+    if state.collected_test_count <= 0:
+        state.add_internal("test-count", False)
+        state.gaps.add("INCOMPLETE_EVIDENCE")
+        return _finish(
+            state,
+            context,
+            pack_sha256=pack_sha,
+            verifier_sha256=detached_sha,
+            digest_equality=digest_equality,
+        )
+
     pytest_argv = (
         str(source_python),
         "-m",
@@ -1431,14 +1489,14 @@ def run_acceptance(
         "no:cacheprovider",
         "-c",
         os.devnull,
-        str(source_root / "tests"),
+        "tests",
     )
     if not _run_deterministic_pair(
         state,
         runner,
         "tests",
         pytest_argv,
-        cwd=request.run_root,
+        cwd=source_root,
         env=env,
         expect_zero=True,
         timeout_seconds=300.0,
@@ -1456,7 +1514,7 @@ def run_acceptance(
         runner,
         "wheel-tests",
         wheel_pytest_argv,
-        cwd=request.run_root,
+        cwd=source_root,
         env=env,
         expect_zero=True,
         timeout_seconds=300.0,
@@ -1468,8 +1526,6 @@ def run_acceptance(
             verifier_sha256=detached_sha,
             digest_equality=digest_equality,
         )
-    state.collected_test_count = _test_count(runner)
-
     source_cli = source_venv / "bin/agent-frontdoor"
     wheel_cli = wheel_venv / "bin/agent-frontdoor"
     samples = (

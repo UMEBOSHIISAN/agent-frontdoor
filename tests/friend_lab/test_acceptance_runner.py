@@ -430,7 +430,7 @@ def test_missing_out_of_band_equality_stops_before_controls(
 
 @pytest.mark.parametrize(
     "mutation",
-    ["missing-closure", "rpds-platform", "backend-hash"],
+    ["missing-closure", "rpds-platform", "backend-hash", "private-target"],
 )
 def test_invalid_wheelhouse_semantics_stop_before_controls(
     acceptance_request: acceptance.AcceptanceRequest,
@@ -449,8 +449,10 @@ def test_invalid_wheelhouse_semantics_stop_before_controls(
             item for item in wheel_manifest["wheels"] if item["name"] == "rpds-py"
         )
         rpds["platform_tags"] = ["manylinux_2_17_aarch64"]
-    else:
+    elif mutation == "backend-hash":
         wheel_manifest["build_backend"]["sha256"] = "f" * 64
+    else:
+        wheel_manifest["target"]["os_version"] = "/Users/private/machine"
     _replace_pack_payload(
         acceptance_request.pack_root,
         relative,
@@ -520,6 +522,19 @@ def test_positive_phase_failure_stops_later_phases(
 
     assert receipt["final_classification"] == "NOT_READY"
     assert forbidden_later.isdisjoint(fake.called_classes)
+
+
+def test_missing_collected_test_count_stops_before_samples(
+    acceptance_request: acceptance.AcceptanceRequest,
+) -> None:
+    fake = FakeRunner()
+    fake.collected_test_count = 0
+
+    receipt = acceptance.run_acceptance(acceptance_request, command_runner=fake)
+
+    assert receipt["final_classification"] == "NOT_READY"
+    assert "sample-validate" not in fake.called_classes
+    assert "INCOMPLETE_EVIDENCE" in receipt["gaps"]
 
 
 def test_negative_fixture_unexpected_zero_stops_next_negative(

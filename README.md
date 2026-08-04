@@ -8,6 +8,12 @@ This is a preflight contract and validator for safely preparing tasks for AI wor
 
 # Agent Frontdoor
 
+<p align="center">
+  <img src="assets/agent-frontdoor-logo.svg" alt="Agent Frontdoor logo" width="180">
+</p>
+
+<p align="center"><img src="assets/agent-frontdoor-pulse.svg" alt="Agent Frontdoor validation pulse" width="720"></p>
+
 > Fail-closed preflight validation for bounded AI task cards.
 >
 > AIに仕事を渡す前に、依頼を境界付きタスクカードへ変換し、危険な拡張を止めるための読み取り専用OSSです。

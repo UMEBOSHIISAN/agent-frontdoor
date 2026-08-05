@@ -41,7 +41,10 @@ flowchart LR
 
 The package is deliberately boring and local:
 
-- no execution, subprocess, socket, network, worker invocation, or routing;
+- no task execution or subprocess invocation;
+- no network requests or socket access;
+- no worker invocation;
+- no automatic routing;
 - no scheduler, hook, daemon, server, deployment, credential, or secret access;
 - no repair fallback, retry, automatic publish, or authority promotion;
 - input files are read locally; results are deterministic stdout/stderr output;
@@ -69,9 +72,10 @@ explicit compatibility decision.
 ## Quick start / 最短で試す
 
 ```bash
-git clone <PUBLIC_REPOSITORY_URL> agent-frontdoor
+git clone https://github.com/UMEBOSHIISAN/agent-frontdoor.git
 cd agent-frontdoor
 python3 -m venv .venv
+.venv/bin/python -m pip install --upgrade pip
 .venv/bin/python -m pip install -e ".[test]"
 .venv/bin/pytest -q
 .venv/bin/agent-frontdoor validate fixtures/positive/01_install_only.json
@@ -132,37 +136,7 @@ deploy、production、scheduler、secret、auth、billing、delete、SSOT mutati
 
 ---
 
-# Agent Frontdoor v0
-
-Agent Frontdoor converts a messy human request into a bounded task card, validates
-that card, and renders a human-readable explanation:
-
-```text
-messy human request
--> bounded task card
--> schema and semantic validation
--> human-readable explanation
-```
-
-The current contract is `src/frontdoor/schema/intake.v0.json` (installed as
-package data), a JSON Schema Draft 2020-12 document plus deterministic semantic
-checks in the validator.
-
-## Safety boundary
-
-Agent Frontdoor performs preflight only. The package has:
-
-- no task execution;
-- no network requests;
-- no worker invocation;
-- no automatic routing;
-- no runtime, daemon, server, or hook integration;
-- no deployment, scheduler mutation, secret access, or authority grant;
-- no task-file writes or repair fallback.
-
-The CLI reads local JSON files and writes deterministic results to standard output
-or standard error. A task card describes boundaries for another system; it does
-not grant that system permission to act.
+## Detailed English reference
 
 ## Installation
 
@@ -172,10 +146,11 @@ standard installation may resolve `jsonschema>=4` and the `test` extra from
 PyPI:
 
 ```bash
-export AGENT_FRONTDOOR_REPOSITORY_URL='<PUBLIC_REPOSITORY_URL>'
+export AGENT_FRONTDOOR_REPOSITORY_URL='https://github.com/UMEBOSHIISAN/agent-frontdoor.git'
 git clone "$AGENT_FRONTDOOR_REPOSITORY_URL" agent-frontdoor
 cd agent-frontdoor
 python3 -m venv .venv
+.venv/bin/python -m pip install --upgrade pip
 .venv/bin/python -m pip install -e ".[test]"
 .venv/bin/pytest -q
 .venv/bin/agent-frontdoor validate fixtures/positive/01_install_only.json

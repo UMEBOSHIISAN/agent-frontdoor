@@ -97,7 +97,11 @@ _NEGATED_COMMAND_DIRECTIVE_PATTERN = re.compile(
     re.IGNORECASE,
 )
 _AFFIRMATIVE_COMMAND_DIRECTIVE_PATTERN = re.compile(
-    r"(?:(?:please\s+)?\b(?:run|execute)"
+    r"(?:^|[\r\n.;!?！？])\s*(?:"
+    r"(?:please\s+)?(?:run|execute)"
+    r"(?:\s+(?:this|the)(?:\s+(?:exact\s+)?command)?)?"
+    r"|(?:could|can|would|will)\s+you\s+(?:please\s+)?"
+    r"(?:run|execute)"
     r"(?:\s+(?:this|the)(?:\s+(?:exact\s+)?command)?)?"
     r"|実行(?:して)?|やって)\s*:?\s*$",
     re.IGNORECASE,
@@ -292,7 +296,7 @@ def _command_parts(value: str) -> tuple[str, ...]:
 
 def _looks_like_command(value: str) -> bool:
     parts = _command_parts(value)
-    if len(parts) < 2:
+    if not parts:
         return False
     executable = parts[0]
     return (
@@ -331,7 +335,7 @@ def _extract_exact_command(prompt: str) -> str | None:
     for pattern in (_FENCED_COMMAND_PATTERN, _SHELL_LINE_PATTERN):
         for match in pattern.finditer(prompt):
             candidate = match.group(1).strip()
-            prefix = prompt[max(0, match.start() - 120) : match.start()]
+            prefix = prompt[: match.start()]
             is_standalone = prompt.strip() == match.group(0).strip()
             is_negated = bool(
                 _NEGATED_COMMAND_DIRECTIVE_PATTERN.search(prefix)
@@ -348,7 +352,7 @@ def _extract_exact_command(prompt: str) -> str | None:
 
     for match in _INLINE_CODE_PATTERN.finditer(prompt):
         candidate = match.group(1).strip()
-        prefix = prompt[max(0, match.start() - 80) : match.start()]
+        prefix = prompt[: match.start()]
         is_standalone = prompt.strip() == match.group(0)
         is_negated = bool(
             _NEGATED_COMMAND_DIRECTIVE_PATTERN.search(prefix)

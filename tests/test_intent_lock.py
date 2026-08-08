@@ -300,6 +300,47 @@ def test_inline_command_in_failure_prose_does_not_become_exact_intent() -> None:
 
 
 @pytest.mark.parametrize(
+    "prompt",
+    [
+        "Do you know how to run `git status`?",
+        "If you run `git status`, explain the output first.",
+        "Failed to run `git status`: exit code 1.",
+        "Unable to run `git status` because permission was denied.",
+        "Error when you run `git status`.",
+        "I tried to run `git status`, but it failed.",
+    ],
+)
+def test_conversational_run_mentions_do_not_invent_execution_intent(
+    prompt: str,
+) -> None:
+    assert derive_lock(prompt) is None
+
+
+@pytest.mark.parametrize(
+    ("prompt", "command"),
+    [
+        ("`./diagnose`", "./diagnose"),
+        ("```bash\npython\n```", "python"),
+        ("Run `python`.", "python"),
+        ("Could you please run `python`?", "python"),
+    ],
+)
+def test_explicit_one_word_commands_create_exact_locks(
+    prompt: str,
+    command: str,
+) -> None:
+    lock = derive_lock(prompt)
+
+    assert lock is not None
+    assert lock.mode == "EXACT_COMMAND"
+    assert evaluate_action(lock, command).allowed
+
+
+def test_unknown_one_word_code_is_not_assumed_to_be_a_command() -> None:
+    assert derive_lock("`status`") is None
+
+
+@pytest.mark.parametrize(
     ("locked_command", "different_action"),
     [
         ("git add 'foo bar'", "git add foo bar"),

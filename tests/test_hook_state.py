@@ -16,6 +16,7 @@ from frontdoor_hooks.state import (
     load_session_lock,
     release_session_tool_claim,
     save_session_lock,
+    session_state_guard,
     state_path,
 )
 
@@ -84,6 +85,30 @@ def test_pending_tool_claim_is_atomic_private_and_session_hashed(
     release_session_tool_claim(tmp_path, session_id)
     assert not claims[0].exists()
     assert claim_session_tool(tmp_path, session_id)
+
+
+def test_session_guard_is_private_persistent_and_session_hashed(
+    tmp_path: Path,
+) -> None:
+    session_id = "raw-session-id"
+
+    with session_state_guard(tmp_path, session_id):
+        guards = list(tmp_path.glob("*.guard"))
+        assert len(guards) == 1
+        assert session_id not in guards[0].name
+        assert stat.S_IMODE(guards[0].stat().st_mode) == 0o600
+
+    assert guards[0].is_file()
+
+
+def test_session_guard_rejects_exposed_existing_file(tmp_path: Path) -> None:
+    with session_state_guard(tmp_path, "session"):
+        guard = next(tmp_path.glob("*.guard"))
+    guard.chmod(0o644)
+
+    with pytest.raises(StateError, match="guard permissions"):
+        with session_state_guard(tmp_path, "session"):
+            pass
 
 
 def test_invalid_state_fails_closed_instead_of_becoming_no_lock(

@@ -82,6 +82,11 @@ Before binding an accepted action, the adapter atomically creates an empty priva
 pending marker. A second tool-use id is denied while that claim is active; there
 is no retry or wait loop. A matching result, a new user prompt, or `SessionEnd`
 releases the marker.
+Each session transition is additionally serialized by a hashed private guard
+file, so an overlapping old tool hook cannot restore or delete a newer prompt's
+intent epoch. The guard contains no session or prompt data and remains as an
+opaque mode-`0600` file; the operating system releases its lock if a hook
+process exits unexpectedly.
 
 The adapter creates its dedicated state directory with mode `0700`. If an
 explicit `--state-dir` already exists, the adapter never changes its permissions:

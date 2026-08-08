@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
+from contextlib import contextmanager
 from hashlib import sha256
 import json
 import os
@@ -26,6 +28,11 @@ def state_path(state_root: Path, session_id: str) -> Path:
 def _claim_path(state_root: Path, session_id: str) -> Path:
     digest = sha256(session_id.encode("utf-8")).hexdigest()
     return state_root / f".{digest}.pending"
+
+
+def _guard_path(state_root: Path, session_id: str) -> Path:
+    digest = sha256(session_id.encode("utf-8")).hexdigest()
+    return state_root / f".{digest}.guard"
 
 
 def _validate_existing_root(state_root: Path, *, missing_ok: bool) -> bool:
@@ -62,6 +69,82 @@ def _prepare_root(state_root: Path) -> None:
         raise
     except OSError as error:
         raise StateError(f"unable to prepare state root: {error}") from error
+
+
+@contextmanager
+def session_state_guard(
+    state_root: Path,
+    session_id: str,
+) -> Iterator[None]:
+    """Serialize one session's read/compare/write transition across processes."""
+
+    _prepare_root(state_root)
+    path = _guard_path(state_root, session_id)
+    descriptor: int | None = None
+    locked = False
+    try:
+        flags = os.O_RDWR | os.O_CREAT
+        if hasattr(os, "O_NOFOLLOW"):
+            flags |= os.O_NOFOLLOW
+        descriptor = os.open(path, flags, 0o600)
+        path_stat = path.lstat()
+        descriptor_stat = os.fstat(descriptor)
+        if (
+            stat.S_ISLNK(path_stat.st_mode)
+            or not stat.S_ISREG(path_stat.st_mode)
+            or not stat.S_ISREG(descriptor_stat.st_mode)
+            or (path_stat.st_dev, path_stat.st_ino)
+            != (descriptor_stat.st_dev, descriptor_stat.st_ino)
+        ):
+            raise StateError("session guard is not a real regular file")
+        permissions = stat.S_IMODE(descriptor_stat.st_mode)
+        if permissions != 0o600:
+            raise StateError(
+                f"session guard permissions must be 0600, found {permissions:04o}"
+            )
+
+        if os.name == "posix":
+            import fcntl
+
+            fcntl.flock(descriptor, fcntl.LOCK_EX)
+            locked = True
+        elif os.name == "nt":
+            import msvcrt
+
+            if descriptor_stat.st_size == 0:
+                os.write(descriptor, b"\0")
+                os.fsync(descriptor)
+            os.lseek(descriptor, 0, os.SEEK_SET)
+            try:
+                msvcrt.locking(descriptor, msvcrt.LK_NBLCK, 1)
+            except OSError as error:
+                raise StateError("session state transition is busy") from error
+            locked = True
+        else:
+            raise StateError(
+                f"session state locking is unsupported on os.name={os.name!r}"
+            )
+        yield
+    except StateError:
+        raise
+    except OSError as error:
+        raise StateError(f"unable to lock session state: {error}") from error
+    finally:
+        if descriptor is not None:
+            if locked:
+                try:
+                    if os.name == "posix":
+                        import fcntl
+
+                        fcntl.flock(descriptor, fcntl.LOCK_UN)
+                    elif os.name == "nt":
+                        import msvcrt
+
+                        os.lseek(descriptor, 0, os.SEEK_SET)
+                        msvcrt.locking(descriptor, msvcrt.LK_UNLCK, 1)
+                except OSError:
+                    pass
+            os.close(descriptor)
 
 
 def save_session_lock(

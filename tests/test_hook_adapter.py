@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 from pathlib import Path
+from threading import Event, Thread, current_thread
 
+import frontdoor_hooks.hook as hook_module
 from frontdoor_hooks.hook import handle_event
 from frontdoor_hooks.state import load_session_lock
 
@@ -202,6 +204,193 @@ def test_stale_tool_result_cannot_mutate_a_new_lock_epoch(
     assert load_session_lock(tmp_path, SESSION) == current
 
 
+def test_concurrent_pre_tool_cannot_restore_replaced_intent(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    _activate_exact_lock(tmp_path)
+    save_started = Event()
+    resume_save = Event()
+    prompt_finished = Event()
+    real_save = hook_module.save_session_lock
+
+    def gated_save(state_root, session_id, lock):
+        if (
+            current_thread().name == "old-pre-tool"
+            and lock.pending_tool_use_sha256 is not None
+        ):
+            save_started.set()
+            assert resume_save.wait(2)
+        return real_save(state_root, session_id, lock)
+
+    monkeypatch.setattr(hook_module, "save_session_lock", gated_save)
+    results = []
+    pre_tool = Thread(
+        name="old-pre-tool",
+        target=lambda: results.append(
+            handle_event(
+                _payload(
+                    "PreToolUse",
+                    tool_name="Bash",
+                    tool_use_id="old-tool",
+                    tool_input={"command": "codex mcp login cloudflare-api"},
+                ),
+                tmp_path,
+                platform="codex",
+            )
+        ),
+    )
+    replacement = Thread(
+        name="replacement-prompt",
+        target=lambda: (
+            handle_event(
+                _payload("UserPromptSubmit", prompt="`git diff`"),
+                tmp_path,
+                platform="codex",
+            ),
+            prompt_finished.set(),
+        ),
+    )
+
+    pre_tool.start()
+    assert save_started.wait(2)
+    replacement.start()
+    prompt_finished.wait(0.2)
+    resume_save.set()
+    pre_tool.join(2)
+    replacement.join(2)
+
+    current = load_session_lock(tmp_path, SESSION)
+    assert not pre_tool.is_alive()
+    assert not replacement.is_alive()
+    assert results == [None]
+    assert current is not None
+    assert current.display_targets == ("diff",)
+    assert current.pending_tool_use_sha256 is None
+
+
+def test_concurrent_old_result_cannot_delete_replacement_intent(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    _activate_exact_lock(tmp_path)
+    _accept_exact_tool(tmp_path, tool_use_id="old-tool")
+    delete_started = Event()
+    resume_delete = Event()
+    prompt_finished = Event()
+    real_delete = hook_module.delete_session_lock
+
+    def gated_delete(state_root, session_id):
+        if current_thread().name == "old-result":
+            delete_started.set()
+            assert resume_delete.wait(2)
+        return real_delete(state_root, session_id)
+
+    monkeypatch.setattr(hook_module, "delete_session_lock", gated_delete)
+    old_result = Thread(
+        name="old-result",
+        target=lambda: handle_event(
+            _payload(
+                "PostToolUse",
+                tool_name="Bash",
+                tool_use_id="old-tool",
+                tool_input={"command": "codex mcp login cloudflare-api"},
+                tool_response={"exit_code": 0, "output": "ok"},
+            ),
+            tmp_path,
+            platform="codex",
+        ),
+    )
+    replacement = Thread(
+        name="replacement-prompt",
+        target=lambda: (
+            handle_event(
+                _payload("UserPromptSubmit", prompt="`git diff`"),
+                tmp_path,
+                platform="codex",
+            ),
+            prompt_finished.set(),
+        ),
+    )
+
+    old_result.start()
+    assert delete_started.wait(2)
+    replacement.start()
+    prompt_finished.wait(0.2)
+    resume_delete.set()
+    old_result.join(2)
+    replacement.join(2)
+
+    current = load_session_lock(tmp_path, SESSION)
+    assert not old_result.is_alive()
+    assert not replacement.is_alive()
+    assert current is not None
+    assert current.display_targets == ("diff",)
+
+
+def test_concurrent_old_failure_cannot_overwrite_replacement_intent(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    _activate_exact_lock(tmp_path)
+    _accept_exact_tool(tmp_path, tool_use_id="old-tool")
+    save_started = Event()
+    resume_save = Event()
+    prompt_finished = Event()
+    real_save = hook_module.save_session_lock
+
+    def gated_save(state_root, session_id, lock):
+        if (
+            current_thread().name == "old-failure"
+            and lock.phase == "REPORT_REQUIRED"
+        ):
+            save_started.set()
+            assert resume_save.wait(2)
+        return real_save(state_root, session_id, lock)
+
+    monkeypatch.setattr(hook_module, "save_session_lock", gated_save)
+    old_failure = Thread(
+        name="old-failure",
+        target=lambda: handle_event(
+            _payload(
+                "PostToolUseFailure",
+                tool_name="Bash",
+                tool_use_id="old-tool",
+                tool_input={"command": "codex mcp login cloudflare-api"},
+                error="failed",
+            ),
+            tmp_path,
+            platform="claude",
+        ),
+    )
+    replacement = Thread(
+        name="replacement-prompt",
+        target=lambda: (
+            handle_event(
+                _payload("UserPromptSubmit", prompt="`git diff`"),
+                tmp_path,
+                platform="codex",
+            ),
+            prompt_finished.set(),
+        ),
+    )
+
+    old_failure.start()
+    assert save_started.wait(2)
+    replacement.start()
+    prompt_finished.wait(0.2)
+    resume_save.set()
+    old_failure.join(2)
+    replacement.join(2)
+
+    current = load_session_lock(tmp_path, SESSION)
+    assert not old_failure.is_alive()
+    assert not replacement.is_alive()
+    assert current is not None
+    assert current.display_targets == ("diff",)
+    assert current.phase == "DIRECT_REQUIRED"
+
+
 def test_unaccepted_tool_result_cannot_mutate_current_lock(
     tmp_path: Path,
 ) -> None:
@@ -381,6 +570,41 @@ def test_structured_codex_success_releases_and_removes_adapter_state(
 
     assert output is None
     assert load_session_lock(tmp_path, SESSION) is None
+
+
+def test_literal_target_success_stays_locked_without_failure_feedback(
+    tmp_path: Path,
+) -> None:
+    _activate_target_lock(tmp_path)
+    action = {"command": "codex mcp list cloudflare-api"}
+    assert handle_event(
+        _payload(
+            "PreToolUse",
+            tool_name="Bash",
+            tool_use_id="target-tool",
+            tool_input=action,
+        ),
+        tmp_path,
+        platform="codex",
+    ) is None
+
+    output = handle_event(
+        _payload(
+            "PostToolUse",
+            tool_name="Bash",
+            tool_use_id="target-tool",
+            tool_input=action,
+            tool_response={"exit_code": 0, "output": "ok"},
+        ),
+        tmp_path,
+        platform="codex",
+    )
+
+    current = load_session_lock(tmp_path, SESSION)
+    assert output is None
+    assert current is not None
+    assert current.phase == "DIRECT_REQUIRED"
+    assert current.pending_tool_use_sha256 is None
 
 
 def test_actual_codex_raw_result_requires_human_report_before_more_tools(

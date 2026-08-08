@@ -25,6 +25,7 @@ from frontdoor_hooks.state import (
     load_session_lock,
     release_session_tool_claim,
     save_session_lock,
+    session_state_guard,
 )
 
 
@@ -126,20 +127,20 @@ def handle_user_prompt(
             "reason": "Intent Lock requires a session id and string prompt.",
         }
     try:
-        previous = load_session_lock(state_root, session_id)
-    except StateError as error:
+        with session_state_guard(state_root, session_id):
+            previous = load_session_lock(state_root, session_id)
+            lock = derive_lock(prompt, previous=previous)
+            if lock is None:
+                release_session_tool_claim(state_root, session_id)
+                delete_session_lock(state_root, session_id)
+                return None
+            release_session_tool_claim(state_root, session_id)
+            save_session_lock(state_root, session_id, lock)
+    except (StateError, ValueError) as error:
         return {
             "decision": "block",
             "reason": f"Intent Lock state is invalid: {error}",
         }
-
-    lock = derive_lock(prompt, previous=previous)
-    if lock is None:
-        release_session_tool_claim(state_root, session_id)
-        delete_session_lock(state_root, session_id)
-        return None
-    release_session_tool_claim(state_root, session_id)
-    save_session_lock(state_root, session_id, lock)
     return {
         "hookSpecificOutput": {
             "hookEventName": "UserPromptSubmit",
@@ -157,50 +158,50 @@ def handle_pre_tool(
         return _deny(
             "Intent Lock cannot identify this session; tool use is denied."
         )
-    lock, failure = _load_or_deny(state_root, session_id)
-    if failure is not None:
-        return failure
-    if lock is None:
-        return None
-
-    decision = evaluate_action(lock, _tool_action(payload))
-    if decision.allowed:
-        tool_use_id = _tool_use_id(payload)
-        if tool_use_id is None:
-            return _deny(
-                "Intent Lock cannot bind this action without a tool use id; "
-                "tool use is denied."
-            )
-        if lock.pending_tool_use_sha256 is not None:
-            if matches_tool_use(lock, tool_use_id):
+    try:
+        with session_state_guard(state_root, session_id):
+            lock, failure = _load_or_deny(state_root, session_id)
+            if failure is not None:
+                return failure
+            if lock is None:
                 return None
-            return _deny(
-                "Intent Lock already has a tool result pending; another tool "
-                "use is denied."
-            )
-        if not claim_session_tool(state_root, session_id):
-            return _deny(
-                "Intent Lock already has a tool result pending; another tool "
-                "use is denied."
-            )
-        try:
-            current = load_session_lock(state_root, session_id)
-            if current != lock:
-                release_session_tool_claim(state_root, session_id)
+
+            decision = evaluate_action(lock, _tool_action(payload))
+            if not decision.allowed:
+                return _deny(decision.reason)
+            tool_use_id = _tool_use_id(payload)
+            if tool_use_id is None:
                 return _deny(
-                    "Intent Lock changed while binding this action; tool use "
-                    "is denied."
+                    "Intent Lock cannot bind this action without a tool use id; "
+                    "tool use is denied."
                 )
-            save_session_lock(
-                state_root,
-                session_id,
-                bind_tool_use(lock, tool_use_id),
-            )
-        except (StateError, ValueError):
-            release_session_tool_claim(state_root, session_id)
-            raise
-        return None
-    return _deny(decision.reason)
+            if lock.pending_tool_use_sha256 is not None:
+                if matches_tool_use(lock, tool_use_id):
+                    return None
+                return _deny(
+                    "Intent Lock already has a tool result pending; another "
+                    "tool use is denied."
+                )
+            if not claim_session_tool(state_root, session_id):
+                return _deny(
+                    "Intent Lock already has a tool result pending; another "
+                    "tool use is denied."
+                )
+            try:
+                save_session_lock(
+                    state_root,
+                    session_id,
+                    bind_tool_use(lock, tool_use_id),
+                )
+            except (StateError, ValueError):
+                release_session_tool_claim(state_root, session_id)
+                raise
+            return None
+    except (StateError, ValueError):
+        return _deny(
+            "Intent Lock state is invalid; tool use is denied until the state "
+            "is repaired or the session ends."
+        )
 
 
 def _explicit_failure(value: object) -> bool | None:
@@ -266,34 +267,37 @@ def handle_tool_result(
     if session_id is None:
         return None
     try:
-        lock = load_session_lock(state_root, session_id)
-    except StateError:
-        return None
-    if lock is None:
-        return None
+        with session_state_guard(state_root, session_id):
+            lock = load_session_lock(state_root, session_id)
+            if lock is None:
+                return None
 
-    tool_use_id = _tool_use_id(payload)
-    if tool_use_id is None or not matches_tool_use(lock, tool_use_id):
-        return None
+            tool_use_id = _tool_use_id(payload)
+            if tool_use_id is None or not matches_tool_use(lock, tool_use_id):
+                return None
 
-    status = _result_status(payload, platform)
-    if status is None:
+            status = _result_status(payload, platform)
+            if status is None:
+                return None
+            action = _tool_action(payload)
+            updated = record_result(lock, action, failed=status != "success")
+            if updated is lock:
+                return None
+            if updated.phase == "RELEASED":
+                delete_session_lock(state_root, session_id)
+                release_session_tool_claim(state_root, session_id)
+                return None
+            save_session_lock(state_root, session_id, updated)
+            release_session_tool_claim(state_root, session_id)
+            if status == "success":
+                return None
+            event = str(payload.get("hook_event_name"))
+            return _report_feedback(
+                event,
+                opaque_codex_result=status == "opaque",
+            )
+    except (StateError, ValueError):
         return None
-    action = _tool_action(payload)
-    updated = record_result(lock, action, failed=status != "success")
-    if updated is lock:
-        return None
-    if updated.phase == "RELEASED":
-        delete_session_lock(state_root, session_id)
-        release_session_tool_claim(state_root, session_id)
-        return None
-    save_session_lock(state_root, session_id, updated)
-    release_session_tool_claim(state_root, session_id)
-    event = str(payload.get("hook_event_name"))
-    return _report_feedback(
-        event,
-        opaque_codex_result=status == "opaque",
-    )
 
 
 def handle_session_end(
@@ -302,8 +306,9 @@ def handle_session_end(
 ) -> None:
     session_id = _session_id(payload)
     if session_id is not None:
-        release_session_tool_claim(state_root, session_id)
-        delete_session_lock(state_root, session_id)
+        with session_state_guard(state_root, session_id):
+            release_session_tool_claim(state_root, session_id)
+            delete_session_lock(state_root, session_id)
     return None
 
 

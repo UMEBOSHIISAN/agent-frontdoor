@@ -1,0 +1,117 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Agent Frontdoor Intent Lock v1",
+  "description": "Privacy-minimized immutable intent boundary for one agent session.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "intent_epoch",
+    "source_prompt_sha256",
+    "phase",
+    "mode",
+    "exact_command_sha256",
+    "target_token_sha256",
+    "display_targets"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "intent-lock.v1"
+    },
+    "intent_epoch": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "source_prompt_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "phase": {
+      "type": "string",
+      "enum": [
+        "DIRECT_REQUIRED",
+        "REPORT_REQUIRED",
+        "RELEASED"
+      ]
+    },
+    "mode": {
+      "type": "string",
+      "enum": [
+        "EXACT_COMMAND",
+        "LITERAL_TARGET"
+      ]
+    },
+    "exact_command_sha256": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      ]
+    },
+    "target_token_sha256": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^[0-9a-f]{64}$"
+      }
+    },
+    "display_targets": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 128,
+        "pattern": "^[A-Za-z0-9][A-Za-z0-9._:@/-]*$"
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "mode": {
+            "const": "EXACT_COMMAND"
+          }
+        },
+        "required": [
+          "mode"
+        ]
+      },
+      "then": {
+        "properties": {
+          "exact_command_sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "mode": {
+            "const": "LITERAL_TARGET"
+          }
+        },
+        "required": [
+          "mode"
+        ]
+      },
+      "then": {
+        "properties": {
+          "exact_command_sha256": {
+            "type": "null"
+          }
+        }
+      }
+    }
+  ]
+}

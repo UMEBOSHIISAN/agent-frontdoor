@@ -120,9 +120,12 @@ source/wheel mismatch stops the run. Do not download or compile a replacement.
 
 ## 7. Run tests and samples
 
-Run the complete suite with bytecode and cache disabled in the source
-environment. Record the freshly collected count; do not copy a historical
-number. Then run the documented positive commands against
+Run the complete core-distribution suite with bytecode and cache disabled in the
+source environment. The separately packaged optional `agent-frontdoor-hooks`
+runtime tests are excluded because this acceptance lane installs only the core
+wheel; they are verified in the adapter's own build/test lane. Record the freshly
+collected count; do not copy a historical number. Then run the documented
+positive commands against
 `fixtures/positive/01_install_only.json`:
 
 ```bash

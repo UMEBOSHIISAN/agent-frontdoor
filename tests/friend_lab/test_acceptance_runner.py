@@ -500,6 +500,27 @@ def test_source_install_requests_test_extra_before_pytest_collection(
     )
 
 
+def test_core_acceptance_excludes_optional_adapter_runtime_tests(
+    acceptance_request: acceptance.AcceptanceRequest,
+) -> None:
+    fake = FakeRunner()
+
+    acceptance.run_acceptance(acceptance_request, command_runner=fake)
+
+    excluded = {
+        "--ignore=tests/test_hook_adapter.py",
+        "--ignore=tests/test_hook_fixtures.py",
+        "--ignore=tests/test_hook_state.py",
+    }
+    for command_class in ("test-collect", "tests", "wheel-tests"):
+        argv = next(
+            argv
+            for called_class, argv, _env in fake.calls
+            if called_class == command_class
+        )
+        assert excluded.issubset(argv)
+
+
 def test_isolated_environment_does_not_forward_receiver_credentials(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

@@ -235,6 +235,8 @@ def test_negated_fenced_and_shell_line_commands_do_not_create_locks(
         "Run `git status`, but don't run it.",
         "Run `git status`; actually, never execute that command.",
         "Please run `git status` -- wait, do not run it.",
+        "Please run: `git status`\nstop",
+        "Please run: `git status`\nabort",
         "Run this exact command:\n```bash\ngit status\n```\nDo not run it.",
         "実行して `git status`。やっぱりやめて。",
     ],
@@ -474,6 +476,30 @@ def test_negated_correction_stops_a_not_yet_run_previous_action() -> None:
 def test_cancellation_after_affirmative_correction_never_relocks(
     prompt: str,
 ) -> None:
+    previous = derive_lock("`git status`")
+    assert previous is not None
+
+    held = derive_lock(prompt, previous=previous)
+
+    assert held is not None
+    assert held.phase == "REPORT_REQUIRED"
+    assert held.intent_epoch == previous.intent_epoch + 1
+    assert not evaluate_action(held, "git status").allowed
+
+
+@pytest.mark.parametrize(
+    "prompt",
+    [
+        "stop",
+        "cancel it",
+        "abort",
+        "skip it",
+        "do not do it",
+        "やめて",
+        "キャンセルして",
+    ],
+)
+def test_standalone_cancellation_holds_active_lock(prompt: str) -> None:
     previous = derive_lock("`git status`")
     assert previous is not None
 

@@ -65,6 +65,11 @@ _REQUIRED_WHEEL_DISTRIBUTIONS = frozenset(
         "wheel",
     }
 )
+_OPTIONAL_ADAPTER_TEST_IGNORES = (
+    "--ignore=tests/test_hook_adapter.py",
+    "--ignore=tests/test_hook_fixtures.py",
+    "--ignore=tests/test_hook_state.py",
+)
 _GAP_ORDER = (
     "REMOTE_EXECUTION",
     "NETWORK_DISCONNECT_UNCONFIRMED",
@@ -1789,6 +1794,7 @@ def run_acceptance(
         "no:cacheprovider",
         "-c",
         os.devnull,
+        *_OPTIONAL_ADAPTER_TEST_IGNORES,
         "tests",
     )
     if _run_phase(
@@ -1828,6 +1834,7 @@ def run_acceptance(
         "no:cacheprovider",
         "-c",
         os.devnull,
+        *_OPTIONAL_ADAPTER_TEST_IGNORES,
         "tests",
     )
     if not _run_deterministic_pair(

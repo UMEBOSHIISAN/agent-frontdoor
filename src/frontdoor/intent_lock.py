@@ -121,6 +121,18 @@ _POST_CORRECTION_NEGATION_PATTERN = re.compile(
     r")",
     re.IGNORECASE,
 )
+_TERMINAL_COMMAND_CANCELLATION_PATTERN = re.compile(
+    r"(?:stop|abort)\s*[.!]?\s*$",
+    re.IGNORECASE,
+)
+_STANDALONE_CANCELLATION_PATTERN = re.compile(
+    r"(?:"
+    r"stop|abort|(?:cancel|ignore|skip)(?:\s+it)?"
+    r"|(?:do\s+not|don't|never)\s+do\s+it"
+    r"|やっぱりやめて|やめて|中止して|キャンセルして|実行しないで|実行するな"
+    r")[。.!！ ]*",
+    re.IGNORECASE,
+)
 _ERROR_TARGET_PATTERNS = tuple(
     re.compile(pattern, re.IGNORECASE)
     for pattern in (
@@ -292,6 +304,8 @@ def _looks_like_command(value: str) -> bool:
 
 def _post_command_is_negated(prompt: str, end: int) -> bool:
     suffix = prompt[end : end + 160]
+    if _TERMINAL_COMMAND_CANCELLATION_PATTERN.search(suffix):
+        return True
     for match in _POST_COMMAND_NEGATION_PATTERN.finditer(suffix):
         remainder = suffix[match.end() :].lstrip(" \t:;,.-–—")
         if remainder.startswith("`") or re.match(r"\$[ \t]+", remainder):
@@ -502,8 +516,13 @@ def derive_lock(
             prompt[affirmative_correction.end() : affirmative_correction.end() + 160]
         )
     )
+    standalone_cancellation = _STANDALONE_CANCELLATION_PATTERN.fullmatch(
+        prompt.strip()
+    )
     if previous is not None and (
-        _NEGATED_CORRECTION_PATTERN.search(prompt) or correction_is_cancelled
+        _NEGATED_CORRECTION_PATTERN.search(prompt)
+        or correction_is_cancelled
+        or standalone_cancellation
     ):
         return _hold(prompt, previous)
 

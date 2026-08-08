@@ -278,6 +278,23 @@ def test_negating_a_later_command_does_not_cancel_the_first_command() -> None:
     assert not evaluate_action(lock, "git diff").allowed
 
 
+@pytest.mark.parametrize(
+    "prompt",
+    [
+        "Run `git status`, but do not run tests.",
+        "Run `git status`, but do not execute deployment.",
+        "Run `git status`, and never run rm -rf.",
+    ],
+)
+def test_unrelated_prohibition_does_not_cancel_requested_command(
+    prompt: str,
+) -> None:
+    lock = derive_lock(prompt)
+
+    assert lock is not None
+    assert evaluate_action(lock, "git status").allowed
+
+
 def test_inline_command_in_failure_prose_does_not_become_exact_intent() -> None:
     assert derive_lock("The command `git status` failed; inspect the error.") is None
 

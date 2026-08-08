@@ -308,6 +308,19 @@ def _post_command_is_negated(prompt: str, end: int) -> bool:
         return True
     for match in _POST_COMMAND_NEGATION_PATTERN.finditer(suffix):
         remainder = suffix[match.end() :].lstrip(" \t:;,.-–—")
+        matched = match.group(0).rstrip()
+        has_bare_run_verb = bool(
+            re.search(r"\b(?:run|execute)\s*$", matched, re.IGNORECASE)
+        )
+        cancellation_tail = re.match(
+            r"(?:again|anymore|yet|now|because|until|unless|while|when)\b",
+            remainder,
+            re.IGNORECASE,
+        )
+        if has_bare_run_verb and remainder and cancellation_tail is None:
+            # A non-pronominal object belongs to a separate prohibition:
+            # "run `git status`, but do not run tests".
+            continue
         if remainder.startswith("`") or re.match(r"\$[ \t]+", remainder):
             continue
         return True

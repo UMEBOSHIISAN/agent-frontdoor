@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import argparse
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 import re
 
 from frontdoor.cli import build_parser
+from tools.verify_handoff_archive import scan_forbidden_text
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -120,6 +121,13 @@ def test_hook_adapter_is_a_separate_optional_distribution() -> None:
         adapter_readme
     )
     assert "replace the placeholder" in adapter_readme
+
+
+def test_hook_adapter_metadata_passes_source_privacy_scan() -> None:
+    assert scan_forbidden_text(
+        PurePosixPath("adapters/pyproject.toml"),
+        ADAPTER_PYPROJECT.read_bytes(),
+    ) == ()
 
 
 def test_both_distributions_use_current_spdx_license_metadata() -> None:

@@ -122,11 +122,12 @@ _POST_COMMAND_NEGATION_PATTERN = re.compile(
 )
 _POST_CORRECTION_NEGATION_PATTERN = re.compile(
     r"(?:"
-    r"(?:do\s+not|don't|never)"
-    r"(?:\s+(?:do|retry|run|execute|resume|continue))?"
-    r"(?:\s+(?:it|this|that|the\s+request))?"
+    r"(?:do\s+not|don't|never)\s+"
+    r"(?:(?:do|retry|run|execute|resume|continue)\s+)?"
+    r"(?:it|this|that|the\s+request)"
     r"|(?:cancel|ignore|stop|abort|skip)"
-    r"(?:\s+(?:it|this|that|the\s+request))?"
+    r"\s+(?:it|this|that|the\s+request)"
+    r"|(?:do\s+not|don't)\s*[.!]?\s*$"
     r")",
     re.IGNORECASE,
 )
@@ -182,16 +183,16 @@ _AFFIRMATIVE_CORRECTION_PATTERN = re.compile(
 _NEGATED_CORRECTION_PATTERN = re.compile(
     r"(?:"
     r"(?:do\s+not|don't|never)\s+"
-    r"(?:(?:retry|run|execute|do)\s+)?(?:the\s+)?"
+    r"(?:(?:retry|run|execute|do|resume|continue)\s+)?(?:the\s+)?"
     r"(?:original|first)\s+request"
     r"|(?:do\s+not|don't|never)\s+want\s+(?:you\s+)?to\s+"
-    r"(?:retry|run|execute|do)\s+(?:the\s+)?"
+    r"(?:retry|run|execute|do|resume|continue)\s+(?:the\s+)?"
     r"(?:original|first)\s+request"
     r"|(?:cannot|can't|must\s+not|should\s+not)\s+"
-    r"(?:retry|run|execute|do)\s+(?:the\s+)?"
+    r"(?:retry|run|execute|do|resume|continue)\s+(?:the\s+)?"
     r"(?:original|first)\s+request"
     r"|(?:please\s+)?refrain\s+from\s+"
-    r"(?:retrying|running|executing|doing)\s+(?:the\s+)?"
+    r"(?:retrying|running|executing|doing|resuming|continuing)\s+(?:the\s+)?"
     r"(?:original|first)\s+request"
     r"|(?:cancel|ignore|stop|abort|skip)\s+(?:the\s+)?"
     r"(?:original|first)\s+request"
@@ -554,6 +555,15 @@ def _hold(prompt: str, previous: IntentLock) -> IntentLock:
     )
 
 
+def _matches_locked_identity(lock: IntentLock, action: str) -> bool:
+    if lock.mode == "EXACT_COMMAND":
+        return _digest(_normalized_command(action)) == lock.exact_command_sha256
+    action_digests = {
+        _digest(token.casefold()) for token in _ACTION_TOKEN_PATTERN.findall(action)
+    }
+    return all(digest in action_digests for digest in lock.target_token_sha256)
+
+
 def derive_lock(
     prompt: str,
     previous: IntentLock | None = None,
@@ -573,7 +583,12 @@ def derive_lock(
             targets=targets,
         )
 
-    if previous is not None and _extract_negated_command(prompt) is not None:
+    negated_command = _extract_negated_command(prompt)
+    if (
+        previous is not None
+        and negated_command is not None
+        and _matches_locked_identity(previous, negated_command)
+    ):
         return _hold(prompt, previous)
 
     targets = _extract_error_targets(prompt)
@@ -632,8 +647,7 @@ def evaluate_action(lock: IntentLock, action: str) -> IntentDecision:
         return IntentDecision(True, "released", "Intent lock is released.")
 
     if lock.mode == "EXACT_COMMAND":
-        matches = _digest(_normalized_command(action)) == lock.exact_command_sha256
-        if matches:
+        if _matches_locked_identity(lock, action):
             return IntentDecision(
                 True,
                 "exact_command_match",
@@ -645,10 +659,7 @@ def evaluate_action(lock: IntentLock, action: str) -> IntentDecision:
             "Proposed action does not match the locked exact command.",
         )
 
-    action_digests = {
-        _digest(token.casefold()) for token in _ACTION_TOKEN_PATTERN.findall(action)
-    }
-    if all(digest in action_digests for digest in lock.target_token_sha256):
+    if _matches_locked_identity(lock, action):
         return IntentDecision(
             True,
             "literal_target_match",

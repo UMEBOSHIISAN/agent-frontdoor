@@ -578,6 +578,10 @@ def test_human_relock_preserves_previous_intent(prompt: str) -> None:
     "prompt",
     [
         "do not retry the original request",
+        "don't continue the original request",
+        "do not resume the first request",
+        "you cannot continue the original request",
+        "you should not resume the first request",
         "never run the first request",
         "cancel the original request",
         "ignore the first request",
@@ -668,6 +672,27 @@ def test_cancellation_after_affirmative_correction_never_relocks(
 @pytest.mark.parametrize(
     "prompt",
     [
+        "Do the original request, but don't run tests.",
+        "Do the original request, but do not execute deployment.",
+    ],
+)
+def test_unrelated_post_correction_prohibition_still_relocks(
+    prompt: str,
+) -> None:
+    previous = derive_lock("`git status`")
+    assert previous is not None
+
+    relocked = derive_lock(prompt, previous=previous)
+
+    assert relocked is not None
+    assert relocked.phase == "DIRECT_REQUIRED"
+    assert relocked.intent_epoch == previous.intent_epoch + 1
+    assert evaluate_action(relocked, "git status").allowed
+
+
+@pytest.mark.parametrize(
+    "prompt",
+    [
         "stop",
         "cancel it",
         "abort",
@@ -705,6 +730,30 @@ def test_substantive_unrelated_prompt_releases_previous_lock() -> None:
         "READMEの文章を監査して結果だけ教えて",
         previous=previous,
     ) is None
+
+
+def test_unrelated_negated_command_does_not_cancel_active_exact_lock() -> None:
+    previous = derive_lock("`git status`")
+    assert previous is not None
+
+    assert derive_lock(
+        "Inspect README, but do not run `curl example.com`.",
+        previous=previous,
+    ) is None
+
+
+def test_matching_negated_command_cancels_active_literal_target_lock() -> None:
+    previous = derive_lock(ERROR_PROMPT)
+    assert previous is not None
+
+    held = derive_lock(
+        "Do not run `codex mcp list cloudflare-api`.",
+        previous=previous,
+    )
+
+    assert held is not None
+    assert held.phase == "REPORT_REQUIRED"
+    assert not evaluate_action(held, "codex mcp list cloudflare-api").allowed
 
 
 def test_lock_serialization_round_trip_is_validated_and_immutable() -> None:

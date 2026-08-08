@@ -131,7 +131,12 @@ _POST_CORRECTION_NEGATION_PATTERN = re.compile(
     re.IGNORECASE,
 )
 _TERMINAL_COMMAND_CANCELLATION_PATTERN = re.compile(
-    r"(?:stop|abort)\s*[.!]?\s*$",
+    r"(?:"
+    r"(?:stop|abort|cancel)"
+    r"(?:\s+(?:it|this|that)(?:\s+command)?)?"
+    r"|(?:do\s+not|don't)"
+    r"(?:\s+(?:do|run|execute)\s+(?:it|this|that))?"
+    r")\s*[.!]?\s*$",
     re.IGNORECASE,
 )
 _STANDALONE_CANCELLATION_PATTERN = re.compile(

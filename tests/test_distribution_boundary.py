@@ -16,6 +16,7 @@ CHANGELOG = ROOT / "CHANGELOG.md"
 PYPROJECT = ROOT / "pyproject.toml"
 ADAPTER_PYPROJECT = ROOT / "adapters" / "pyproject.toml"
 ADAPTER_README = ROOT / "adapters" / "README.md"
+ADAPTER_LICENSE = ROOT / "adapters" / "LICENSE"
 MANIFEST = ROOT / "MANIFEST.in"
 ADAPTER_SOURCE_PRESENT = ADAPTER_PYPROJECT.exists()
 
@@ -172,6 +173,10 @@ def test_both_distributions_use_current_spdx_license_metadata() -> None:
         assert 'requires = ["setuptools>=77"]' in pyproject
         assert 'license = "MIT"' in pyproject
         assert "license = {text" not in pyproject
+    if ADAPTER_SOURCE_PRESENT:
+        adapter = ADAPTER_PYPROJECT.read_text(encoding="utf-8")
+        assert 'license-files = ["LICENSE"]' in adapter
+        assert ADAPTER_LICENSE.read_bytes() == (ROOT / "LICENSE").read_bytes()
 
 
 def test_root_pytest_configuration_loads_core_adapter_and_lab_sources() -> None:

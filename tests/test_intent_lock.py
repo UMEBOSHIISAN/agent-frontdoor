@@ -120,6 +120,18 @@ def test_prose_and_negated_command_mentions_do_not_create_exact_locks(
     assert derive_lock(prompt) is None
 
 
+def test_negated_inline_command_is_skipped_for_affirmative_command() -> None:
+    lock = derive_lock("Do not run `git status`; run `git diff`.")
+
+    assert lock is not None
+    assert not evaluate_action(lock, "git status").allowed
+    assert evaluate_action(lock, "git diff").allowed
+
+
+def test_inline_command_in_failure_prose_does_not_become_exact_intent() -> None:
+    assert derive_lock("The command `git status` failed; inspect the error.") is None
+
+
 @pytest.mark.parametrize(
     ("locked_command", "different_action"),
     [
@@ -127,6 +139,10 @@ def test_prose_and_negated_command_mentions_do_not_create_exact_locks(
         ("git add 'foo; touch /tmp/other'", "git add foo; touch /tmp/other"),
         ("bash -c 'echo safe; exit 1'", "bash -c echo safe; exit 1"),
         ("git add '>'", "git add >"),
+        (
+            "python -c pass touch /tmp/other",
+            "python -c pass\ntouch /tmp/other",
+        ),
     ],
 )
 def test_exact_command_hash_preserves_quotes_and_shell_boundaries(
@@ -182,6 +198,15 @@ def test_success_releases_exact_command_but_keeps_target_lock_bounded() -> None:
     assert evaluate_action(exact_after, "npx wrangler whoami").allowed
     assert target_after.phase == "DIRECT_REQUIRED"
     assert not evaluate_action(target_after, "npx wrangler whoami").allowed
+
+
+def test_released_lock_is_terminal_for_later_results() -> None:
+    lock = derive_lock("`git status`")
+    assert lock is not None
+    released = record_result(lock, "git status", failed=False)
+
+    assert released.phase == "RELEASED"
+    assert record_result(released, "unrelated action", failed=True) is released
 
 
 @pytest.mark.parametrize(

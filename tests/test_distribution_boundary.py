@@ -130,6 +130,11 @@ def test_both_distributions_use_current_spdx_license_metadata() -> None:
         assert "license = {text" not in pyproject
 
 
+def test_root_pytest_configuration_loads_core_adapter_and_lab_sources() -> None:
+    pyproject = PYPROJECT.read_text(encoding="utf-8")
+    assert 'pythonpath = [".", "src", "adapters/src"]' in pyproject
+
+
 def test_changelog_records_intent_lock_as_unreleased_and_unactivated() -> None:
     text = CHANGELOG.read_text(encoding="utf-8")
     assert "intent-lock.v1" in text

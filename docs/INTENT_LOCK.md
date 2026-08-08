@@ -63,12 +63,14 @@ filename and writes only validated contract JSON.
 ## Deterministic derivation
 
 An exact-command lock is created from a shell-looking command in a fenced block,
-inline code, `$`-prefixed line, or a recognized CLI command followed by a bounded
-Japanese request suffix such as `してや`. Free prose, trailing English prose, and
-negated command mentions do not create exact-command locks. Exact-command
-comparison collapses only unquoted whitespace and preserves quotes, escapes, and
-shell operators before hashing, so the state file does not retain its arguments
-and a different shell program cannot compare equal by losing syntax boundaries.
+standalone inline code, inline code following an explicit affirmative run
+directive, a `$`-prefixed line, or a recognized CLI command followed by a bounded
+Japanese request suffix such as `してや`. Free prose, trailing English prose,
+failure descriptions, and negated command mentions do not create exact-command
+locks. Exact-command comparison collapses only unquoted horizontal whitespace and
+preserves newlines, quotes, escapes, and shell operators before hashing, so the
+state file does not retain its arguments and a different shell program cannot
+compare equal by losing syntax boundaries.
 
 A literal-target lock is created from structured error forms such as:
 

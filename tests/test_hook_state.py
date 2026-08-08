@@ -96,3 +96,15 @@ def test_state_root_file_is_rejected(tmp_path: Path) -> None:
 
     with pytest.raises(StateError, match="state root"):
         save_session_lock(root, "session", _lock())
+
+
+def test_existing_shared_state_root_is_rejected_without_chmod(tmp_path: Path) -> None:
+    root = tmp_path / "shared"
+    root.mkdir(mode=0o700)
+    root.chmod(0o755)
+    before = stat.S_IMODE(root.stat().st_mode)
+
+    with pytest.raises(StateError, match="existing state root permissions"):
+        save_session_lock(root, "session", _lock())
+
+    assert stat.S_IMODE(root.stat().st_mode) == before

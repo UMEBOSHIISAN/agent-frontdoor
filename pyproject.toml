@@ -24,4 +24,4 @@ where = ["src"]
 frontdoor = ["schema/*.json"]
 
 [tool.pytest.ini_options]
-pythonpath = ["src"]
+pythonpath = [".", "src", "adapters/src"]

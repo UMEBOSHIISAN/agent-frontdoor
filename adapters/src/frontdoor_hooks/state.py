@@ -6,6 +6,7 @@ from hashlib import sha256
 import json
 import os
 from pathlib import Path
+import stat
 import tempfile
 
 from frontdoor.intent_lock import IntentLock, lock_from_dict, lock_to_dict
@@ -24,10 +25,23 @@ def state_path(state_root: Path, session_id: str) -> Path:
 
 def _prepare_root(state_root: Path) -> None:
     try:
-        state_root.mkdir(mode=0o700, parents=True, exist_ok=True)
-        if not state_root.is_dir():
+        created = False
+        try:
+            state_root.mkdir(mode=0o700, parents=True, exist_ok=False)
+            created = True
+        except FileExistsError:
+            pass
+        if state_root.is_symlink() or not state_root.is_dir():
             raise StateError(f"state root is not a directory: {state_root}")
-        state_root.chmod(0o700)
+        if created:
+            state_root.chmod(0o700)
+            return
+        permissions = stat.S_IMODE(state_root.stat().st_mode)
+        if permissions & 0o077:
+            raise StateError(
+                "existing state root permissions expose group or other access: "
+                f"{permissions:04o}"
+            )
     except StateError:
         raise
     except OSError as error:

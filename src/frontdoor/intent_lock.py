@@ -90,6 +90,14 @@ _FENCED_COMMAND_PATTERN = re.compile(
 )
 _INLINE_CODE_PATTERN = re.compile(r"`{1,3}([^`\r\n]+)`{1,3}")
 _SHELL_LINE_PATTERN = re.compile(r"(?m)^\s*\$\s+([^\r\n]+)$")
+_NEGATED_INLINE_DIRECTIVE_PATTERN = re.compile(
+    r"(?:do\s+not|don't|never)\s+(?:run|execute)\s*:?[ \t]*$",
+    re.IGNORECASE,
+)
+_AFFIRMATIVE_INLINE_DIRECTIVE_PATTERN = re.compile(
+    r"(?:\b(?:run|execute)|実行(?:して)?|やって)\s*:?[ \t]*$",
+    re.IGNORECASE,
+)
 _ERROR_TARGET_PATTERNS = tuple(
     re.compile(pattern, re.IGNORECASE)
     for pattern in (
@@ -167,7 +175,7 @@ def _normalized_command(value: str) -> str:
                 quote = None
             normalized.append(character)
             continue
-        if character.isspace() and quote is None:
+        if character in {" ", "\t"} and quote is None:
             pending_space = True
             continue
         if pending_space and normalized:
@@ -197,15 +205,26 @@ def _looks_like_command(value: str) -> bool:
 
 
 def _extract_exact_command(prompt: str) -> str | None:
-    for pattern in (
-        _FENCED_COMMAND_PATTERN,
-        _SHELL_LINE_PATTERN,
-        _INLINE_CODE_PATTERN,
-    ):
+    for pattern in (_FENCED_COMMAND_PATTERN, _SHELL_LINE_PATTERN):
         for match in pattern.finditer(prompt):
             candidate = match.group(1).strip()
             if _looks_like_command(candidate):
                 return _normalized_command(candidate)
+
+    for match in _INLINE_CODE_PATTERN.finditer(prompt):
+        candidate = match.group(1).strip()
+        prefix = prompt[max(0, match.start() - 80) : match.start()]
+        is_standalone = prompt.strip() == match.group(0)
+        is_negated = bool(_NEGATED_INLINE_DIRECTIVE_PATTERN.search(prefix))
+        is_affirmative = bool(
+            _AFFIRMATIVE_INLINE_DIRECTIVE_PATTERN.search(prefix)
+        )
+        if (
+            _looks_like_command(candidate)
+            and not is_negated
+            and (is_standalone or is_affirmative)
+        ):
+            return _normalized_command(candidate)
 
     match = _NATURAL_COMMAND_PATTERN.fullmatch(prompt)
     if match:
@@ -374,6 +393,8 @@ def record_result(
 ) -> IntentLock:
     """Record a matching direct result without mutating the supplied lock."""
 
+    if lock.phase == "RELEASED":
+        return lock
     if not evaluate_action(lock, action).allowed:
         return lock
     if failed:

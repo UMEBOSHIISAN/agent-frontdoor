@@ -75,6 +75,11 @@ contains prompt and target hashes plus safe display labels, but never the raw
 prompt, raw command, raw session ID, tool result, transcript path, OAuth token,
 or other credential material.
 
+The adapter creates its dedicated state directory with mode `0700`. If an
+explicit `--state-dir` already exists, the adapter never changes its permissions:
+it accepts a real directory with no group/other access and rejects a shared or
+symlinked path.
+
 Malformed persisted state causes `PreToolUse` to fail closed. `SessionEnd`
 removes only the current session's hashed state file. A crashed session can leave
 stale state; inspect the exact configured state directory before manually
@@ -83,8 +88,8 @@ removing anything.
 ## What the lock enforces
 
 - A direct exact command permits only the same command syntax, with differences
-  limited to unquoted whitespace. Quotes, escapes, and shell operators remain
-  significant.
+  limited to unquoted horizontal whitespace. Newlines, quotes, escapes, and shell
+  operators remain significant.
 - A structured error target permits only actions containing the same literal
   target tokens.
 - A failed matching action enters `REPORT_REQUIRED`; Codex retains the original

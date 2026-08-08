@@ -23,8 +23,8 @@ except ModuleNotFoundError:
     verifier = None
 
 
-SOURCE_ROOT = "agent-frontdoor-0.1.0"
-PACK_ROOT = "agent-frontdoor-friend-pack-0.1.0"
+SOURCE_ROOT = "agent-frontdoor-0.2.0"
+PACK_ROOT = "agent-frontdoor-friend-pack-0.2.0"
 PUBLIC_REVISION = "1" * 40
 
 
@@ -101,11 +101,11 @@ def source_entries() -> list[TarEntry]:
         TarEntry(f"{SOURCE_ROOT}/README.md", b"# Agent Frontdoor\n"),
         TarEntry(
             f"{SOURCE_ROOT}/pyproject.toml",
-            b"[project]\nname = 'agent-frontdoor'\nversion = '0.1.0'\n",
+            b"[project]\nname = 'agent-frontdoor'\nversion = '0.2.0'\n",
         ),
         TarEntry(
             f"{SOURCE_ROOT}/src/frontdoor/__init__.py",
-            b"__version__ = '0.1.0'\n",
+            b"__version__ = '0.2.0'\n",
         ),
         TarEntry(
             f"{SOURCE_ROOT}/src/frontdoor/schema/intake.v0.json",
@@ -174,7 +174,7 @@ def verify_source(
 def source_manifest(records: list[FixtureRecord]) -> dict[str, object]:
     return {
         "schema_version": "source-archive-manifest.v1",
-        "package_version": "0.1.0",
+        "package_version": "0.2.0",
         "public_revision": PUBLIC_REVISION,
         "archive_root": SOURCE_ROOT,
         "regular_file_count": len(records),
@@ -220,7 +220,7 @@ def make_friend_pack(
     source_manifest_bytes = json_bytes(source_manifest(records))
     payload: dict[str, tuple[bytes, int]] = {
         "FRIEND_LAB.md": (b"# Friend Lab\n", 0o644),
-        "source/agent-frontdoor-0.1.0.tar.gz": (nested, 0o644),
+        "source/agent-frontdoor-0.2.0.tar.gz": (nested, 0o644),
         "source/source-manifest.json": (source_manifest_bytes, 0o644),
         "verifier/verify_handoff_archive.py": (verifier_bytes, 0o755),
         "lab/controls/privacy_control.txt": (privacy_control, 0o644),
@@ -231,10 +231,10 @@ def make_friend_pack(
     ]
     manifest: dict[str, object] = {
         "schema_version": "friend-pack-manifest.v1",
-        "package_version": "0.1.0",
+        "package_version": "0.2.0",
         "public_revision": PUBLIC_REVISION,
         "source_archive": {
-            "path": "source/agent-frontdoor-0.1.0.tar.gz",
+            "path": "source/agent-frontdoor-0.2.0.tar.gz",
             "sha256": sha256(nested),
             "regular_file_count": len(records),
             "manifest_path": "source/source-manifest.json",
@@ -580,7 +580,7 @@ def test_friend_pack_rejects_manifest_checksum_mismatch(tmp_path: Path) -> None:
     "missing",
     [
         "FRIEND_LAB.md",
-        "source/agent-frontdoor-0.1.0.tar.gz",
+        "source/agent-frontdoor-0.2.0.tar.gz",
         "source/source-manifest.json",
         "verifier/verify_handoff_archive.py",
         "lab/controls/privacy_control.txt",

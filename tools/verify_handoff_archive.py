@@ -24,8 +24,8 @@ PRIVACY_CATEGORIES: tuple[str, ...] = (
     "private-operational-record",
 )
 
-_SOURCE_ROOT = "agent-frontdoor-0.1.0"
-_PACK_ROOT = "agent-frontdoor-friend-pack-0.1.0"
+_SOURCE_ROOT = "agent-frontdoor-0.2.0"
+_PACK_ROOT = "agent-frontdoor-friend-pack-0.2.0"
 _HEX64 = re.compile(r"[0-9a-f]{64}\Z")
 _REQUIRED_SOURCE_MEMBERS = frozenset(
     {
@@ -538,7 +538,7 @@ def _load_source_manifest_bytes(
         return (), None, None, ("source manifest invalid: fields",)
     if value.get("schema_version") != "source-archive-manifest.v1":
         errors.append("source manifest invalid: schema_version")
-    if value.get("package_version") != "0.1.0":
+    if value.get("package_version") != "0.2.0":
         errors.append("source manifest invalid: package_version")
     revision = value.get("public_revision")
     if not isinstance(revision, str) or not re.fullmatch(
@@ -609,7 +609,7 @@ def _load_pack_manifest_bytes(
     errors: list[str] = []
     if value.get("schema_version") != "friend-pack-manifest.v1":
         errors.append("manifest invalid: schema_version")
-    if value.get("package_version") != "0.1.0":
+    if value.get("package_version") != "0.2.0":
         errors.append("manifest invalid: package_version")
     revision = value.get("public_revision")
     if not isinstance(revision, str) or not re.fullmatch(

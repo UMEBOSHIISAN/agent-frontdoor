@@ -36,9 +36,9 @@ def member(path: str = "README.md") -> dict[str, object]:
 def valid_source_manifest() -> dict[str, object]:
     return {
         "schema_version": "source-archive-manifest.v1",
-        "package_version": "0.1.0",
+        "package_version": "0.2.0",
         "public_revision": REVISION,
-        "archive_root": "agent-frontdoor-0.1.0",
+        "archive_root": "agent-frontdoor-0.2.0",
         "regular_file_count": 1,
         "members": [member()],
     }
@@ -47,10 +47,10 @@ def valid_source_manifest() -> dict[str, object]:
 def valid_friend_pack_manifest() -> dict[str, object]:
     return {
         "schema_version": "friend-pack-manifest.v1",
-        "package_version": "0.1.0",
+        "package_version": "0.2.0",
         "public_revision": REVISION,
         "source_archive": {
-            "path": "source/agent-frontdoor-0.1.0.tar.gz",
+            "path": "source/agent-frontdoor-0.2.0.tar.gz",
             "sha256": HEX,
             "regular_file_count": 1,
             "manifest_path": "source/source-manifest.json",
@@ -71,7 +71,7 @@ def valid_friend_pack_manifest() -> dict[str, object]:
 def valid_wheelhouse_manifest() -> dict[str, object]:
     return {
         "schema_version": "wheelhouse-manifest.v1",
-        "package_version": "0.1.0",
+        "package_version": "0.2.0",
         "target": {
             "os_version": "macOS 26.5.2",
             "architecture": "arm64",
@@ -106,7 +106,7 @@ def valid_wheelhouse_manifest() -> dict[str, object]:
 def valid_receipt() -> dict[str, object]:
     return {
         "schema_version": "friend-acceptance-receipt.v1",
-        "package_version": "0.1.0",
+        "package_version": "0.2.0",
         "public_revision": REVISION,
         "pack_sha256": HEX,
         "source_archive_sha256": HEX,

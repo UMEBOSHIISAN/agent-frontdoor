@@ -284,13 +284,27 @@ def test_multiline_shell_fence_preserves_exact_command(command: str) -> None:
 
 
 def test_heredoc_payload_whitespace_is_preserved_in_exact_hash() -> None:
-    command = "cat <<'EOF'\nall:\n\t@echo hi\nEOF"
-    spaces_instead_of_tab = "cat <<'EOF'\nall:\n    @echo hi\nEOF"
+    recipe = "@echo hi"
+    command = "cat <<'EOF'\nall:\n\t" + recipe + "\nEOF"
+    spaces_instead_of_tab = "cat <<'EOF'\nall:\n    " + recipe + "\nEOF"
     lock = derive_lock(f"```bash\n{command}\n```")
 
     assert lock is not None
     assert evaluate_action(lock, command).allowed
     assert not evaluate_action(lock, spaces_instead_of_tab).allowed
+
+
+@pytest.mark.parametrize("escaped_whitespace", [" ", "\t"])
+def test_escaped_trailing_whitespace_is_preserved_in_exact_hash(
+    escaped_whitespace: str,
+) -> None:
+    command = f"printf '<%s>' value\\{escaped_whitespace}"
+    without_whitespace = "printf '<%s>' value\\"
+    lock = derive_lock(f"```bash\n{command}\n```")
+
+    assert lock is not None
+    assert evaluate_action(lock, command).allowed
+    assert not evaluate_action(lock, without_whitespace).allowed
 
 
 @pytest.mark.parametrize(

@@ -41,7 +41,7 @@ except ModuleNotFoundError as exc:
     )
 
 
-PACKAGE_VERSION = "0.1.0"
+PACKAGE_VERSION = "0.2.0"
 PACK_ROOT_NAME = f"agent-frontdoor-friend-pack-{PACKAGE_VERSION}"
 SOURCE_ROOT_NAME = f"agent-frontdoor-{PACKAGE_VERSION}"
 RECEIPT_NAME = "friend-acceptance-receipt.json"

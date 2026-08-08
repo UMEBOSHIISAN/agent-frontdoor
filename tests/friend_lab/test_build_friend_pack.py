@@ -15,7 +15,7 @@ from tools.friend_lab import build_friend_pack as builder
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 REQUIRED_DISTRIBUTIONS = {
-    "agent-frontdoor": "0.1.0",
+    "agent-frontdoor": "0.2.0",
     "attrs": "25.3.0",
     "iniconfig": "2.1.0",
     "jsonschema": "4.25.0",
@@ -215,7 +215,7 @@ def test_source_archive_rejects_wrong_package_version(
     pyproject = public_repo / "pyproject.toml"
     pyproject.write_text(
         pyproject.read_text(encoding="utf-8").replace(
-            'version = "0.1.0"', 'version = "0.2.0"'
+            'version = "0.2.0"', 'version = "0.3.0"'
         ),
         encoding="utf-8",
     )
@@ -390,18 +390,18 @@ def test_build_friend_pack_is_deterministic_and_outputs_two_files(
         first.pack_path.read_bytes()
     ).hexdigest()
     assert {path.name for path in first.pack_path.parent.iterdir()} == {
-        "agent-frontdoor-friend-pack-0.1.0.tar.gz",
+        "agent-frontdoor-friend-pack-0.2.0.tar.gz",
         "verify_handoff_archive.py",
     }
     with tarfile.open(first.pack_path, "r:gz") as archive:
         by_name = {item.name: item for item in archive.getmembers()}
-        pack_root = "agent-frontdoor-friend-pack-0.1.0/"
+        pack_root = "agent-frontdoor-friend-pack-0.2.0/"
         assert by_name[pack_root + "lab/sitecustomize.py"].mode == 0o644
         assert by_name[pack_root + "lab/acceptance_runner.py"].mode == 0o755
         assert by_name[pack_root + "lab/controls/socket_probe.py"].mode == 0o755
         assert by_name[pack_root + "verifier/verify_handoff_archive.py"].mode == 0o755
         source = archive.extractfile(
-            pack_root + "source/agent-frontdoor-0.1.0.tar.gz"
+            pack_root + "source/agent-frontdoor-0.2.0.tar.gz"
         )
         assert source is not None
         with tarfile.open(fileobj=source, mode="r:gz") as nested:
@@ -424,7 +424,7 @@ def test_build_friend_pack_is_deterministic_and_outputs_two_files(
             "privacy",
         ),
         (
-            "agent_frontdoor-0.1.0.dist-info/private.txt",
+            "agent_frontdoor-0.2.0.dist-info/private.txt",
             b"/Users/synthetic-receiver/private\n",
             "unexpected",
         ),
@@ -434,8 +434,8 @@ def test_build_friend_pack_is_deterministic_and_outputs_two_files(
             "unexpected",
         ),
         (
-            "agent_frontdoor-0.1.0.dist-info/METADATA",
-            b"Metadata-Version: 2.1\nName: agent-frontdoor\nVersion: 0.1.0\nLicense: MIT\nRequires-Dist: jsonschema>=4\nrequires-dist: evil-package\n",
+            "agent_frontdoor-0.2.0.dist-info/METADATA",
+            b"Metadata-Version: 2.1\nName: agent-frontdoor\nVersion: 0.2.0\nLicense: MIT\nRequires-Dist: jsonschema>=4\nrequires-dist: evil-package\n",
             "dependency metadata",
         ),
     ],

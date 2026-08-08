@@ -19,7 +19,7 @@ python3 -m venv .venv
 .venv/bin/python -m pip install -e adapters
 ```
 
-The adapter depends on the matching `agent-frontdoor` 0.1 release line. Review
+The adapter depends on the matching `agent-frontdoor` 0.2 release line. Review
 both distributions and the example configuration before trusting the command as
 a local hook. The state adapter requires a POSIX operating system; Windows is
 rejected explicitly because this release cannot enforce its required `0700` /

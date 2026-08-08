@@ -52,7 +52,7 @@ def test_friend_lab_manual_has_ordered_attended_acceptance_phases() -> None:
     assert "--upgrade-deps" not in text
     assert (
         'export FRIEND_PACK_ROOT="$FRIEND_TEMP_ROOT/'
-        'agent-frontdoor-friend-pack-0.1.0"'
+        'agent-frontdoor-friend-pack-0.2.0"'
     ) in text
     assert '"$FRIEND_PACK_ROOT/lab/acceptance_runner.py"' in text
     assert '--pack-root "$FRIEND_PACK_ROOT"' in text
@@ -118,9 +118,11 @@ def test_hook_adapter_is_a_separate_optional_distribution() -> None:
     adapter = ADAPTER_PYPROJECT.read_text(encoding="utf-8")
 
     assert 'name = "agent-frontdoor"' in core
+    assert 'version = "0.2.0"' in core
     assert "agent-frontdoor-hook" not in core
     assert 'name = "agent-frontdoor-hooks"' in adapter
-    assert 'dependencies = ["agent-frontdoor>=0.1.0,<0.2"]' in adapter
+    assert 'version = "0.2.0"' in adapter
+    assert 'dependencies = ["agent-frontdoor>=0.2.0,<0.3"]' in adapter
     assert 'agent-frontdoor-hook = "frontdoor_hooks.hook:main"' in adapter
     assert ADAPTER_README.exists()
     adapter_readme = ADAPTER_README.read_text(encoding="utf-8")

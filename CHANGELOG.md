@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Reserved `0.2.0` as the first core and adapter release line containing
+  `intent-lock.v1`; the adapter rejects the incompatible `0.1.x` core line.
 - Added the pure `intent-lock.v1` schema and deterministic task-identity state
   machine for exact commands and literal error targets.
 - Added the separate optional `agent-frontdoor-hooks` distribution with Codex

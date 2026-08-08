@@ -17,14 +17,14 @@
       "const": "source-archive-manifest.v1"
     },
     "package_version": {
-      "const": "0.1.0"
+      "const": "0.2.0"
     },
     "public_revision": {
       "type": "string",
       "pattern": "^[0-9a-f]{40}$"
     },
     "archive_root": {
-      "const": "agent-frontdoor-0.1.0"
+      "const": "agent-frontdoor-0.2.0"
     },
     "regular_file_count": {
       "type": "integer",

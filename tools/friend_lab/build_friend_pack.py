@@ -27,7 +27,7 @@ from tools.verify_handoff_archive import (
 )
 
 
-PACKAGE_VERSION = "0.1.0"
+PACKAGE_VERSION = "0.2.0"
 SOURCE_ROOT = f"agent-frontdoor-{PACKAGE_VERSION}"
 PACK_ROOT = f"agent-frontdoor-friend-pack-{PACKAGE_VERSION}"
 PACK_FILENAME = f"{PACK_ROOT}.tar.gz"

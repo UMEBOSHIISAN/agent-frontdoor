@@ -2,7 +2,7 @@ This is not an agent runtime.
 This is not an autonomous router.
 This is a preflight contract and validator for safely preparing tasks for AI workers.
 
-![Agent Frontdoor](https://img.shields.io/badge/Agent%20Frontdoor-v0.1.0-111827)
+![Agent Frontdoor](https://img.shields.io/badge/Agent%20Frontdoor-v0.2.0-111827)
 ![Python](https://img.shields.io/badge/python-3.10%2B-3776ab)
 ![Safety](https://img.shields.io/badge/runtime-fail--closed-16a34a)
 

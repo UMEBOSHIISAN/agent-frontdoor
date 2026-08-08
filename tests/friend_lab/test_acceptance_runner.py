@@ -24,8 +24,8 @@ from tools.friend_lab import acceptance_runner as acceptance
 
 HEX_EMPTY = hashlib.sha256(b"").hexdigest()
 PUBLIC_REVISION = "a" * 40
-PACK_ROOT_NAME = "agent-frontdoor-friend-pack-0.1.0"
-SOURCE_ROOT_NAME = "agent-frontdoor-0.1.0"
+PACK_ROOT_NAME = "agent-frontdoor-friend-pack-0.2.0"
+SOURCE_ROOT_NAME = "agent-frontdoor-0.2.0"
 
 
 def _sha256(data: bytes) -> str:
@@ -273,7 +273,7 @@ class FakeRunner:
 def acceptance_request(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> acceptance.AcceptanceRequest:
-    outer_pack = tmp_path / "agent-frontdoor-friend-pack-0.1.0.tar.gz"
+    outer_pack = tmp_path / "agent-frontdoor-friend-pack-0.2.0.tar.gz"
     outer_pack.write_bytes(b"synthetic verified outer pack")
     detached = tmp_path / "verify_handoff_archive.py"
     detached.write_bytes(b"#!/usr/bin/env python3\n")
@@ -285,10 +285,10 @@ def acceptance_request(
         "LICENSE": (b"MIT\n", 0o644),
         "README.md": (b"# Agent Frontdoor\n", 0o644),
         "pyproject.toml": (
-            b"[project]\nname='agent-frontdoor'\nversion='0.1.0'\n",
+            b"[project]\nname='agent-frontdoor'\nversion='0.2.0'\n",
             0o644,
         ),
-        "src/frontdoor/__init__.py": (b"__version__='0.1.0'\n", 0o644),
+        "src/frontdoor/__init__.py": (b"__version__='0.2.0'\n", 0o644),
         "src/frontdoor/schema/intake.v0.json": (b"{}\n", 0o644),
         "tests/test_cli.py": (b"def test_ok(): assert True\n", 0o644),
         "tools/verify_handoff_archive.py": (detached.read_bytes(), 0o755),
@@ -300,14 +300,14 @@ def acceptance_request(
     ]
     source_manifest = {
         "schema_version": "source-archive-manifest.v1",
-        "package_version": "0.1.0",
+        "package_version": "0.2.0",
         "public_revision": PUBLIC_REVISION,
         "archive_root": SOURCE_ROOT_NAME,
         "regular_file_count": len(source_records),
         "members": source_records,
     }
     wheel_versions = {
-        "agent-frontdoor": "0.1.0",
+        "agent-frontdoor": "0.2.0",
         "attrs": "25.3.0",
         "iniconfig": "2.1.0",
         "jsonschema": "4.25.0",
@@ -355,7 +355,7 @@ def acceptance_request(
         )
     wheel_manifest = {
         "schema_version": "wheelhouse-manifest.v1",
-        "package_version": "0.1.0",
+        "package_version": "0.2.0",
         "target": {
             "os_version": "macOS 26.5.2",
             "architecture": "arm64",
@@ -419,7 +419,7 @@ def acceptance_request(
     ]
     manifest = {
         "schema_version": "friend-pack-manifest.v1",
-        "package_version": "0.1.0",
+        "package_version": "0.2.0",
         "public_revision": PUBLIC_REVISION,
         "source_archive": {
             "path": f"source/{SOURCE_ROOT_NAME}.tar.gz",
@@ -629,11 +629,11 @@ def test_invalid_wheelhouse_semantics_stop_before_controls(
 @pytest.mark.parametrize(
     ("member", "payload"),
     [
-        ("frontdoor/__init__.py", b"__version__='0.1.1'\n"),
+        ("frontdoor/__init__.py", b"__version__='0.2.1'\n"),
         ("frontdoor/private_receiver.py", b"API_KEY=sk-privatevalue123\n"),
         (
-            "agent_frontdoor-0.1.0.dist-info/METADATA",
-            b"Metadata-Version: 2.1\nName: agent-frontdoor\nVersion: 0.1.0\nLicense: MIT\nRequires-Dist: jsonschema>=4\nrequires-dist: evil-package\n",
+            "agent_frontdoor-0.2.0.dist-info/METADATA",
+            b"Metadata-Version: 2.1\nName: agent-frontdoor\nVersion: 0.2.0\nLicense: MIT\nRequires-Dist: jsonschema>=4\nrequires-dist: evil-package\n",
         ),
     ],
 )

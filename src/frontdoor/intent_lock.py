@@ -111,6 +111,16 @@ _POST_COMMAND_NEGATION_PATTERN = re.compile(
     r")",
     re.IGNORECASE,
 )
+_POST_CORRECTION_NEGATION_PATTERN = re.compile(
+    r"(?:"
+    r"(?:do\s+not|don't|never)"
+    r"(?:\s+(?:do|retry|run|execute|resume|continue))?"
+    r"(?:\s+(?:it|this|that|the\s+request))?"
+    r"|(?:cancel|ignore|stop|abort|skip)"
+    r"(?:\s+(?:it|this|that|the\s+request))?"
+    r")",
+    re.IGNORECASE,
+)
 _ERROR_TARGET_PATTERNS = tuple(
     re.compile(pattern, re.IGNORECASE)
     for pattern in (
@@ -282,7 +292,12 @@ def _looks_like_command(value: str) -> bool:
 
 def _post_command_is_negated(prompt: str, end: int) -> bool:
     suffix = prompt[end : end + 160]
-    return bool(_POST_COMMAND_NEGATION_PATTERN.search(suffix))
+    for match in _POST_COMMAND_NEGATION_PATTERN.finditer(suffix):
+        remainder = suffix[match.end() :].lstrip(" \t:;,.-–—")
+        if remainder.startswith("`") or re.match(r"\$[ \t]+", remainder):
+            continue
+        return True
+    return False
 
 
 def _extract_exact_command(prompt: str) -> str | None:
@@ -480,11 +495,20 @@ def derive_lock(
             targets=targets,
         )
 
-    if previous is not None and _NEGATED_CORRECTION_PATTERN.search(prompt):
+    affirmative_correction = _AFFIRMATIVE_CORRECTION_PATTERN.search(prompt)
+    correction_is_cancelled = bool(
+        affirmative_correction
+        and _POST_CORRECTION_NEGATION_PATTERN.search(
+            prompt[affirmative_correction.end() : affirmative_correction.end() + 160]
+        )
+    )
+    if previous is not None and (
+        _NEGATED_CORRECTION_PATTERN.search(prompt) or correction_is_cancelled
+    ):
         return _hold(prompt, previous)
 
     if previous is not None and (
-        _AFFIRMATIVE_CORRECTION_PATTERN.search(prompt)
+        affirmative_correction
         or _CONTINUATION_PATTERN.fullmatch(prompt.strip())
     ):
         return _relock(prompt, previous)

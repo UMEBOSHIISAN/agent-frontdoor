@@ -14,6 +14,9 @@ import tempfile
 from frontdoor.intent_lock import IntentLock, lock_from_dict, lock_to_dict
 
 
+_PLATFORM_NAME = os.name
+
+
 class StateError(RuntimeError):
     """The adapter state cannot be safely read or written."""
 
@@ -35,7 +38,15 @@ def _guard_path(state_root: Path, session_id: str) -> Path:
     return state_root / f".{digest}.guard"
 
 
+def _require_posix_state() -> None:
+    if _PLATFORM_NAME != "posix":
+        raise StateError(
+            "agent-frontdoor-hooks state requires a POSIX operating system"
+        )
+
+
 def _validate_existing_root(state_root: Path, *, missing_ok: bool) -> bool:
+    _require_posix_state()
     try:
         root_stat = state_root.lstat()
     except FileNotFoundError:
@@ -55,6 +66,7 @@ def _validate_existing_root(state_root: Path, *, missing_ok: bool) -> bool:
 
 
 def _prepare_root(state_root: Path) -> None:
+    _require_posix_state()
     try:
         created = False
         try:
@@ -103,27 +115,10 @@ def session_state_guard(
                 f"session guard permissions must be 0600, found {permissions:04o}"
             )
 
-        if os.name == "posix":
-            import fcntl
+        import fcntl
 
-            fcntl.flock(descriptor, fcntl.LOCK_EX)
-            locked = True
-        elif os.name == "nt":
-            import msvcrt
-
-            if descriptor_stat.st_size == 0:
-                os.write(descriptor, b"\0")
-                os.fsync(descriptor)
-            os.lseek(descriptor, 0, os.SEEK_SET)
-            try:
-                msvcrt.locking(descriptor, msvcrt.LK_NBLCK, 1)
-            except OSError as error:
-                raise StateError("session state transition is busy") from error
-            locked = True
-        else:
-            raise StateError(
-                f"session state locking is unsupported on os.name={os.name!r}"
-            )
+        fcntl.flock(descriptor, fcntl.LOCK_EX)
+        locked = True
         yield
     except StateError:
         raise
@@ -133,15 +128,9 @@ def session_state_guard(
         if descriptor is not None:
             if locked:
                 try:
-                    if os.name == "posix":
-                        import fcntl
+                    import fcntl
 
-                        fcntl.flock(descriptor, fcntl.LOCK_UN)
-                    elif os.name == "nt":
-                        import msvcrt
-
-                        os.lseek(descriptor, 0, os.SEEK_SET)
-                        msvcrt.locking(descriptor, msvcrt.LK_UNLCK, 1)
+                    fcntl.flock(descriptor, fcntl.LOCK_UN)
                 except OSError:
                     pass
             os.close(descriptor)

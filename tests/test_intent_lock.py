@@ -268,6 +268,14 @@ def test_negated_inline_command_is_skipped_for_affirmative_command() -> None:
     assert evaluate_action(lock, "git diff").allowed
 
 
+def test_negating_a_later_command_does_not_cancel_the_first_command() -> None:
+    lock = derive_lock("Run `git status`, but do not run `git diff`.")
+
+    assert lock is not None
+    assert evaluate_action(lock, "git status").allowed
+    assert not evaluate_action(lock, "git diff").allowed
+
+
 def test_inline_command_in_failure_prose_does_not_become_exact_intent() -> None:
     assert derive_lock("The command `git status` failed; inspect the error.") is None
 
@@ -448,6 +456,28 @@ def test_negated_correction_stops_a_not_yet_run_previous_action() -> None:
     assert previous is not None
 
     held = derive_lock("do not run the original request", previous=previous)
+
+    assert held is not None
+    assert held.phase == "REPORT_REQUIRED"
+    assert held.intent_epoch == previous.intent_epoch + 1
+    assert not evaluate_action(held, "git status").allowed
+
+
+@pytest.mark.parametrize(
+    "prompt",
+    [
+        "do the original request, but do not do it",
+        "do the original request—actually, don't",
+        "do the original request; cancel it",
+    ],
+)
+def test_cancellation_after_affirmative_correction_never_relocks(
+    prompt: str,
+) -> None:
+    previous = derive_lock("`git status`")
+    assert previous is not None
+
+    held = derive_lock(prompt, previous=previous)
 
     assert held is not None
     assert held.phase == "REPORT_REQUIRED"

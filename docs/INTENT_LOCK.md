@@ -95,7 +95,7 @@ inventing one.
 new exact command/error -> DIRECT_REQUIRED
 matching exact command with explicit success succeeds -> RELEASED
 matching tool action fails -> REPORT_REQUIRED
-Codex Bash raw result with no exit status -> REPORT_REQUIRED
+Codex result with no explicit structured status -> REPORT_REQUIRED
 REPORT_REQUIRED + any tool -> deny and require human-facing report
 affirmative human correction phrase -> DIRECT_REQUIRED on the previous literal intent
 negated/cancellation phrase -> REPORT_REQUIRED hold; never re-enable the action
@@ -117,9 +117,9 @@ The optional adapter consumes hook JSON from stdin and supports:
 - `PreToolUse`: deny mismatched or uncorrelatable actions with the current
   documented `hookSpecificOutput.permissionDecision = deny` shape, and hash-bind
   an accepted `tool_use_id` to the current epoch;
-- Codex `PostToolUse`: process explicit structured status when present; for the
-  current raw Bash response, preserve the original result and require a report
-  without guessing its exit status;
+- Codex `PostToolUse`: process explicit structured status when present; for raw
+  strings or mappings without status, preserve the original result and require a
+  report without guessing the outcome;
 - Claude Code `PostToolUse`: process successful calls;
 - Claude Code `PostToolUseFailure`: require a report after failures;
 - `SessionEnd`: remove only the hashed state file for that session.
@@ -148,13 +148,17 @@ security boundary.
 
 Current Codex `ExecCommandToolOutput` serializes only truncated raw output into
 the Bash `PostToolUse` response even though the internal object has an exit-code
-field. Because that stable hook boundary loses the status, the adapter treats a
-raw response as outcome-opaque and requires a human-facing report. It does not
-parse success or failure from arbitrary command text.
+field. Because that stable hook boundary loses the status, the adapter treats any
+response without explicit structured status as outcome-opaque and requires a
+human-facing report. It does not parse success or failure from arbitrary command
+text or mapping shape.
 
 State reads validate an exact mode-`0700` real directory and an exact
 mode-`0600` regular file. Missing paths are distinct from permission, type, and
 symlink failures; only genuine absence means no saved lock.
+The optional state adapter requires POSIX permission and advisory-lock semantics.
+Windows is rejected explicitly instead of pretending that POSIX mode checks
+provide an equivalent privacy boundary there.
 
 ## Required regression cases
 

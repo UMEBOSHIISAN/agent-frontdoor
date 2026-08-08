@@ -237,7 +237,7 @@ def _result_status(
     failed = _explicit_failure(response)
     if failed is not None:
         return "failure" if failed else "success"
-    return None
+    return "opaque"
 
 
 def _report_feedback(

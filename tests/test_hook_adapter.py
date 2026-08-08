@@ -684,6 +684,42 @@ def test_codex_raw_json_stdout_cannot_forge_structured_success(
     assert load_session_lock(tmp_path, SESSION).phase == "REPORT_REQUIRED"
 
 
+def test_statusless_codex_mapping_is_opaque_instead_of_staying_pending(
+    tmp_path: Path,
+) -> None:
+    _activate_target_lock(tmp_path)
+    action = {"command": "codex mcp list cloudflare-api"}
+    assert handle_event(
+        _payload(
+            "PreToolUse",
+            tool_name="Bash",
+            tool_use_id="mapping-tool",
+            tool_input=action,
+        ),
+        tmp_path,
+        platform="codex",
+    ) is None
+
+    output = handle_event(
+        _payload(
+            "PostToolUse",
+            tool_name="Bash",
+            tool_use_id="mapping-tool",
+            tool_input=action,
+            tool_response={"content": [{"type": "text", "text": "done"}]},
+        ),
+        tmp_path,
+        platform="codex",
+    )
+
+    current = load_session_lock(tmp_path, SESSION)
+    assert output is not None
+    assert "report the direct result" in str(output)
+    assert current is not None
+    assert current.phase == "REPORT_REQUIRED"
+    assert current.pending_tool_use_sha256 is None
+
+
 def test_human_correction_relocks_failed_intent(
     tmp_path: Path,
 ) -> None:

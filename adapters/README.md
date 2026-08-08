@@ -21,7 +21,9 @@ python3 -m venv .venv
 
 The adapter depends on the matching `agent-frontdoor` 0.1 release line. Review
 both distributions and the example configuration before trusting the command as
-a local hook.
+a local hook. The state adapter requires a POSIX operating system; Windows is
+rejected explicitly because this release cannot enforce its required `0700` /
+`0600` state permissions with the Python standard library.
 
 ## Codex example
 
@@ -41,9 +43,10 @@ environment created during installation. Do not rely on an interactive shell's
 The example covers `UserPromptSubmit`, `PreToolUse`, `PostToolUse`, and
 `SessionEnd`. Current Codex Bash `PostToolUse` payloads expose the command output
 as a raw string but omit the process exit status. The adapter therefore treats a
-matching raw result as outcome-opaque and enters `REPORT_REQUIRED`; it never
-guesses success from output text. If a future or synthetic payload supplies an
-explicit structured status, that status is honored.
+matching result without an explicit structured status—whether a raw string or a
+content mapping—as outcome-opaque and enters `REPORT_REQUIRED`; it never guesses
+success from output text or envelope shape. If a future or synthetic payload
+supplies an explicit structured status, that status is honored.
 
 ## Claude Code example
 
@@ -111,9 +114,9 @@ removing anything.
   only for that id and lock epoch. Late results from older epochs are ignored.
 - A failed matching action enters `REPORT_REQUIRED`; the next tool is denied
   until the result is surfaced to the human.
-- A current Codex Bash raw result also enters `REPORT_REQUIRED`, whether its text
-  looks successful or unsuccessful, because the hook payload omits exit status.
-  The original result remains visible for accurate reporting.
+- A Codex result without explicit structured status also enters
+  `REPORT_REQUIRED`, whether it is a raw string or content mapping, because the
+  outcome is unknown. The original result remains visible for accurate reporting.
 - An explicit negation of the previous request never re-enables it; tool use is
   held until the agent responds to the human.
 - A same-intent match emits no allow decision. Separate permission and authority

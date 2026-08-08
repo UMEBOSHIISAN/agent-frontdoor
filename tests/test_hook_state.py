@@ -8,6 +8,7 @@ import stat
 
 import pytest
 
+import frontdoor_hooks.state as state_module
 from frontdoor.intent_lock import derive_lock
 from frontdoor_hooks.state import (
     StateError,
@@ -109,6 +110,19 @@ def test_session_guard_rejects_exposed_existing_file(tmp_path: Path) -> None:
     with pytest.raises(StateError, match="guard permissions"):
         with session_state_guard(tmp_path, "session"):
             pass
+
+
+def test_non_posix_state_is_explicitly_rejected_before_creation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(state_module, "_PLATFORM_NAME", "nt")
+
+    with pytest.raises(StateError, match="POSIX"):
+        with session_state_guard(tmp_path, "session"):
+            pass
+
+    assert not list(tmp_path.iterdir())
 
 
 def test_invalid_state_fails_closed_instead_of_becoming_no_lock(

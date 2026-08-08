@@ -246,13 +246,13 @@ Run:
 
 ```bash
 git diff --check
-rg -n '/Users/umeboshi|PRIVATE_HANDOFF_READY_WITH_GAPS|CC_AUDITED|security boundary$' README.md tests/test_readme.py
+rg -n 'PRIVATE_HANDOFF_READY_WITH_GAPS|CC_AUDITED|security boundary$' README.md tests/test_readme.py
 git diff -- README.md tests/test_readme.py
 ```
 
 Expected: `git diff --check` succeeds; the scan prints no private path, false CC
-audit, or false security-boundary claim; every diff hunk belongs to this README
-task.
+audit, or false security-boundary claim. The complete suite's archive privacy
+tests cover absolute user paths. Every diff hunk belongs to this README task.
 
 - [ ] **Step 8: Run Codex review on the uncommitted README change**
 

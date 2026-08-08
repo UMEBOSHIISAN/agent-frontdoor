@@ -232,6 +232,22 @@ def test_negated_fenced_and_shell_line_commands_do_not_create_locks(
 @pytest.mark.parametrize(
     "prompt",
     [
+        "Run `git status`, but don't run it.",
+        "Run `git status`; actually, never execute that command.",
+        "Please run `git status` -- wait, do not run it.",
+        "Run this exact command:\n```bash\ngit status\n```\nDo not run it.",
+        "実行して `git status`。やっぱりやめて。",
+    ],
+)
+def test_post_command_cancellation_does_not_create_exact_lock(
+    prompt: str,
+) -> None:
+    assert derive_lock(prompt) is None
+
+
+@pytest.mark.parametrize(
+    "prompt",
+    [
         "Run git status please.",
         "git status please",
         "Don't run git status; run git diff.",
@@ -277,6 +293,26 @@ def test_exact_command_hash_preserves_quotes_and_shell_boundaries(
     assert lock is not None
 
     assert evaluate_action(lock, locked_command).allowed
+    assert not evaluate_action(lock, different_action).allowed
+
+
+@pytest.mark.parametrize(
+    "different_action",
+    [
+        "\ngit status",
+        "git status\n",
+        "\rgit status",
+        "git status\r",
+        "\vgit status",
+        "git status\v",
+    ],
+)
+def test_exact_command_hash_preserves_edge_vertical_whitespace(
+    different_action: str,
+) -> None:
+    lock = derive_lock("`git status`")
+    assert lock is not None
+
     assert not evaluate_action(lock, different_action).allowed
 
 

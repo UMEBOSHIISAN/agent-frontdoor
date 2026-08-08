@@ -98,7 +98,11 @@ def test_display_targets_reject_network_and_path_like_values() -> None:
     assert not list(
         validator.iter_errors({**base, "display_targets": ["cloudflare-api"]})
     )
-    for unsafe in ("internal.example.com", "relative/private.py", "user@host"):
+    for unsafe in (
+        "internal.example.com",
+        "relative/private.py",
+        "user" + "@" + "host",
+    ):
         assert list(
             validator.iter_errors({**base, "display_targets": [unsafe]})
         )

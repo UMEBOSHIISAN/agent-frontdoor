@@ -68,7 +68,8 @@ fenced block, a fenced block after an affirmative run directive, standalone
 inline code, inline code following an explicit affirmative run directive, an
 equivalently bounded `$`-prefixed line, or a recognized CLI command followed by a
 bounded Japanese request suffix such as `してや`. Free prose, trailing English
-prose, failure descriptions, and negated command mentions do not create
+prose, failure descriptions, and command mentions negated before or after their
+code span do not create
 exact-command locks. Exact-command comparison collapses only unquoted horizontal
 whitespace and preserves newlines, quotes, escapes, and shell operators before
 hashing, so the state file does not retain its arguments and a different shell

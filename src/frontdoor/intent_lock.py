@@ -102,6 +102,15 @@ _AFFIRMATIVE_COMMAND_DIRECTIVE_PATTERN = re.compile(
     r"|実行(?:して)?|やって)\s*:?\s*$",
     re.IGNORECASE,
 )
+_POST_COMMAND_NEGATION_PATTERN = re.compile(
+    r"(?:"
+    r"(?:do\s+not|don't|never)\s+(?:run|execute)"
+    r"(?:\s+(?:it|this|that)(?:\s+command)?)?"
+    r"|(?:cancel|ignore|skip)\s+(?:it|this|that)(?:\s+command)?"
+    r"|(?:やめて|中止して|キャンセルして|実行しないで|実行するな)"
+    r")",
+    re.IGNORECASE,
+)
 _ERROR_TARGET_PATTERNS = tuple(
     re.compile(pattern, re.IGNORECASE)
     for pattern in (
@@ -212,7 +221,7 @@ def _digest(value: str) -> str:
 def _normalized_command(value: str) -> str:
     """Collapse only unquoted whitespace while preserving shell syntax."""
 
-    candidate = value.strip()
+    candidate = value.strip(" \t")
     normalized: list[str] = []
     quote: str | None = None
     escaped = False
@@ -271,6 +280,11 @@ def _looks_like_command(value: str) -> bool:
     )
 
 
+def _post_command_is_negated(prompt: str, end: int) -> bool:
+    suffix = prompt[end : end + 160]
+    return bool(_POST_COMMAND_NEGATION_PATTERN.search(suffix))
+
+
 def _extract_exact_command(prompt: str) -> str | None:
     for pattern in (_FENCED_COMMAND_PATTERN, _SHELL_LINE_PATTERN):
         for match in pattern.finditer(prompt):
@@ -279,7 +293,7 @@ def _extract_exact_command(prompt: str) -> str | None:
             is_standalone = prompt.strip() == match.group(0).strip()
             is_negated = bool(
                 _NEGATED_COMMAND_DIRECTIVE_PATTERN.search(prefix)
-            )
+            ) or _post_command_is_negated(prompt, match.end())
             is_affirmative = bool(
                 _AFFIRMATIVE_COMMAND_DIRECTIVE_PATTERN.search(prefix)
             )
@@ -294,7 +308,9 @@ def _extract_exact_command(prompt: str) -> str | None:
         candidate = match.group(1).strip()
         prefix = prompt[max(0, match.start() - 80) : match.start()]
         is_standalone = prompt.strip() == match.group(0)
-        is_negated = bool(_NEGATED_COMMAND_DIRECTIVE_PATTERN.search(prefix))
+        is_negated = bool(
+            _NEGATED_COMMAND_DIRECTIVE_PATTERN.search(prefix)
+        ) or _post_command_is_negated(prompt, match.end())
         is_affirmative = bool(
             _AFFIRMATIVE_COMMAND_DIRECTIVE_PATTERN.search(prefix)
         )

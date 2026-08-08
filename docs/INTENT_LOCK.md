@@ -62,15 +62,16 @@ filename and writes only validated contract JSON.
 
 ## Deterministic derivation
 
-An exact-command lock is created from a shell-looking command in a fenced block,
-standalone inline code, inline code following an explicit affirmative run
-directive, a `$`-prefixed line, or a recognized CLI command followed by a bounded
-Japanese request suffix such as `してや`. Free prose, trailing English prose,
-failure descriptions, and negated command mentions do not create exact-command
-locks. Exact-command comparison collapses only unquoted horizontal whitespace and
-preserves newlines, quotes, escapes, and shell operators before hashing, so the
-state file does not retain its arguments and a different shell program cannot
-compare equal by losing syntax boundaries.
+An exact-command lock is created from a shell-looking command in a standalone
+fenced block, a fenced block after an affirmative run directive, standalone
+inline code, inline code following an explicit affirmative run directive, an
+equivalently bounded `$`-prefixed line, or a recognized CLI command followed by a
+bounded Japanese request suffix such as `してや`. Free prose, trailing English
+prose, failure descriptions, and negated command mentions do not create
+exact-command locks. Exact-command comparison collapses only unquoted horizontal
+whitespace and preserves newlines, quotes, escapes, and shell operators before
+hashing, so the state file does not retain its arguments and a different shell
+program cannot compare equal by losing syntax boundaries.
 
 A literal-target lock is created from structured error forms such as:
 
@@ -86,10 +87,12 @@ deterministic evidence creates no lock rather than inventing one.
 
 ```text
 new exact command/error -> DIRECT_REQUIRED
-matching exact command succeeds -> RELEASED
+matching exact command with explicit success succeeds -> RELEASED
 matching tool action fails -> REPORT_REQUIRED
+Codex Bash raw result with no exit status -> REPORT_REQUIRED
 REPORT_REQUIRED + any tool -> deny and require human-facing report
 human correction phrase -> DIRECT_REQUIRED on the previous literal intent
+negated correction phrase -> REPORT_REQUIRED hold; never re-enable the action
 new explicit command/error -> new epoch and replacement lock
 new substantive unrelated prompt -> prior lock released
 ```
@@ -106,8 +109,9 @@ The optional adapter consumes hook JSON from stdin and supports:
 - `UserPromptSubmit`: derive, replace, preserve, or release the session lock;
 - `PreToolUse`: deny mismatched actions with the current documented
   `hookSpecificOutput.permissionDecision = deny` shape;
-- Codex `PostToolUse`: detect a failed direct action, preserve the original tool
-  result, and add report-required context;
+- Codex `PostToolUse`: process explicit structured status when present; for the
+  current raw Bash response, preserve the original result and require a report
+  without guessing its exit status;
 - Claude Code `PostToolUse`: process successful calls;
 - Claude Code `PostToolUseFailure`: require a report after failures;
 - `SessionEnd`: remove only the hashed state file for that session.
@@ -127,6 +131,12 @@ Code exposes a broader set of named tools but also has paths outside command-hoo
 coverage. The implementation is therefore a strong runtime guardrail, not a
 security boundary.
 
+Current Codex `ExecCommandToolOutput` serializes only truncated raw output into
+the Bash `PostToolUse` response even though the internal object has an exit-code
+field. Because that stable hook boundary loses the status, the adapter treats a
+raw response as outcome-opaque and requires a human-facing report. It does not
+parse success or failure from arbitrary command text.
+
 ## Required regression cases
 
 1. `cloudflare-api` plus `invalid_grant` creates a literal-target lock.
@@ -134,12 +144,13 @@ security boundary.
 3. `codex mcp login cloudflare-api` is target-consistent.
 4. An exact natural-language command creates an exact-command lock.
 5. An exact-command mismatch is denied even when it names the same vendor.
-6. A failed matching action moves to `REPORT_REQUIRED`.
-7. No later tool call is allowed before the failure is reported to the human.
+6. A failed or outcome-opaque matching action moves to `REPORT_REQUIRED`.
+7. No later tool call is allowed before the result is reported to the human.
 8. `最初の依頼` and `original request` re-lock the prior intent.
-9. Hook state contains no raw prompt, session id, or command.
-10. Codex and Claude Code fixtures produce the same intent decision despite their
-    different failure-event shapes.
+9. A negated correction never re-enables the prior action.
+10. Hook state contains no raw prompt, session id, or command.
+11. Codex and Claude Code fixtures produce the same intent decision despite their
+    different result-event shapes.
 
 ## Rollout boundary
 
@@ -151,4 +162,6 @@ become authorized merely because the OSS implementation exists.
 ## Primary references
 
 - OpenAI Codex hooks: <https://developers.openai.com/codex/hooks/>
+- OpenAI Codex Bash hook response implementation:
+  <https://github.com/openai/codex/blob/main/codex-rs/core/src/tools/context.rs>
 - Claude Code hooks: <https://code.claude.com/docs/en/hooks>

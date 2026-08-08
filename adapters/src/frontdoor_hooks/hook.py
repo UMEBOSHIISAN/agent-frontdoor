@@ -28,6 +28,10 @@ _REPORT_CONTEXT = (
     "INTENT_LOCK_REPORT_REQUIRED: report the direct failure; do not try an "
     "alternative tool or subsystem."
 )
+_CODEX_OPAQUE_REPORT_CONTEXT = (
+    "INTENT_LOCK_REPORT_REQUIRED: report the direct result; Codex Bash hooks "
+    "do not expose its exit status. Do not try another tool or subsystem first."
+)
 _SHELL_TOOL_NAMES = frozenset(
     {
         "bash",
@@ -186,25 +190,39 @@ def _explicit_failure(value: object) -> bool | None:
     return None
 
 
-def _failure_status(
+def _result_status(
     payload: Mapping[str, object],
     platform: str,
-) -> bool | None:
+) -> str | None:
     event = payload.get("hook_event_name")
     if event == "PostToolUseFailure":
-        return True
+        return "failure"
     if event != "PostToolUse":
         return None
     if platform == "claude":
-        return False
-    return _explicit_failure(payload.get("tool_response"))
+        return "success"
+    response = payload.get("tool_response")
+    failed = _explicit_failure(response)
+    if failed is not None:
+        return "failure" if failed else "success"
+    if isinstance(response, str):
+        return "opaque"
+    return None
 
 
-def _failure_feedback(event: str) -> dict[str, object]:
+def _report_feedback(
+    event: str,
+    *,
+    opaque_codex_result: bool = False,
+) -> dict[str, object]:
     return {
         "hookSpecificOutput": {
             "hookEventName": event,
-            "additionalContext": _REPORT_CONTEXT,
+            "additionalContext": (
+                _CODEX_OPAQUE_REPORT_CONTEXT
+                if opaque_codex_result
+                else _REPORT_CONTEXT
+            ),
         }
     }
 
@@ -225,11 +243,11 @@ def handle_tool_result(
     if lock is None:
         return None
 
-    failed = _failure_status(payload, platform)
-    if failed is None:
+    status = _result_status(payload, platform)
+    if status is None:
         return None
     action = _tool_action(payload)
-    updated = record_result(lock, action, failed=failed)
+    updated = record_result(lock, action, failed=status != "success")
     if updated is lock:
         return None
     if updated.phase == "RELEASED":
@@ -237,7 +255,10 @@ def handle_tool_result(
         return None
     save_session_lock(state_root, session_id, updated)
     event = str(payload.get("hook_event_name"))
-    return _failure_feedback(event)
+    return _report_feedback(
+        event,
+        opaque_codex_result=status == "opaque",
+    )
 
 
 def handle_session_end(

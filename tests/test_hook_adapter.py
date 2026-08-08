@@ -198,7 +198,7 @@ def test_claude_failure_event_produces_equivalent_report_lock(
     assert load_session_lock(tmp_path, SESSION).phase == "REPORT_REQUIRED"
 
 
-def test_exact_success_releases_and_removes_adapter_state(
+def test_structured_codex_success_releases_and_removes_adapter_state(
     tmp_path: Path,
 ) -> None:
     _activate_exact_lock(tmp_path)
@@ -218,7 +218,7 @@ def test_exact_success_releases_and_removes_adapter_state(
     assert load_session_lock(tmp_path, SESSION) is None
 
 
-def test_unknown_codex_result_does_not_release_exact_lock(
+def test_actual_codex_raw_result_requires_human_report_before_more_tools(
     tmp_path: Path,
 ) -> None:
     _activate_exact_lock(tmp_path)
@@ -228,14 +228,44 @@ def test_unknown_codex_result_does_not_release_exact_lock(
             "PostToolUse",
             tool_name="Bash",
             tool_input={"command": "codex mcp login cloudflare-api"},
-            tool_response="unstructured result",
+            tool_response="Error: server not found",
         ),
         tmp_path,
         platform="codex",
     )
 
-    assert output is None
-    assert load_session_lock(tmp_path, SESSION).phase == "DIRECT_REQUIRED"
+    assert output == {
+        "hookSpecificOutput": {
+            "hookEventName": "PostToolUse",
+            "additionalContext": (
+                "INTENT_LOCK_REPORT_REQUIRED: report the direct result; "
+                "Codex Bash hooks do not expose its exit status. Do not try "
+                "another tool or subsystem first."
+            ),
+        }
+    }
+    assert load_session_lock(tmp_path, SESSION).phase == "REPORT_REQUIRED"
+
+
+def test_actual_codex_raw_success_is_also_held_for_report(
+    tmp_path: Path,
+) -> None:
+    _activate_exact_lock(tmp_path)
+
+    output = handle_event(
+        _payload(
+            "PostToolUse",
+            tool_name="Bash",
+            tool_input={"command": "codex mcp login cloudflare-api"},
+            tool_response="Successfully logged in",
+        ),
+        tmp_path,
+        platform="codex",
+    )
+
+    assert output is not None
+    assert "report the direct result" in str(output)
+    assert load_session_lock(tmp_path, SESSION).phase == "REPORT_REQUIRED"
 
 
 def test_human_correction_relocks_failed_intent(

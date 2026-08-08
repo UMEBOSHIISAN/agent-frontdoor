@@ -39,8 +39,11 @@ environment created during installation. Do not rely on an interactive shell's
 `PATH`; hook processes may receive a different environment.
 
 The example covers `UserPromptSubmit`, `PreToolUse`, `PostToolUse`, and
-`SessionEnd`. Codex reports command results through `PostToolUse`, so the adapter
-examines explicit result fields to distinguish success from failure.
+`SessionEnd`. Current Codex Bash `PostToolUse` payloads expose the command output
+as a raw string but omit the process exit status. The adapter therefore treats a
+matching raw result as outcome-opaque and enters `REPORT_REQUIRED`; it never
+guesses success from output text. If a future or synthetic payload supplies an
+explicit structured status, that status is honored.
 
 ## Claude Code example
 
@@ -92,9 +95,13 @@ removing anything.
   operators remain significant.
 - A structured error target permits only actions containing the same literal
   target tokens.
-- A failed matching action enters `REPORT_REQUIRED`; Codex retains the original
-  result for reporting, and the next tool is denied until the failure is
-  surfaced to the human.
+- A failed matching action enters `REPORT_REQUIRED`; the next tool is denied
+  until the result is surfaced to the human.
+- A current Codex Bash raw result also enters `REPORT_REQUIRED`, whether its text
+  looks successful or unsuccessful, because the hook payload omits exit status.
+  The original result remains visible for accurate reporting.
+- An explicit negation of the previous request never re-enables it; tool use is
+  held until the agent responds to the human.
 - A same-intent match emits no allow decision. Separate permission and authority
   hooks remain independent and may still deny the action.
 

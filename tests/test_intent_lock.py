@@ -108,6 +108,19 @@ def test_fenced_shell_command_derives_exact_lock() -> None:
 @pytest.mark.parametrize(
     "prompt",
     [
+        "Do not run this command:\n```bash\ngit status\n```",
+        "Never execute:\n$ git status",
+    ],
+)
+def test_negated_fenced_and_shell_line_commands_do_not_create_locks(
+    prompt: str,
+) -> None:
+    assert derive_lock(prompt) is None
+
+
+@pytest.mark.parametrize(
+    "prompt",
+    [
         "Run git status please.",
         "git status please",
         "Don't run git status; run git diff.",
@@ -170,10 +183,7 @@ def test_failed_matching_action_requires_report_before_any_other_tool() -> None:
     assert evaluate_action(failed, "rg cloudflare-api .") == IntentDecision(
         allowed=False,
         code="report_required",
-        reason=(
-            "The direct action failed. Report that result to the human before "
-            "using another tool."
-        ),
+        reason="A human-facing response is required before using another tool.",
     )
 
 
@@ -235,6 +245,48 @@ def test_human_relock_preserves_previous_intent(prompt: str) -> None:
     assert relocked.mode == failed.mode
     assert relocked.exact_command_sha256 == failed.exact_command_sha256
     assert relocked.target_token_sha256 == failed.target_token_sha256
+
+
+@pytest.mark.parametrize(
+    "prompt",
+    [
+        "do not retry the original request",
+        "never run the first request",
+        "最初の依頼はやらないで",
+    ],
+)
+def test_negated_correction_holds_instead_of_reenabling_previous_action(
+    prompt: str,
+) -> None:
+    previous = derive_lock("`codex mcp login cloudflare-api`")
+    assert previous is not None
+    failed = record_result(
+        previous,
+        "codex mcp login cloudflare-api",
+        failed=True,
+    )
+
+    held = derive_lock(prompt, previous=failed)
+
+    assert held is not None
+    assert held.intent_epoch == failed.intent_epoch + 1
+    assert held.phase == "REPORT_REQUIRED"
+    assert not evaluate_action(
+        held,
+        "codex mcp login cloudflare-api",
+    ).allowed
+
+
+def test_negated_correction_stops_a_not_yet_run_previous_action() -> None:
+    previous = derive_lock("`git status`")
+    assert previous is not None
+
+    held = derive_lock("do not run the original request", previous=previous)
+
+    assert held is not None
+    assert held.phase == "REPORT_REQUIRED"
+    assert held.intent_epoch == previous.intent_epoch + 1
+    assert not evaluate_action(held, "git status").allowed
 
 
 def test_substantive_unrelated_prompt_releases_previous_lock() -> None:

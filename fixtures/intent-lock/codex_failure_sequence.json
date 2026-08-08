@@ -47,10 +47,7 @@
         "tool_input": {
           "command": "codex mcp login cloudflare-api"
         },
-        "tool_response": {
-          "exit_code": 1,
-          "output": "Error: server not found"
-        }
+        "tool_response": "Error: server not found"
       }
     },
     {

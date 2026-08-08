@@ -90,12 +90,15 @@ _FENCED_COMMAND_PATTERN = re.compile(
 )
 _INLINE_CODE_PATTERN = re.compile(r"`{1,3}([^`\r\n]+)`{1,3}")
 _SHELL_LINE_PATTERN = re.compile(r"(?m)^\s*\$\s+([^\r\n]+)$")
-_NEGATED_INLINE_DIRECTIVE_PATTERN = re.compile(
-    r"(?:do\s+not|don't|never)\s+(?:run|execute)\s*:?[ \t]*$",
+_NEGATED_COMMAND_DIRECTIVE_PATTERN = re.compile(
+    r"(?:do\s+not|don't|never)\s+(?:run|execute)"
+    r"(?:\s+(?:this|the)(?:\s+(?:exact\s+)?command)?)?\s*:?\s*$",
     re.IGNORECASE,
 )
-_AFFIRMATIVE_INLINE_DIRECTIVE_PATTERN = re.compile(
-    r"(?:\b(?:run|execute)|実行(?:して)?|やって)\s*:?[ \t]*$",
+_AFFIRMATIVE_COMMAND_DIRECTIVE_PATTERN = re.compile(
+    r"(?:(?:please\s+)?\b(?:run|execute)"
+    r"(?:\s+(?:this|the)(?:\s+(?:exact\s+)?command)?)?"
+    r"|実行(?:して)?|やって)\s*:?\s*$",
     re.IGNORECASE,
 )
 _ERROR_TARGET_PATTERNS = tuple(
@@ -119,6 +122,16 @@ _CORRECTION_PATTERN = re.compile(
     r"(?:最初の依頼|元の依頼|original request|first request)",
     re.IGNORECASE,
 )
+_NEGATED_CORRECTION_PATTERN = re.compile(
+    r"(?:"
+    r"(?:do\s+not|don't|never)\s+"
+    r"(?:(?:retry|run|execute|do)\s+)?(?:the\s+)?"
+    r"(?:original|first)\s+request"
+    r"|(?:最初の依頼|元の依頼).{0,20}"
+    r"(?:しない|やらない|やるな|やめて)"
+    r")",
+    re.IGNORECASE,
+)
 _CONTINUATION_PATTERN = re.compile(
     r"^(?:やって|全部やって|続けて|進めて|うん|はい|go|proceed|continue|yes)[。.!！ ]*$",
     re.IGNORECASE,
@@ -133,8 +146,7 @@ _SECRET_LIKE_PATTERN = re.compile(
 _ACTION_TOKEN_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:@/-]{0,127}")
 
 _REPORT_REASON = (
-    "The direct action failed. Report that result to the human before using "
-    "another tool."
+    "A human-facing response is required before using another tool."
 )
 
 
@@ -208,16 +220,28 @@ def _extract_exact_command(prompt: str) -> str | None:
     for pattern in (_FENCED_COMMAND_PATTERN, _SHELL_LINE_PATTERN):
         for match in pattern.finditer(prompt):
             candidate = match.group(1).strip()
-            if _looks_like_command(candidate):
+            prefix = prompt[max(0, match.start() - 120) : match.start()]
+            is_standalone = prompt.strip() == match.group(0).strip()
+            is_negated = bool(
+                _NEGATED_COMMAND_DIRECTIVE_PATTERN.search(prefix)
+            )
+            is_affirmative = bool(
+                _AFFIRMATIVE_COMMAND_DIRECTIVE_PATTERN.search(prefix)
+            )
+            if (
+                _looks_like_command(candidate)
+                and not is_negated
+                and (is_standalone or is_affirmative)
+            ):
                 return _normalized_command(candidate)
 
     for match in _INLINE_CODE_PATTERN.finditer(prompt):
         candidate = match.group(1).strip()
         prefix = prompt[max(0, match.start() - 80) : match.start()]
         is_standalone = prompt.strip() == match.group(0)
-        is_negated = bool(_NEGATED_INLINE_DIRECTIVE_PATTERN.search(prefix))
+        is_negated = bool(_NEGATED_COMMAND_DIRECTIVE_PATTERN.search(prefix))
         is_affirmative = bool(
-            _AFFIRMATIVE_INLINE_DIRECTIVE_PATTERN.search(prefix)
+            _AFFIRMATIVE_COMMAND_DIRECTIVE_PATTERN.search(prefix)
         )
         if (
             _looks_like_command(candidate)
@@ -300,6 +324,21 @@ def _relock(prompt: str, previous: IntentLock) -> IntentLock:
     )
 
 
+def _hold(prompt: str, previous: IntentLock) -> IntentLock:
+    """Stop tool use after an explicit negation of the previous action."""
+
+    return IntentLock(
+        schema_version=previous.schema_version,
+        intent_epoch=previous.intent_epoch + 1,
+        source_prompt_sha256=_digest(prompt),
+        phase="REPORT_REQUIRED",
+        mode=previous.mode,
+        exact_command_sha256=previous.exact_command_sha256,
+        target_token_sha256=previous.target_token_sha256,
+        display_targets=previous.display_targets,
+    )
+
+
 def derive_lock(
     prompt: str,
     previous: IntentLock | None = None,
@@ -328,6 +367,9 @@ def derive_lock(
             command=None,
             targets=targets,
         )
+
+    if previous is not None and _NEGATED_CORRECTION_PATTERN.search(prompt):
+        return _hold(prompt, previous)
 
     if previous is not None and (
         _CORRECTION_PATTERN.search(prompt)

@@ -117,6 +117,41 @@ def test_state_load_rejects_symlinked_root(tmp_path: Path) -> None:
         load_session_lock(linked_root, "session")
 
 
+def test_state_delete_rejects_symlinked_root_without_deleting_target(
+    tmp_path: Path,
+) -> None:
+    real_root = tmp_path / "real"
+    path = save_session_lock(real_root, "session", _lock())
+    linked_root = tmp_path / "linked"
+    linked_root.symlink_to(real_root, target_is_directory=True)
+
+    with pytest.raises(StateError, match="state root"):
+        delete_session_lock(linked_root, "session")
+
+    assert path.is_file()
+
+
+def test_state_delete_rejects_shared_root_without_deleting_target(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "shared"
+    path = save_session_lock(root, "session", _lock())
+    root.chmod(0o755)
+
+    try:
+        with pytest.raises(StateError, match="state root permissions"):
+            delete_session_lock(root, "session")
+        assert path.is_file()
+    finally:
+        root.chmod(0o700)
+
+
+def test_state_delete_is_a_noop_when_root_is_genuinely_absent(
+    tmp_path: Path,
+) -> None:
+    delete_session_lock(tmp_path / "absent", "session")
+
+
 def test_state_load_rejects_exposed_state_file(tmp_path: Path) -> None:
     path = save_session_lock(tmp_path, "session", _lock())
     path.chmod(0o644)

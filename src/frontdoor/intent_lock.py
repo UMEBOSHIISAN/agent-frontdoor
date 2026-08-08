@@ -161,6 +161,27 @@ _SECRET_CONTEXT_PATTERN = re.compile(
     r"\s*(?:is\s+)?[:=]?\s*[`'\"]?\s*$",
     re.IGNORECASE,
 )
+_NETWORK_IDENTITY_PATTERN = re.compile(
+    r"(?:^[A-Za-z][A-Za-z0-9+.-]*://|@)"
+)
+_GENERIC_ERROR_TARGETS = frozenset(
+    {
+        "an",
+        "authentication",
+        "error",
+        "failed",
+        "found",
+        "invalid",
+        "is",
+        "not",
+        "rejected",
+        "startup",
+        "the",
+        "unavailable",
+        "was",
+        "with",
+    }
+)
 _ACTION_TOKEN_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:@/-]{0,127}")
 
 _REPORT_REASON = (
@@ -289,6 +310,8 @@ def _extract_error_targets(prompt: str) -> tuple[str, ...]:
     for pattern in (*_ERROR_TARGET_PATTERNS, *_BACKTICK_ERROR_TARGET_PATTERNS):
         for match in pattern.finditer(prompt):
             target = match.group(1).rstrip(".:,;")
+            if target.casefold() in _GENERIC_ERROR_TARGETS:
+                continue
             if target not in targets:
                 targets.append(target)
     return tuple(targets)
@@ -331,6 +354,7 @@ def _display_targets(
         if _SAFE_LABEL_PATTERN.fullmatch(target)
         and not _SECRET_LIKE_PATTERN.search(target)
         and not _CREDENTIAL_PREFIX_PATTERN.search(target)
+        and not _NETWORK_IDENTITY_PATTERN.search(target)
         and not _credential_shaped(target)
         and not _target_has_secret_context(prompt, target)
     )

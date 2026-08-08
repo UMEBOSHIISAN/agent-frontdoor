@@ -114,6 +114,44 @@ def test_credential_shaped_error_targets_are_never_persisted_or_displayed(
     assert credential not in json.dumps(lock_to_dict(lock), sort_keys=True)
 
 
+@pytest.mark.parametrize(
+    "command",
+    [
+        "curl https://alice:letmein@example.com/private",
+        "curl ftp://alice:huntertwo@example.com/private",
+        "ssh alice@example.com",
+        "curl https://example.com/privatevalue",
+    ],
+)
+def test_exact_command_network_targets_are_hashed_but_never_displayed(
+    command: str,
+) -> None:
+    lock = derive_lock(f"`{command}`")
+
+    assert lock is not None
+    assert lock.mode == "EXACT_COMMAND"
+    assert lock.display_targets == ()
+    assert command.split()[-1] not in json.dumps(lock_to_dict(lock))
+    assert evaluate_action(lock, command).allowed
+
+
+@pytest.mark.parametrize(
+    "prompt",
+    [
+        "Error: server not found",
+        "Error: component failed",
+        "failed component startup",
+        "client for authentication failed",
+        "Error: server is unavailable",
+        "component failed with an error",
+    ],
+)
+def test_identifier_free_errors_do_not_invent_literal_targets(
+    prompt: str,
+) -> None:
+    assert derive_lock(prompt) is None
+
+
 def test_target_lock_denies_adjacent_product_and_allows_literal_target() -> None:
     lock = derive_lock(ERROR_PROMPT)
     assert lock is not None

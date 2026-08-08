@@ -133,6 +133,8 @@ def load_session_lock(
 def delete_session_lock(state_root: Path, session_id: str) -> None:
     """Delete only the hashed state file for one session."""
 
+    if not _validate_existing_root(state_root, missing_ok=True):
+        return
     path = state_path(state_root, session_id)
     try:
         path.unlink(missing_ok=True)

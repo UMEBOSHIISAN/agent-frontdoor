@@ -25,6 +25,11 @@ a local hook. The state adapter requires a POSIX operating system; Windows is
 rejected explicitly because this release cannot enforce its required `0700` /
 `0600` state permissions with the Python standard library.
 
+In a source checkout or sdist, the inert JSON files are under `examples/`. A
+wheel installation copies the same files to
+`<VIRTUAL_ENV>/share/agent-frontdoor-hooks/examples/`; inspect those copies
+before merging any entries into operator-owned configuration.
+
 ## Codex example
 
 Merge the event entries from

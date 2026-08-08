@@ -16,3 +16,9 @@ agent-frontdoor-hook = "frontdoor_hooks.hook:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.data-files]
+"share/agent-frontdoor-hooks/examples" = [
+  "examples/codex-hooks.json",
+  "examples/claude-settings.json",
+]

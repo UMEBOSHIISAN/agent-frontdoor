@@ -104,6 +104,18 @@ def test_structured_server_or_component_error_derives_target(prompt: str) -> Non
             "invalid token `A1b2C3d4E5f6G7h8I9j0K1l2`",
             "A1b2C3d4E5f6G7h8I9j0K1l2",
         ),
+        (
+            "Error: invalid client `73190482651730948265019384726105`",
+            "73190482651730948265019384726105",
+        ),
+        (
+            "Error: invalid client `abcdefghijklmnopqrstuvwxyzabcdef`",
+            "abcdefghijklmnopqrstuvwxyzabcdef",
+        ),
+        (
+            "Error: invalid client `ABCDEFGHIJKLMNOPQRSTUVWXYZABCDEF`",
+            "ABCDEFGHIJKLMNOPQRSTUVWXYZABCDEF",
+        ),
     ],
 )
 def test_credential_shaped_error_targets_are_never_persisted_or_displayed(
@@ -486,6 +498,9 @@ def test_human_relock_preserves_previous_intent(prompt: str) -> None:
         "never run the first request",
         "cancel the original request",
         "ignore the first request",
+        "I don't want you to do the original request.",
+        "You cannot do the original request.",
+        "Please refrain from doing the original request.",
         "最初の依頼はやらないで",
     ],
 )

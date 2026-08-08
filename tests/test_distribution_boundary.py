@@ -130,6 +130,18 @@ def test_hook_adapter_metadata_passes_source_privacy_scan() -> None:
     ) == ()
 
 
+def test_hook_adapter_distribution_includes_inert_configuration_examples() -> None:
+    adapter = ADAPTER_PYPROJECT.read_text(encoding="utf-8")
+
+    assert '[tool.setuptools.data-files]' in adapter
+    assert '"share/agent-frontdoor-hooks/examples"' in adapter
+    assert '"examples/codex-hooks.json"' in adapter
+    assert '"examples/claude-settings.json"' in adapter
+    assert "share/agent-frontdoor-hooks/examples" in ADAPTER_README.read_text(
+        encoding="utf-8"
+    )
+
+
 def test_both_distributions_use_current_spdx_license_metadata() -> None:
     for path in (PYPROJECT, ADAPTER_PYPROJECT):
         pyproject = path.read_text(encoding="utf-8")

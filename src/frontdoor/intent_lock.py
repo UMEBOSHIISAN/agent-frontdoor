@@ -174,6 +174,15 @@ _NEGATED_CORRECTION_PATTERN = re.compile(
     r"(?:do\s+not|don't|never)\s+"
     r"(?:(?:retry|run|execute|do)\s+)?(?:the\s+)?"
     r"(?:original|first)\s+request"
+    r"|(?:do\s+not|don't|never)\s+want\s+(?:you\s+)?to\s+"
+    r"(?:retry|run|execute|do)\s+(?:the\s+)?"
+    r"(?:original|first)\s+request"
+    r"|(?:cannot|can't|must\s+not|should\s+not)\s+"
+    r"(?:retry|run|execute|do)\s+(?:the\s+)?"
+    r"(?:original|first)\s+request"
+    r"|(?:please\s+)?refrain\s+from\s+"
+    r"(?:retrying|running|executing|doing)\s+(?:the\s+)?"
+    r"(?:original|first)\s+request"
     r"|(?:cancel|ignore|stop|abort|skip)\s+(?:the\s+)?"
     r"(?:original|first)\s+request"
     r"|(?:最初の依頼|元の依頼).{0,20}"
@@ -400,11 +409,7 @@ def _credential_shaped(target: str) -> bool:
         return True
     if len(target) < 20:
         return False
-    classes = sum(
-        any(check(character) for character in target)
-        for check in (str.islower, str.isupper, str.isdigit)
-    )
-    return classes >= 2 and len(set(target.casefold())) >= 10
+    return len(set(target.casefold())) >= 10
 
 
 def _target_has_secret_context(prompt: str, target: str) -> bool:

@@ -78,6 +78,10 @@ contains prompt and target hashes, a hash binding the accepted tool-use id to it
 lock epoch, and safe opaque display labels, but never the raw prompt, raw command,
 raw session ID, raw tool-use ID, tool result, transcript path, OAuth token, network
 endpoint, path-like target, or other credential material.
+Before binding an accepted action, the adapter atomically creates an empty private
+pending marker. A second tool-use id is denied while that claim is active; there
+is no retry or wait loop. A matching result, a new user prompt, or `SessionEnd`
+releases the marker.
 
 The adapter creates its dedicated state directory with mode `0700`. If an
 explicit `--state-dir` already exists, the adapter never changes its permissions:

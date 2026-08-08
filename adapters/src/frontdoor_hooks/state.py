@@ -23,6 +23,11 @@ def state_path(state_root: Path, session_id: str) -> Path:
     return state_root / f"{digest}.json"
 
 
+def _claim_path(state_root: Path, session_id: str) -> Path:
+    digest = sha256(session_id.encode("utf-8")).hexdigest()
+    return state_root / f".{digest}.pending"
+
+
 def _validate_existing_root(state_root: Path, *, missing_ok: bool) -> bool:
     try:
         root_stat = state_root.lstat()
@@ -140,3 +145,33 @@ def delete_session_lock(state_root: Path, session_id: str) -> None:
         path.unlink(missing_ok=True)
     except OSError as error:
         raise StateError(f"unable to delete intent-lock state: {error}") from error
+
+
+def claim_session_tool(state_root: Path, session_id: str) -> bool:
+    """Atomically claim the one pending tool slot without retrying."""
+
+    _prepare_root(state_root)
+    path = _claim_path(state_root, session_id)
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
+    if hasattr(os, "O_NOFOLLOW"):
+        flags |= os.O_NOFOLLOW
+    try:
+        descriptor = os.open(path, flags, 0o600)
+        os.close(descriptor)
+        path.chmod(0o600)
+        return True
+    except FileExistsError:
+        return False
+    except OSError as error:
+        raise StateError(f"unable to claim pending tool state: {error}") from error
+
+
+def release_session_tool_claim(state_root: Path, session_id: str) -> None:
+    """Release only this session's hashed pending-tool marker."""
+
+    if not _validate_existing_root(state_root, missing_ok=True):
+        return
+    try:
+        _claim_path(state_root, session_id).unlink(missing_ok=True)
+    except OSError as error:
+        raise StateError(f"unable to release pending tool state: {error}") from error

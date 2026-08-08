@@ -20,8 +20,10 @@ from frontdoor.intent_lock import (
 )
 from frontdoor_hooks.state import (
     StateError,
+    claim_session_tool,
     delete_session_lock,
     load_session_lock,
+    release_session_tool_claim,
     save_session_lock,
 )
 
@@ -133,8 +135,10 @@ def handle_user_prompt(
 
     lock = derive_lock(prompt, previous=previous)
     if lock is None:
+        release_session_tool_claim(state_root, session_id)
         delete_session_lock(state_root, session_id)
         return None
+    release_session_tool_claim(state_root, session_id)
     save_session_lock(state_root, session_id, lock)
     return {
         "hookSpecificOutput": {
@@ -167,11 +171,34 @@ def handle_pre_tool(
                 "Intent Lock cannot bind this action without a tool use id; "
                 "tool use is denied."
             )
-        save_session_lock(
-            state_root,
-            session_id,
-            bind_tool_use(lock, tool_use_id),
-        )
+        if lock.pending_tool_use_sha256 is not None:
+            if matches_tool_use(lock, tool_use_id):
+                return None
+            return _deny(
+                "Intent Lock already has a tool result pending; another tool "
+                "use is denied."
+            )
+        if not claim_session_tool(state_root, session_id):
+            return _deny(
+                "Intent Lock already has a tool result pending; another tool "
+                "use is denied."
+            )
+        try:
+            current = load_session_lock(state_root, session_id)
+            if current != lock:
+                release_session_tool_claim(state_root, session_id)
+                return _deny(
+                    "Intent Lock changed while binding this action; tool use "
+                    "is denied."
+                )
+            save_session_lock(
+                state_root,
+                session_id,
+                bind_tool_use(lock, tool_use_id),
+            )
+        except (StateError, ValueError):
+            release_session_tool_claim(state_root, session_id)
+            raise
         return None
     return _deny(decision.reason)
 
@@ -258,8 +285,10 @@ def handle_tool_result(
         return None
     if updated.phase == "RELEASED":
         delete_session_lock(state_root, session_id)
+        release_session_tool_claim(state_root, session_id)
         return None
     save_session_lock(state_root, session_id, updated)
+    release_session_tool_claim(state_root, session_id)
     event = str(payload.get("hook_event_name"))
     return _report_feedback(
         event,
@@ -273,6 +302,7 @@ def handle_session_end(
 ) -> None:
     session_id = _session_id(payload)
     if session_id is not None:
+        release_session_tool_claim(state_root, session_id)
         delete_session_lock(state_root, session_id)
     return None
 

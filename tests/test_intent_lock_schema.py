@@ -82,6 +82,28 @@ def test_exact_command_mode_requires_a_hash_and_literal_target_requires_null() -
     )
 
 
+def test_display_targets_reject_network_and_path_like_values() -> None:
+    validator = Draft202012Validator(_schema())
+    base = {
+        "schema_version": "intent-lock.v1",
+        "intent_epoch": 1,
+        "source_prompt_sha256": "a" * 64,
+        "phase": "DIRECT_REQUIRED",
+        "mode": "LITERAL_TARGET",
+        "exact_command_sha256": None,
+        "target_token_sha256": ["b" * 64],
+        "pending_tool_use_sha256": None,
+    }
+
+    assert not list(
+        validator.iter_errors({**base, "display_targets": ["cloudflare-api"]})
+    )
+    for unsafe in ("internal.example.com", "relative/private.py", "user@host"):
+        assert list(
+            validator.iter_errors({**base, "display_targets": [unsafe]})
+        )
+
+
 def test_core_distribution_declares_all_public_schemas_as_package_data() -> None:
     pyproject = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
     assert 'frontdoor = ["schema/*.json"]' in pyproject

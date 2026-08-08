@@ -224,6 +224,70 @@ def test_unaccepted_tool_result_cannot_mutate_current_lock(
     assert load_session_lock(tmp_path, SESSION) == current
 
 
+def test_second_matching_tool_is_denied_until_first_result_arrives(
+    tmp_path: Path,
+) -> None:
+    _activate_exact_lock(tmp_path)
+    _accept_exact_tool(tmp_path, tool_use_id="first-tool")
+
+    second = handle_event(
+        _payload(
+            "PreToolUse",
+            tool_name="Bash",
+            tool_use_id="second-tool",
+            tool_input={"command": "codex mcp login cloudflare-api"},
+        ),
+        tmp_path,
+        platform="codex",
+    )
+    first_result = handle_event(
+        _payload(
+            "PostToolUse",
+            tool_name="Bash",
+            tool_use_id="first-tool",
+            tool_input={"command": "codex mcp login cloudflare-api"},
+            tool_response={"exit_code": 1, "output": "failed"},
+        ),
+        tmp_path,
+        platform="codex",
+    )
+
+    assert second is not None
+    assert second["hookSpecificOutput"]["permissionDecision"] == "deny"
+    assert "result pending" in second["hookSpecificOutput"][
+        "permissionDecisionReason"
+    ]
+    assert first_result is not None
+    assert load_session_lock(tmp_path, SESSION).phase == "REPORT_REQUIRED"
+
+
+def test_ambiguous_correction_keeps_report_required_lock(
+    tmp_path: Path,
+) -> None:
+    _activate_exact_lock(tmp_path)
+    _accept_exact_tool(tmp_path)
+    handle_event(
+        _payload(
+            "PostToolUseFailure",
+            tool_name="Bash",
+            tool_use_id="accepted-tool",
+            tool_input={"command": "codex mcp login cloudflare-api"},
+            error="failed",
+        ),
+        tmp_path,
+        platform="claude",
+    )
+
+    output = handle_event(
+        _payload("UserPromptSubmit", prompt="the original request"),
+        tmp_path,
+        platform="claude",
+    )
+
+    assert output is not None
+    assert load_session_lock(tmp_path, SESSION).phase == "REPORT_REQUIRED"
+
+
 def test_codex_failed_post_tool_requires_report_and_blocks_next_tool(
     tmp_path: Path,
 ) -> None:

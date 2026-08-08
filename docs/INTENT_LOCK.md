@@ -98,7 +98,7 @@ Codex Bash raw result with no exit status -> REPORT_REQUIRED
 REPORT_REQUIRED + any tool -> deny and require human-facing report
 affirmative human correction phrase -> DIRECT_REQUIRED on the previous literal intent
 negated/cancellation phrase -> REPORT_REQUIRED hold; never re-enable the action
-ambiguous mention of an original request -> no re-lock
+ambiguous mention of an original request -> preserve the prior lock without re-locking
 new explicit command/error -> new epoch and replacement lock
 new substantive unrelated prompt -> prior lock released
 ```
@@ -132,6 +132,10 @@ exact-command comparison; an unrelated function or MCP tool with a coincidental
 Result events are applied only when their `tool_use_id` matches the digest bound
 at `PreToolUse`. A result from an older epoch, even for the same command, is
 ignored and cannot release or fail the current lock.
+An empty private marker is created with an atomic exclusive create before the
+binding is saved. While that marker and pending digest exist, a different tool-use
+id is denied. There is no retry loop; a competing or stale claim fails closed until
+the matching result, a new user prompt, or `SessionEnd` releases it.
 
 ## Platform limits
 
@@ -161,7 +165,8 @@ symlink failures; only genuine absence means no saved lock.
 6. A failed or outcome-opaque matching action moves to `REPORT_REQUIRED`.
 7. No later tool call is allowed before the result is reported to the human.
 8. Affirmative `最初の依頼` and `do the original request` re-lock the prior intent.
-9. A negated, cancelled, or ambiguous correction never re-enables the prior action.
+9. A negated, cancelled, or ambiguous correction preserves a blocking lock and
+   never re-enables the prior action.
 10. A stale result from an older epoch cannot mutate the current lock.
 11. Hook state contains no raw prompt, session id, command, or tool-use id.
 12. Codex and Claude Code fixtures produce the same intent decision despite their

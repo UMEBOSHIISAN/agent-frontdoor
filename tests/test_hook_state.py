@@ -11,8 +11,10 @@ import pytest
 from frontdoor.intent_lock import derive_lock
 from frontdoor_hooks.state import (
     StateError,
+    claim_session_tool,
     delete_session_lock,
     load_session_lock,
+    release_session_tool_claim,
     save_session_lock,
     state_path,
 )
@@ -64,6 +66,24 @@ def test_missing_state_returns_none_and_delete_is_idempotent(
     delete_session_lock(tmp_path, "session")
 
     assert not path.exists()
+
+
+def test_pending_tool_claim_is_atomic_private_and_session_hashed(
+    tmp_path: Path,
+) -> None:
+    session_id = "raw-session-id"
+
+    assert claim_session_tool(tmp_path, session_id)
+    assert not claim_session_tool(tmp_path, session_id)
+    claims = list(tmp_path.glob("*.pending"))
+    assert len(claims) == 1
+    assert session_id not in claims[0].name
+    assert stat.S_IMODE(claims[0].stat().st_mode) == 0o600
+    assert claims[0].read_bytes() == b""
+
+    release_session_tool_claim(tmp_path, session_id)
+    assert not claims[0].exists()
+    assert claim_session_tool(tmp_path, session_id)
 
 
 def test_invalid_state_fails_closed_instead_of_becoming_no_lock(

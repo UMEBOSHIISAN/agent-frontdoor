@@ -146,6 +146,10 @@ _NEGATED_CORRECTION_PATTERN = re.compile(
     r")",
     re.IGNORECASE,
 )
+_CORRECTION_MENTION_PATTERN = re.compile(
+    r"(?:最初の依頼|元の依頼|original request|first request)",
+    re.IGNORECASE,
+)
 _CONTINUATION_PATTERN = re.compile(
     r"^(?:やって|全部やって|続けて|進めて|うん|はい|go|proceed|continue|yes)[。.!！ ]*$",
     re.IGNORECASE,
@@ -168,6 +172,12 @@ _CREDENTIAL_PREFIX_PATTERN = re.compile(
 _SECRET_CONTEXT_PATTERN = re.compile(
     r"(?:access[ _-]?key|api[ _-]?key|authorization|bearer|password|secret|token)"
     r"\s*(?:is\s+)?[:=]?\s*[`'\"]?\s*$",
+    re.IGNORECASE,
+)
+_SECRET_SUFFIX_PATTERN = re.compile(
+    r"^\s*[`'\"]?\s*(?:(?:is|was)\s+(?:the\s+|an?\s+)?)?"
+    r"(?:invalid\s+)?"
+    r"(?:access[ _-]?key|api[ _-]?key|authorization|bearer|password|secret|token)\b",
     re.IGNORECASE,
 )
 _GENERIC_ERROR_TARGETS = frozenset(
@@ -346,6 +356,9 @@ def _target_has_secret_context(prompt: str, target: str) -> bool:
         prefix = prompt[max(0, index - 64) : index]
         if _SECRET_CONTEXT_PATTERN.search(prefix):
             return True
+        suffix = prompt[index + len(target) : index + len(target) + 64]
+        if _SECRET_SUFFIX_PATTERN.search(suffix):
+            return True
         offset = index + len(target)
 
 
@@ -459,6 +472,8 @@ def derive_lock(
         or _CONTINUATION_PATTERN.fullmatch(prompt.strip())
     ):
         return _relock(prompt, previous)
+    if previous is not None and _CORRECTION_MENTION_PATTERN.search(prompt):
+        return previous
     return None
 
 

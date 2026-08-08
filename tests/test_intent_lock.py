@@ -117,6 +117,16 @@ def test_credential_shaped_error_targets_are_never_persisted_or_displayed(
     assert credential not in json.dumps(lock_to_dict(lock), sort_keys=True)
 
 
+def test_secret_label_followed_by_password_context_is_never_displayed() -> None:
+    prompt = "The value `hunter2` was the password and is invalid"
+
+    lock = derive_lock(prompt)
+
+    assert lock is not None
+    assert lock.display_targets == ()
+    assert "hunter2" not in json.dumps(lock_to_dict(lock), sort_keys=True)
+
+
 @pytest.mark.parametrize(
     "command",
     [
@@ -409,11 +419,12 @@ def test_negated_correction_stops_a_not_yet_run_previous_action() -> None:
     assert not evaluate_action(held, "git status").allowed
 
 
-def test_ambiguous_original_request_mention_does_not_reenable_action() -> None:
+def test_ambiguous_original_request_mention_preserves_previous_hold() -> None:
     previous = derive_lock("`git status`")
     assert previous is not None
+    held = record_result(previous, "git status", failed=True)
 
-    assert derive_lock("the original request", previous=previous) is None
+    assert derive_lock("the original request", previous=held) is held
 
 
 def test_substantive_unrelated_prompt_releases_previous_lock() -> None:

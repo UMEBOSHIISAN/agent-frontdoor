@@ -92,8 +92,12 @@ _FENCED_COMMAND_PATTERN = re.compile(
 _INLINE_CODE_PATTERN = re.compile(r"`{1,3}([^`\r\n]+)`{1,3}")
 _SHELL_LINE_PATTERN = re.compile(r"(?m)^\s*\$\s+([^\r\n]+)$")
 _NEGATED_COMMAND_DIRECTIVE_PATTERN = re.compile(
+    r"(?:"
     r"(?:do\s+not|don't|never)\s+(?:run|execute)"
-    r"(?:\s+(?:this|the)(?:\s+(?:exact\s+)?command)?)?\s*:?\s*$",
+    r"(?:\s+(?:this|the)(?:\s+(?:exact\s+)?command)?)?"
+    r"|(?:cancel|ignore|skip)"
+    r"(?:\s+(?:this|that|the)(?:\s+(?:exact\s+)?command)?)?"
+    r")\s*:?\s*$",
     re.IGNORECASE,
 )
 _AFFIRMATIVE_COMMAND_DIRECTIVE_PATTERN = re.compile(
@@ -382,6 +386,28 @@ def _extract_exact_command(prompt: str) -> str | None:
     return None
 
 
+def _extract_negated_command(prompt: str) -> str | None:
+    for pattern in (_FENCED_COMMAND_PATTERN, _SHELL_LINE_PATTERN):
+        for match in pattern.finditer(prompt):
+            candidate = match.group(1).strip()
+            prefix = prompt[: match.start()]
+            is_negated = bool(
+                _NEGATED_COMMAND_DIRECTIVE_PATTERN.search(prefix)
+            ) or _post_command_is_negated(prompt, match.end())
+            if _looks_like_command(candidate) and is_negated:
+                return _normalized_command(candidate)
+
+    for match in _INLINE_CODE_PATTERN.finditer(prompt):
+        candidate = match.group(1).strip()
+        prefix = prompt[: match.start()]
+        is_negated = bool(
+            _NEGATED_COMMAND_DIRECTIVE_PATTERN.search(prefix)
+        ) or _post_command_is_negated(prompt, match.end())
+        if _looks_like_command(candidate) and is_negated:
+            return _normalized_command(candidate)
+    return None
+
+
 def _command_target(command: str) -> str | None:
     parts = _command_parts(command)
     candidates = [
@@ -520,6 +546,9 @@ def derive_lock(
             command=command,
             targets=targets,
         )
+
+    if previous is not None and _extract_negated_command(prompt) is not None:
+        return _hold(prompt, previous)
 
     targets = _extract_error_targets(prompt)
     if targets:

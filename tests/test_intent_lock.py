@@ -541,6 +541,28 @@ def test_negated_correction_stops_a_not_yet_run_previous_action() -> None:
 @pytest.mark.parametrize(
     "prompt",
     [
+        "Do not run `git status`.",
+        "Never execute: `git status`",
+        "Don't run `git status` anymore.",
+        "Cancel `git status`.",
+        "Run `git status`, but don't run it.",
+    ],
+)
+def test_direct_command_cancellation_holds_active_lock(prompt: str) -> None:
+    previous = derive_lock("`git status`")
+    assert previous is not None
+
+    held = derive_lock(prompt, previous=previous)
+
+    assert held is not None
+    assert held.phase == "REPORT_REQUIRED"
+    assert held.intent_epoch == previous.intent_epoch + 1
+    assert not evaluate_action(held, "git status").allowed
+
+
+@pytest.mark.parametrize(
+    "prompt",
+    [
         "do the original request, but do not do it",
         "do the original request—actually, don't",
         "do the original request; cancel it",

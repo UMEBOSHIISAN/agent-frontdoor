@@ -1,0 +1,11 @@
+include .gitattributes
+include CHANGELOG.md
+include docs/FRIEND_LAB.md
+recursive-include examples *.json
+recursive-include fixtures *.json
+recursive-include schemas *.json
+include tools/verify_handoff_archive.py
+exclude tests/test_adapter_safety.py
+exclude tests/test_hook_adapter.py
+exclude tests/test_hook_fixtures.py
+exclude tests/test_hook_state.py

@@ -4,8 +4,9 @@ import argparse
 from pathlib import Path, PurePosixPath
 import re
 
+import pytest
+
 from frontdoor.cli import build_parser
-from tools.verify_handoff_archive import scan_forbidden_text
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -15,6 +16,8 @@ CHANGELOG = ROOT / "CHANGELOG.md"
 PYPROJECT = ROOT / "pyproject.toml"
 ADAPTER_PYPROJECT = ROOT / "adapters" / "pyproject.toml"
 ADAPTER_README = ROOT / "adapters" / "README.md"
+MANIFEST = ROOT / "MANIFEST.in"
+ADAPTER_SOURCE_PRESENT = ADAPTER_PYPROJECT.exists()
 
 
 def test_export_ignore_contains_only_lab_orchestration_boundaries() -> None:
@@ -106,6 +109,10 @@ def test_changelog_records_unreleased_release_hardening() -> None:
     assert "## 0.1.0" in text
 
 
+@pytest.mark.skipif(
+    not ADAPTER_SOURCE_PRESENT,
+    reason="optional adapter source is not part of the core sdist",
+)
 def test_hook_adapter_is_a_separate_optional_distribution() -> None:
     core = PYPROJECT.read_text(encoding="utf-8")
     adapter = ADAPTER_PYPROJECT.read_text(encoding="utf-8")
@@ -123,13 +130,23 @@ def test_hook_adapter_is_a_separate_optional_distribution() -> None:
     assert "replace the placeholder" in adapter_readme
 
 
+@pytest.mark.skipif(
+    not ADAPTER_SOURCE_PRESENT,
+    reason="optional adapter source is not part of the core sdist",
+)
 def test_hook_adapter_metadata_passes_source_privacy_scan() -> None:
+    from tools.verify_handoff_archive import scan_forbidden_text
+
     assert scan_forbidden_text(
         PurePosixPath("adapters/pyproject.toml"),
         ADAPTER_PYPROJECT.read_bytes(),
     ) == ()
 
 
+@pytest.mark.skipif(
+    not ADAPTER_SOURCE_PRESENT,
+    reason="optional adapter source is not part of the core sdist",
+)
 def test_hook_adapter_distribution_includes_inert_configuration_examples() -> None:
     adapter = ADAPTER_PYPROJECT.read_text(encoding="utf-8")
 
@@ -143,7 +160,12 @@ def test_hook_adapter_distribution_includes_inert_configuration_examples() -> No
 
 
 def test_both_distributions_use_current_spdx_license_metadata() -> None:
-    for path in (PYPROJECT, ADAPTER_PYPROJECT):
+    paths = (
+        (PYPROJECT, ADAPTER_PYPROJECT)
+        if ADAPTER_SOURCE_PRESENT
+        else (PYPROJECT,)
+    )
+    for path in paths:
         pyproject = path.read_text(encoding="utf-8")
         assert 'requires = ["setuptools>=77"]' in pyproject
         assert 'license = "MIT"' in pyproject
@@ -153,6 +175,22 @@ def test_both_distributions_use_current_spdx_license_metadata() -> None:
 def test_root_pytest_configuration_loads_core_adapter_and_lab_sources() -> None:
     pyproject = PYPROJECT.read_text(encoding="utf-8")
     assert 'pythonpath = [".", "src", "adapters/src"]' in pyproject
+
+
+def test_core_sdist_excludes_tests_for_the_separate_adapter_distribution() -> None:
+    assert MANIFEST.read_text(encoding="utf-8") == (
+        "include .gitattributes\n"
+        "include CHANGELOG.md\n"
+        "include docs/FRIEND_LAB.md\n"
+        "recursive-include examples *.json\n"
+        "recursive-include fixtures *.json\n"
+        "recursive-include schemas *.json\n"
+        "include tools/verify_handoff_archive.py\n"
+        "exclude tests/test_adapter_safety.py\n"
+        "exclude tests/test_hook_adapter.py\n"
+        "exclude tests/test_hook_fixtures.py\n"
+        "exclude tests/test_hook_state.py\n"
+    )
 
 
 def test_changelog_records_intent_lock_as_unreleased_and_unactivated() -> None:

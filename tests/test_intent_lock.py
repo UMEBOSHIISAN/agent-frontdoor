@@ -10,10 +10,12 @@ import pytest
 from frontdoor.intent_lock import (
     IntentDecision,
     IntentLock,
+    bind_tool_use,
     derive_lock,
     evaluate_action,
     lock_from_dict,
     lock_to_dict,
+    matches_tool_use,
     record_result,
 )
 
@@ -24,6 +26,7 @@ invalid_grant: Grant not found
 """
 AWS_ACCESS_KEY_FIXTURE = "AK" + "IA1234567890ABCDEF"
 GITHUB_TOKEN_FIXTURE = "gh" + "p_1234567890abcdefghijklmn"
+PRIVATE_IP_FIXTURE = ".".join(("10", "0", "0", "5"))
 
 
 def test_structured_error_derives_literal_target_without_raw_prompt() -> None:
@@ -121,6 +124,9 @@ def test_credential_shaped_error_targets_are_never_persisted_or_displayed(
         "curl ftp://alice:huntertwo@example.com/private",
         "ssh alice@example.com",
         "curl https://example.com/privatevalue",
+        f"ssh {PRIVATE_IP_FIXTURE}",
+        "curl internal.example.com",
+        "python relative/private_script.py",
     ],
 )
 def test_exact_command_network_targets_are_hashed_but_never_displayed(
@@ -282,6 +288,23 @@ def test_failed_matching_action_requires_report_before_any_other_tool() -> None:
     )
 
 
+def test_tool_use_binding_is_epoch_local_and_persists_only_a_digest() -> None:
+    lock = derive_lock("`codex mcp login cloudflare-api`")
+    assert lock is not None
+
+    bound = bind_tool_use(lock, "raw-tool-use-id")
+
+    assert bound.intent_epoch == lock.intent_epoch
+    assert bound.pending_tool_use_sha256 is not None
+    assert len(bound.pending_tool_use_sha256) == 64
+    assert "raw-tool-use-id" not in json.dumps(lock_to_dict(bound))
+    assert matches_tool_use(bound, "raw-tool-use-id")
+    assert not matches_tool_use(bound, "different-tool-use-id")
+    relocked = derive_lock("do the original request", previous=bound)
+    assert relocked is not None
+    assert relocked.pending_tool_use_sha256 is None
+
+
 def test_success_releases_exact_command_but_keeps_target_lock_bounded() -> None:
     exact = derive_lock("`codex mcp login cloudflare-api`")
     target = derive_lock(ERROR_PROMPT)
@@ -347,6 +370,8 @@ def test_human_relock_preserves_previous_intent(prompt: str) -> None:
     [
         "do not retry the original request",
         "never run the first request",
+        "cancel the original request",
+        "ignore the first request",
         "最初の依頼はやらないで",
     ],
 )
@@ -382,6 +407,13 @@ def test_negated_correction_stops_a_not_yet_run_previous_action() -> None:
     assert held.phase == "REPORT_REQUIRED"
     assert held.intent_epoch == previous.intent_epoch + 1
     assert not evaluate_action(held, "git status").allowed
+
+
+def test_ambiguous_original_request_mention_does_not_reenable_action() -> None:
+    previous = derive_lock("`git status`")
+    assert previous is not None
+
+    assert derive_lock("the original request", previous=previous) is None
 
 
 def test_substantive_unrelated_prompt_releases_previous_lock() -> None:

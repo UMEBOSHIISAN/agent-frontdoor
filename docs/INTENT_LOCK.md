@@ -54,7 +54,8 @@ not substitute another subsystem.
 - mode `EXACT_COMMAND` or `LITERAL_TARGET`;
 - an optional normalized-command SHA-256;
 - SHA-256 digests for required target tokens;
-- safe display labels for human-readable denial messages.
+- safe display labels for human-readable denial messages;
+- an optional SHA-256 digest binding an accepted tool-use id to one lock epoch.
 
 The contract never stores the raw prompt, raw session id, transcript path, tool
 response, or OAuth material. The adapter hashes the session id for the state
@@ -80,10 +81,12 @@ A literal-target lock is created from structured error forms such as:
 - `component <target>`;
 - backticked identifiers near `failed`, `error`, or `invalid`.
 
-Secret-context, known credential-prefix, and high-entropy credential-shaped target
-labels are never retained for display. Their one-way digests may still bound the
-current action without persisting raw credential material. A prompt that yields
-no deterministic evidence creates no lock rather than inventing one.
+Secret-context, known credential-prefix, high-entropy credential-shaped, network,
+and path-like target labels are never retained for display. Only simple opaque
+labels made from letters, digits, `_`, and `-` are displayable. One-way digests
+may still bound the current action without persisting raw target material. A
+prompt that yields no deterministic evidence creates no lock rather than
+inventing one.
 
 ## State machine
 
@@ -93,8 +96,9 @@ matching exact command with explicit success succeeds -> RELEASED
 matching tool action fails -> REPORT_REQUIRED
 Codex Bash raw result with no exit status -> REPORT_REQUIRED
 REPORT_REQUIRED + any tool -> deny and require human-facing report
-human correction phrase -> DIRECT_REQUIRED on the previous literal intent
-negated correction phrase -> REPORT_REQUIRED hold; never re-enable the action
+affirmative human correction phrase -> DIRECT_REQUIRED on the previous literal intent
+negated/cancellation phrase -> REPORT_REQUIRED hold; never re-enable the action
+ambiguous mention of an original request -> no re-lock
 new explicit command/error -> new epoch and replacement lock
 new substantive unrelated prompt -> prior lock released
 ```
@@ -109,8 +113,9 @@ action without trying to infer semantic equivalence.
 The optional adapter consumes hook JSON from stdin and supports:
 
 - `UserPromptSubmit`: derive, replace, preserve, or release the session lock;
-- `PreToolUse`: deny mismatched actions with the current documented
-  `hookSpecificOutput.permissionDecision = deny` shape;
+- `PreToolUse`: deny mismatched or uncorrelatable actions with the current
+  documented `hookSpecificOutput.permissionDecision = deny` shape, and hash-bind
+  an accepted `tool_use_id` to the current epoch;
 - Codex `PostToolUse`: process explicit structured status when present; for the
   current raw Bash response, preserve the original result and require a report
   without guessing its exit status;
@@ -124,6 +129,9 @@ allow decision is represented by silence, never an authority-granting `allow`.
 Only recognized shell-tool identities may supply the raw command used for an
 exact-command comparison; an unrelated function or MCP tool with a coincidental
 `command` field retains its full envelope and does not match.
+Result events are applied only when their `tool_use_id` matches the digest bound
+at `PreToolUse`. A result from an older epoch, even for the same command, is
+ignored and cannot release or fail the current lock.
 
 ## Platform limits
 
@@ -152,10 +160,11 @@ symlink failures; only genuine absence means no saved lock.
 5. An exact-command mismatch is denied even when it names the same vendor.
 6. A failed or outcome-opaque matching action moves to `REPORT_REQUIRED`.
 7. No later tool call is allowed before the result is reported to the human.
-8. `最初の依頼` and `original request` re-lock the prior intent.
-9. A negated correction never re-enables the prior action.
-10. Hook state contains no raw prompt, session id, or command.
-11. Codex and Claude Code fixtures produce the same intent decision despite their
+8. Affirmative `最初の依頼` and `do the original request` re-lock the prior intent.
+9. A negated, cancelled, or ambiguous correction never re-enables the prior action.
+10. A stale result from an older epoch cannot mutate the current lock.
+11. Hook state contains no raw prompt, session id, command, or tool-use id.
+12. Codex and Claude Code fixtures produce the same intent decision despite their
     different result-event shapes.
 
 ## Rollout boundary

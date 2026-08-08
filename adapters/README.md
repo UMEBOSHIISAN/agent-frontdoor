@@ -74,9 +74,10 @@ By default, state is stored below:
 Set `AGENT_FRONTDOOR_STATE_DIR` or pass `--state-dir` to select an explicit
 alternative. The directory is restricted to mode `0700`; atomically written
 state files use mode `0600`. Filenames are SHA-256 digests of session IDs. State
-contains prompt and target hashes plus safe display labels, but never the raw
-prompt, raw command, raw session ID, tool result, transcript path, OAuth token,
-or other credential material.
+contains prompt and target hashes, a hash binding the accepted tool-use id to its
+lock epoch, and safe opaque display labels, but never the raw prompt, raw command,
+raw session ID, raw tool-use ID, tool result, transcript path, OAuth token, network
+endpoint, path-like target, or other credential material.
 
 The adapter creates its dedicated state directory with mode `0700`. If an
 explicit `--state-dir` already exists, the adapter never changes its permissions:
@@ -97,6 +98,8 @@ removing anything.
   operators remain significant.
 - A structured error target permits only actions containing the same literal
   target tokens.
+- A matching action must have a non-empty `tool_use_id`; its result is accepted
+  only for that id and lock epoch. Late results from older epochs are ignored.
 - A failed matching action enters `REPORT_REQUIRED`; the next tool is denied
   until the result is surfaced to the human.
 - A current Codex Bash raw result also enters `REPORT_REQUIRED`, whether its text

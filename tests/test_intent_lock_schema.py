@@ -29,6 +29,7 @@ def test_intent_lock_schema_is_valid_and_closed() -> None:
         "exact_command_sha256",
         "target_token_sha256",
         "display_targets",
+        "pending_tool_use_sha256",
     }
 
 
@@ -56,6 +57,7 @@ def test_exact_command_mode_requires_a_hash_and_literal_target_requires_null() -
         "phase": "DIRECT_REQUIRED",
         "target_token_sha256": ["b" * 64],
         "display_targets": ["cloudflare-api"],
+        "pending_tool_use_sha256": None,
     }
 
     assert not list(

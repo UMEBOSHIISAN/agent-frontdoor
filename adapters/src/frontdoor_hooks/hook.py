@@ -12,8 +12,10 @@ from typing import Any
 
 from frontdoor.intent_lock import (
     IntentLock,
+    bind_tool_use,
     derive_lock,
     evaluate_action,
+    matches_tool_use,
     record_result,
 )
 from frontdoor_hooks.state import (
@@ -56,6 +58,11 @@ def _deny(reason: str) -> dict[str, object]:
 
 def _session_id(payload: Mapping[str, object]) -> str | None:
     value = payload.get("session_id")
+    return value if isinstance(value, str) and value else None
+
+
+def _tool_use_id(payload: Mapping[str, object]) -> str | None:
+    value = payload.get("tool_use_id")
     return value if isinstance(value, str) and value else None
 
 
@@ -154,6 +161,17 @@ def handle_pre_tool(
 
     decision = evaluate_action(lock, _tool_action(payload))
     if decision.allowed:
+        tool_use_id = _tool_use_id(payload)
+        if tool_use_id is None:
+            return _deny(
+                "Intent Lock cannot bind this action without a tool use id; "
+                "tool use is denied."
+            )
+        save_session_lock(
+            state_root,
+            session_id,
+            bind_tool_use(lock, tool_use_id),
+        )
         return None
     return _deny(decision.reason)
 
@@ -225,6 +243,10 @@ def handle_tool_result(
     except StateError:
         return None
     if lock is None:
+        return None
+
+    tool_use_id = _tool_use_id(payload)
+    if tool_use_id is None or not matches_tool_use(lock, tool_use_id):
         return None
 
     status = _result_status(payload, platform)

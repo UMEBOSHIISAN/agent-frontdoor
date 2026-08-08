@@ -12,7 +12,8 @@
     "mode",
     "exact_command_sha256",
     "target_token_sha256",
-    "display_targets"
+    "display_targets",
+    "pending_tool_use_sha256"
   ],
   "properties": {
     "schema_version": {
@@ -71,6 +72,18 @@
         "maxLength": 128,
         "pattern": "^[A-Za-z0-9][A-Za-z0-9._:@/-]*$"
       }
+    },
+    "pending_tool_use_sha256": {
+      "description": "Hash of the accepted tool-use id for this exact lock epoch, or null before acceptance.",
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      ]
     }
   },
   "allOf": [

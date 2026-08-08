@@ -29,7 +29,7 @@
 - Create: `fixtures/intent-lock/exact_command.json`
 
 **Interfaces:**
-- Produces: `IntentLock`, `IntentDecision`, `derive_lock(prompt, previous=None)`, `evaluate_action(lock, action)`, `record_result(lock, action, failed)`, `lock_to_dict(lock)`, and `lock_from_dict(value)`.
+- Produces: `IntentLock`, `IntentDecision`, `derive_lock(prompt, previous=None)`, `evaluate_action(lock, action)`, `bind_tool_use(lock, tool_use_id)`, `matches_tool_use(lock, tool_use_id)`, `record_result(lock, action, failed)`, `lock_to_dict(lock)`, and `lock_from_dict(value)`.
 - `IntentLock` fields match `intent-lock.v1`; all values are immutable tuples/scalars.
 
 - [ ] **Step 1: Write failing derivation and privacy tests**
@@ -60,6 +60,7 @@ class IntentLock:
     exact_command_sha256: str | None
     target_token_sha256: tuple[str, ...]
     display_targets: tuple[str, ...]
+    pending_tool_use_sha256: str | None
 
 @dataclass(frozen=True)
 class IntentDecision:

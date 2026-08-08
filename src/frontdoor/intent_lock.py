@@ -26,6 +26,7 @@ class IntentLock:
     exact_command_sha256: str | None
     target_token_sha256: tuple[str, ...]
     display_targets: tuple[str, ...]
+    pending_tool_use_sha256: str | None
 
 
 @dataclass(frozen=True)
@@ -124,14 +125,21 @@ _BACKTICK_ERROR_TARGET_PATTERNS = tuple(
         r"[^`\r\n]{0,80}\b(?:failed|error|invalid)\b",
     )
 )
-_CORRECTION_PATTERN = re.compile(
-    r"(?:最初の依頼|元の依頼|original request|first request)",
+_AFFIRMATIVE_CORRECTION_PATTERN = re.compile(
+    r"(?:"
+    r"(?:do|retry|run|execute|resume|continue)\s+(?:the\s+)?"
+    r"(?:original|first)\s+request"
+    r"|(?:最初の依頼|元の依頼).{0,20}"
+    r"(?:して|やって|続けて|再開)"
+    r")",
     re.IGNORECASE,
 )
 _NEGATED_CORRECTION_PATTERN = re.compile(
     r"(?:"
     r"(?:do\s+not|don't|never)\s+"
     r"(?:(?:retry|run|execute|do)\s+)?(?:the\s+)?"
+    r"(?:original|first)\s+request"
+    r"|(?:cancel|ignore|stop|abort|skip)\s+(?:the\s+)?"
     r"(?:original|first)\s+request"
     r"|(?:最初の依頼|元の依頼).{0,20}"
     r"(?:しない|やらない|やるな|やめて)"
@@ -145,6 +153,7 @@ _CONTINUATION_PATTERN = re.compile(
 _SAFE_LABEL_PATTERN = re.compile(
     r"^[A-Za-z0-9][A-Za-z0-9._:@/-]{0,127}$"
 )
+_DISPLAY_LABEL_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$")
 _SECRET_LIKE_PATTERN = re.compile(
     r"(?:^sk-|bearer|password|secret|token|api[_-]?key)",
     re.IGNORECASE,
@@ -160,9 +169,6 @@ _SECRET_CONTEXT_PATTERN = re.compile(
     r"(?:access[ _-]?key|api[ _-]?key|authorization|bearer|password|secret|token)"
     r"\s*(?:is\s+)?[:=]?\s*[`'\"]?\s*$",
     re.IGNORECASE,
-)
-_NETWORK_IDENTITY_PATTERN = re.compile(
-    r"(?:^[A-Za-z][A-Za-z0-9+.-]*://|@)"
 )
 _GENERIC_ERROR_TARGETS = frozenset(
     {
@@ -351,10 +357,9 @@ def _display_targets(
     return tuple(
         target
         for target in targets
-        if _SAFE_LABEL_PATTERN.fullmatch(target)
+        if _DISPLAY_LABEL_PATTERN.fullmatch(target)
         and not _SECRET_LIKE_PATTERN.search(target)
         and not _CREDENTIAL_PREFIX_PATTERN.search(target)
-        and not _NETWORK_IDENTITY_PATTERN.search(target)
         and not _credential_shaped(target)
         and not _target_has_secret_context(prompt, target)
     )
@@ -381,6 +386,7 @@ def _new_lock(
             dict.fromkeys(_digest(target.casefold()) for target in targets)
         ),
         display_targets=_display_targets(targets, prompt=prompt),
+        pending_tool_use_sha256=None,
     )
     lock_from_dict(lock_to_dict(lock))
     return lock
@@ -396,6 +402,7 @@ def _relock(prompt: str, previous: IntentLock) -> IntentLock:
         exact_command_sha256=previous.exact_command_sha256,
         target_token_sha256=previous.target_token_sha256,
         display_targets=previous.display_targets,
+        pending_tool_use_sha256=None,
     )
 
 
@@ -411,6 +418,7 @@ def _hold(prompt: str, previous: IntentLock) -> IntentLock:
         exact_command_sha256=previous.exact_command_sha256,
         target_token_sha256=previous.target_token_sha256,
         display_targets=previous.display_targets,
+        pending_tool_use_sha256=None,
     )
 
 
@@ -447,7 +455,7 @@ def derive_lock(
         return _hold(prompt, previous)
 
     if previous is not None and (
-        _CORRECTION_PATTERN.search(prompt)
+        _AFFIRMATIVE_CORRECTION_PATTERN.search(prompt)
         or _CONTINUATION_PATTERN.fullmatch(prompt.strip())
     ):
         return _relock(prompt, previous)
@@ -502,6 +510,37 @@ def evaluate_action(lock: IntentLock, action: str) -> IntentDecision:
     )
 
 
+def bind_tool_use(lock: IntentLock, tool_use_id: str) -> IntentLock:
+    """Bind one accepted tool call to the current immutable lock epoch."""
+
+    if lock.phase != "DIRECT_REQUIRED" or not tool_use_id:
+        return lock
+    digest = _digest(tool_use_id)
+    if digest == lock.pending_tool_use_sha256:
+        return lock
+    return IntentLock(
+        schema_version=lock.schema_version,
+        intent_epoch=lock.intent_epoch,
+        source_prompt_sha256=lock.source_prompt_sha256,
+        phase=lock.phase,
+        mode=lock.mode,
+        exact_command_sha256=lock.exact_command_sha256,
+        target_token_sha256=lock.target_token_sha256,
+        display_targets=lock.display_targets,
+        pending_tool_use_sha256=digest,
+    )
+
+
+def matches_tool_use(lock: IntentLock, tool_use_id: str) -> bool:
+    """Return whether a result belongs to the accepted call for this epoch."""
+
+    return (
+        bool(tool_use_id)
+        and lock.pending_tool_use_sha256 is not None
+        and _digest(tool_use_id) == lock.pending_tool_use_sha256
+    )
+
+
 def record_result(
     lock: IntentLock,
     action: str,
@@ -519,7 +558,7 @@ def record_result(
     elif lock.mode == "EXACT_COMMAND":
         phase = "RELEASED"
     else:
-        return lock
+        phase = lock.phase
     return IntentLock(
         schema_version=lock.schema_version,
         intent_epoch=lock.intent_epoch,
@@ -529,6 +568,7 @@ def record_result(
         exact_command_sha256=lock.exact_command_sha256,
         target_token_sha256=lock.target_token_sha256,
         display_targets=lock.display_targets,
+        pending_tool_use_sha256=None,
     )
 
 
@@ -544,6 +584,7 @@ def lock_to_dict(lock: IntentLock) -> dict[str, object]:
         "exact_command_sha256": lock.exact_command_sha256,
         "target_token_sha256": list(lock.target_token_sha256),
         "display_targets": list(lock.display_targets),
+        "pending_tool_use_sha256": lock.pending_tool_use_sha256,
     }
 
 
@@ -567,4 +608,5 @@ def lock_from_dict(value: Mapping[str, Any]) -> IntentLock:
         exact_command_sha256=candidate["exact_command_sha256"],
         target_token_sha256=tuple(candidate["target_token_sha256"]),
         display_targets=tuple(candidate["display_targets"]),
+        pending_tool_use_sha256=candidate["pending_tool_use_sha256"],
     )

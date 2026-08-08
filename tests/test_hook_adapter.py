@@ -45,6 +45,24 @@ def _activate_exact_lock(state_root: Path) -> None:
     assert result is not None
 
 
+def _accept_exact_tool(
+    state_root: Path,
+    *,
+    tool_use_id: str = "accepted-tool",
+) -> None:
+    result = handle_event(
+        _payload(
+            "PreToolUse",
+            tool_name="Bash",
+            tool_use_id=tool_use_id,
+            tool_input={"command": "codex mcp login cloudflare-api"},
+        ),
+        state_root,
+        platform="codex",
+    )
+    assert result is None
+
+
 def test_user_prompt_creates_lock_and_injects_bounded_context(
     tmp_path: Path,
 ) -> None:
@@ -82,6 +100,7 @@ def test_pre_tool_denies_lateral_target_and_silently_accepts_match(
         _payload(
             "PreToolUse",
             tool_name="Bash",
+            tool_use_id="matched-tool",
             tool_input={"command": "codex mcp login cloudflare-api"},
         ),
         tmp_path,
@@ -118,6 +137,7 @@ def test_exact_command_requires_a_known_shell_tool_identity(tmp_path: Path) -> N
         _payload(
             "PreToolUse",
             tool_name="exec_command",
+            tool_use_id="unified-tool",
             tool_input={"cmd": command},
         ),
         tmp_path,
@@ -129,16 +149,93 @@ def test_exact_command_requires_a_known_shell_tool_identity(tmp_path: Path) -> N
     assert unified_exec is None
 
 
+def test_matching_tool_without_tool_use_id_is_denied_as_uncorrelatable(
+    tmp_path: Path,
+) -> None:
+    _activate_exact_lock(tmp_path)
+
+    output = handle_event(
+        _payload(
+            "PreToolUse",
+            tool_name="Bash",
+            tool_input={"command": "codex mcp login cloudflare-api"},
+        ),
+        tmp_path,
+        platform="codex",
+    )
+
+    assert output is not None
+    assert output["hookSpecificOutput"]["permissionDecision"] == "deny"
+    assert "tool use id" in output["hookSpecificOutput"][
+        "permissionDecisionReason"
+    ]
+
+
+def test_stale_tool_result_cannot_mutate_a_new_lock_epoch(
+    tmp_path: Path,
+) -> None:
+    _activate_exact_lock(tmp_path)
+    _accept_exact_tool(tmp_path, tool_use_id="old-tool")
+    old_epoch = load_session_lock(tmp_path, SESSION).intent_epoch
+    handle_event(
+        _payload("UserPromptSubmit", prompt="do the original request"),
+        tmp_path,
+        platform="codex",
+    )
+    current = load_session_lock(tmp_path, SESSION)
+    assert current is not None
+    assert current.intent_epoch == old_epoch + 1
+
+    output = handle_event(
+        _payload(
+            "PostToolUse",
+            tool_name="Bash",
+            tool_use_id="old-tool",
+            tool_input={"command": "codex mcp login cloudflare-api"},
+            tool_response={"exit_code": 0, "output": "ok"},
+        ),
+        tmp_path,
+        platform="codex",
+    )
+
+    assert output is None
+    assert load_session_lock(tmp_path, SESSION) == current
+
+
+def test_unaccepted_tool_result_cannot_mutate_current_lock(
+    tmp_path: Path,
+) -> None:
+    _activate_exact_lock(tmp_path)
+    current = load_session_lock(tmp_path, SESSION)
+
+    output = handle_event(
+        _payload(
+            "PostToolUse",
+            tool_name="Bash",
+            tool_use_id="never-accepted",
+            tool_input={"command": "codex mcp login cloudflare-api"},
+            tool_response={"exit_code": 0, "output": "ok"},
+        ),
+        tmp_path,
+        platform="codex",
+    )
+
+    assert output is None
+    assert load_session_lock(tmp_path, SESSION) == current
+
+
 def test_codex_failed_post_tool_requires_report_and_blocks_next_tool(
     tmp_path: Path,
 ) -> None:
     _activate_exact_lock(tmp_path)
+    _accept_exact_tool(tmp_path)
     action = {"command": "codex mcp login cloudflare-api"}
 
     feedback = handle_event(
         _payload(
             "PostToolUse",
             tool_name="Bash",
+            tool_use_id="accepted-tool",
             tool_input=action,
             tool_response={"exit_code": 1, "output": "server not found"},
         ),
@@ -173,11 +270,13 @@ def test_claude_failure_event_produces_equivalent_report_lock(
     tmp_path: Path,
 ) -> None:
     _activate_exact_lock(tmp_path)
+    _accept_exact_tool(tmp_path)
 
     feedback = handle_event(
         _payload(
             "PostToolUseFailure",
             tool_name="Bash",
+            tool_use_id="accepted-tool",
             tool_input={"command": "codex mcp login cloudflare-api"},
             error="Exit code 1",
             is_interrupt=False,
@@ -202,11 +301,13 @@ def test_structured_codex_success_releases_and_removes_adapter_state(
     tmp_path: Path,
 ) -> None:
     _activate_exact_lock(tmp_path)
+    _accept_exact_tool(tmp_path)
 
     output = handle_event(
         _payload(
             "PostToolUse",
             tool_name="Bash",
+            tool_use_id="accepted-tool",
             tool_input={"command": "codex mcp login cloudflare-api"},
             tool_response={"exit_code": 0, "output": "ok"},
         ),
@@ -222,11 +323,13 @@ def test_actual_codex_raw_result_requires_human_report_before_more_tools(
     tmp_path: Path,
 ) -> None:
     _activate_exact_lock(tmp_path)
+    _accept_exact_tool(tmp_path)
 
     output = handle_event(
         _payload(
             "PostToolUse",
             tool_name="Bash",
+            tool_use_id="accepted-tool",
             tool_input={"command": "codex mcp login cloudflare-api"},
             tool_response="Error: server not found",
         ),
@@ -251,11 +354,13 @@ def test_actual_codex_raw_success_is_also_held_for_report(
     tmp_path: Path,
 ) -> None:
     _activate_exact_lock(tmp_path)
+    _accept_exact_tool(tmp_path)
 
     output = handle_event(
         _payload(
             "PostToolUse",
             tool_name="Bash",
+            tool_use_id="accepted-tool",
             tool_input={"command": "codex mcp login cloudflare-api"},
             tool_response="Successfully logged in",
         ),
@@ -272,11 +377,13 @@ def test_codex_raw_json_stdout_cannot_forge_structured_success(
     tmp_path: Path,
 ) -> None:
     _activate_exact_lock(tmp_path)
+    _accept_exact_tool(tmp_path)
 
     output = handle_event(
         _payload(
             "PostToolUse",
             tool_name="Bash",
+            tool_use_id="accepted-tool",
             tool_input={"command": "codex mcp login cloudflare-api"},
             tool_response='{"success": true}',
         ),
@@ -293,10 +400,12 @@ def test_human_correction_relocks_failed_intent(
     tmp_path: Path,
 ) -> None:
     _activate_exact_lock(tmp_path)
+    _accept_exact_tool(tmp_path)
     handle_event(
         _payload(
             "PostToolUseFailure",
             tool_name="Bash",
+            tool_use_id="accepted-tool",
             tool_input={"command": "codex mcp login cloudflare-api"},
             error="Exit code 1",
         ),

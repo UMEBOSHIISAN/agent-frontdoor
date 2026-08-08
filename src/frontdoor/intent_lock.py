@@ -101,6 +101,14 @@ _NEGATED_COMMAND_DIRECTIVE_PATTERN = re.compile(
     r")\s*:?\s*$",
     re.IGNORECASE,
 )
+_PLAIN_NEGATED_COMMAND_PATTERN = re.compile(
+    r"^\s*(?:please\s+)?(?:"
+    r"(?:do\s+not|don't|never)\s+(?:run|execute)"
+    r"|(?:cancel|ignore|skip)"
+    r")\s*:?\s*(?P<command>.+?)"
+    r"(?:\s+(?:again|anymore))?\s*[.!]?\s*$",
+    re.IGNORECASE,
+)
 _AFFIRMATIVE_COMMAND_DIRECTIVE_PATTERN = re.compile(
     r"(?:^|[\r\n.;!?！？])\s*(?:"
     r"(?:please\s+)?(?:run|execute)"
@@ -346,9 +354,10 @@ def _post_command_is_negated(prompt: str, end: int) -> bool:
             remainder,
             re.IGNORECASE,
         )
-        if has_bare_run_verb and remainder and cancellation_tail is None:
+        if has_bare_run_verb and cancellation_tail is None:
             # A non-pronominal object belongs to a separate prohibition:
-            # "run `git status`, but do not run tests".
+            # "run `git status`, but do not run tests". A bare "don't run"
+            # later in explanatory prose is likewise not tied to this command.
             continue
         if remainder.startswith("`") or re.match(r"\$[ \t]+", remainder):
             continue
@@ -433,6 +442,16 @@ def _extract_negated_command(prompt: str) -> str | None:
         if _looks_like_command(candidate) and is_negated:
             return _normalized_command(candidate)
     return None
+
+
+def _extract_plain_negated_command(prompt: str) -> str | None:
+    match = _PLAIN_NEGATED_COMMAND_PATTERN.fullmatch(prompt)
+    if match is None:
+        return None
+    candidate = match.group("command")
+    if not _looks_like_command(candidate):
+        return None
+    return _normalized_command(candidate)
 
 
 def _command_target(command: str) -> str | None:
@@ -584,6 +603,8 @@ def derive_lock(
         )
 
     negated_command = _extract_negated_command(prompt)
+    if negated_command is None and previous is not None:
+        negated_command = _extract_plain_negated_command(prompt)
     if (
         previous is not None
         and negated_command is not None

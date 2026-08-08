@@ -373,6 +373,13 @@ def test_negating_a_later_command_does_not_cancel_the_first_command() -> None:
     assert not evaluate_action(lock, "git diff").allowed
 
 
+def test_unrelated_suffix_negation_does_not_cancel_requested_command() -> None:
+    lock = derive_lock("Run `git status` to diagnose why tests don't run.")
+
+    assert lock is not None
+    assert evaluate_action(lock, "git status").allowed
+
+
 @pytest.mark.parametrize(
     "prompt",
     [
@@ -629,6 +636,9 @@ def test_negated_correction_stops_a_not_yet_run_previous_action() -> None:
     "prompt",
     [
         "Do not run `git status`.",
+        "Do not run git status.",
+        "Please don't execute git status anymore.",
+        "Cancel git status.",
         "Never execute: `git status`",
         "Don't run `git status` anymore.",
         "Cancel `git status`.",
@@ -645,6 +655,13 @@ def test_direct_command_cancellation_holds_active_lock(prompt: str) -> None:
     assert held.phase == "REPORT_REQUIRED"
     assert held.intent_epoch == previous.intent_epoch + 1
     assert not evaluate_action(held, "git status").allowed
+
+
+def test_unrelated_plain_command_cancellation_does_not_hold_active_lock() -> None:
+    previous = derive_lock("`git status`")
+    assert previous is not None
+
+    assert derive_lock("Do not run git diff.", previous=previous) is None
 
 
 @pytest.mark.parametrize(

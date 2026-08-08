@@ -110,4 +110,3 @@ def test_safety_guard_detects_forbidden_adapter_examples(tmp_path: Path) -> None
         path = tmp_path / name
         path.write_text(source, encoding="utf-8")
         assert _violations(path), name
-

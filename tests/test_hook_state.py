@@ -83,4 +83,3 @@ def test_state_root_file_is_rejected(tmp_path: Path) -> None:
 
     with pytest.raises(StateError, match="state root"):
         save_session_lock(root, "session", _lock())
-

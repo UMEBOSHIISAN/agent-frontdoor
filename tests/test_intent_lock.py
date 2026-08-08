@@ -188,4 +188,3 @@ def test_contract_dataclass_is_frozen() -> None:
 
     with pytest.raises(AttributeError):
         lock.phase = "RELEASED"  # type: ignore[misc]
-

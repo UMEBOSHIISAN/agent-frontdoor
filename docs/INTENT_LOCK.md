@@ -143,4 +143,3 @@ become authorized merely because the OSS implementation exists.
 
 - OpenAI Codex hooks: <https://developers.openai.com/codex/hooks/>
 - Claude Code hooks: <https://code.claude.com/docs/en/hooks>
-

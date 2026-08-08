@@ -102,4 +102,3 @@ def delete_session_lock(state_root: Path, session_id: str) -> None:
         path.unlink(missing_ok=True)
     except OSError as error:
         raise StateError(f"unable to delete intent-lock state: {error}") from error
-

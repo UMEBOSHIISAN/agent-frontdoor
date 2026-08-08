@@ -16,4 +16,3 @@ agent-frontdoor-hook = "frontdoor_hooks.hook:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
-

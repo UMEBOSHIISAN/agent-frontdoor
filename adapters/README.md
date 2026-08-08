@@ -109,4 +109,3 @@ The shared core and platform fixtures are tested together. The current adoption
 record is `CODEX_SELF_CONFIDENT_ADOPTED` because of
 `REPEATED_EXCESSIVE_DERAILMENT`. Independent Claude/CC review remains
 `CC_UNAUDITED`; that label is disclosure, not evidence of approval or failure.
-

@@ -312,4 +312,3 @@ def test_malformed_persisted_state_fails_closed_for_pre_tool(
     assert "state is invalid" in output["hookSpecificOutput"][
         "permissionDecisionReason"
     ]
-

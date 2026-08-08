@@ -22,6 +22,8 @@ ERROR_PROMPT = """\
 MCP client for `cloudflare-api` failed to start: OAuth refresh token rejected.
 invalid_grant: Grant not found
 """
+AWS_ACCESS_KEY_FIXTURE = "AK" + "IA1234567890ABCDEF"
+GITHUB_TOKEN_FIXTURE = "gh" + "p_1234567890abcdefghijklmn"
 
 
 def test_structured_error_derives_literal_target_without_raw_prompt() -> None:
@@ -55,6 +57,61 @@ def test_backticked_identifier_near_error_word_derives_target(prompt: str) -> No
     assert lock is not None
     assert lock.mode == "LITERAL_TARGET"
     assert lock.display_targets == ("cloudflare-api",)
+
+
+@pytest.mark.parametrize(
+    "prompt",
+    [
+        "restart the server locally",
+        "render the component locally",
+    ],
+)
+def test_server_and_component_prose_without_error_evidence_is_not_locked(
+    prompt: str,
+) -> None:
+    assert derive_lock(prompt) is None
+
+
+@pytest.mark.parametrize(
+    "prompt",
+    [
+        "Error: server cloudflare-api not found",
+        "component cloudflare-api failed during startup",
+    ],
+)
+def test_structured_server_or_component_error_derives_target(prompt: str) -> None:
+    lock = derive_lock(prompt)
+
+    assert lock is not None
+    assert lock.display_targets == ("cloudflare-api",)
+
+
+@pytest.mark.parametrize(
+    ("prompt", "credential"),
+    [
+        (
+            f"Error: invalid token `{GITHUB_TOKEN_FIXTURE}`",
+            GITHUB_TOKEN_FIXTURE,
+        ),
+        (
+            f"AWS access key `{AWS_ACCESS_KEY_FIXTURE}` is invalid",
+            AWS_ACCESS_KEY_FIXTURE,
+        ),
+        (
+            "invalid token `A1b2C3d4E5f6G7h8I9j0K1l2`",
+            "A1b2C3d4E5f6G7h8I9j0K1l2",
+        ),
+    ],
+)
+def test_credential_shaped_error_targets_are_never_persisted_or_displayed(
+    prompt: str,
+    credential: str,
+) -> None:
+    lock = derive_lock(prompt)
+
+    assert lock is not None
+    assert lock.display_targets == ()
+    assert credential not in json.dumps(lock_to_dict(lock), sort_keys=True)
 
 
 def test_target_lock_denies_adjacent_product_and_allows_literal_target() -> None:

@@ -80,8 +80,10 @@ or other credential material.
 
 The adapter creates its dedicated state directory with mode `0700`. If an
 explicit `--state-dir` already exists, the adapter never changes its permissions:
-it accepts a real directory with no group/other access and rejects a shared or
-symlinked path.
+it accepts only a real directory already at mode `0700` and rejects a shared,
+under-permissioned, over-permissioned, or symlinked path. Reads validate the same
+root plus a real mode-`0600` state file and distinguish absence from lookup
+failure.
 
 Malformed persisted state causes `PreToolUse` to fail closed. `SessionEnd`
 removes only the current session's hashed state file. A crashed session can leave

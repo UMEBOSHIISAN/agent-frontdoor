@@ -81,12 +81,47 @@ def test_state_inspection_error_is_translated_to_state_error(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    def deny_inspection(_path: Path) -> bool:
-        raise PermissionError("synthetic unreadable state path")
+    original_lstat = Path.lstat
 
-    monkeypatch.setattr(Path, "exists", deny_inspection)
+    def deny_inspection(path: Path):
+        if path == tmp_path:
+            raise PermissionError("synthetic unreadable state root")
+        return original_lstat(path)
 
-    with pytest.raises(StateError, match="invalid intent-lock state"):
+    monkeypatch.setattr(Path, "lstat", deny_inspection)
+
+    with pytest.raises(StateError, match="state root"):
+        load_session_lock(tmp_path, "session")
+
+
+def test_unreadable_existing_state_root_is_not_treated_as_missing(
+    tmp_path: Path,
+) -> None:
+    save_session_lock(tmp_path, "session", _lock())
+    tmp_path.chmod(0)
+
+    try:
+        with pytest.raises(StateError, match="state root permissions"):
+            load_session_lock(tmp_path, "session")
+    finally:
+        tmp_path.chmod(0o700)
+
+
+def test_state_load_rejects_symlinked_root(tmp_path: Path) -> None:
+    real_root = tmp_path / "real"
+    save_session_lock(real_root, "session", _lock())
+    linked_root = tmp_path / "linked"
+    linked_root.symlink_to(real_root, target_is_directory=True)
+
+    with pytest.raises(StateError, match="state root"):
+        load_session_lock(linked_root, "session")
+
+
+def test_state_load_rejects_exposed_state_file(tmp_path: Path) -> None:
+    path = save_session_lock(tmp_path, "session", _lock())
+    path.chmod(0o644)
+
+    with pytest.raises(StateError, match="state file permissions"):
         load_session_lock(tmp_path, "session")
 
 
@@ -104,7 +139,7 @@ def test_existing_shared_state_root_is_rejected_without_chmod(tmp_path: Path) ->
     root.chmod(0o755)
     before = stat.S_IMODE(root.stat().st_mode)
 
-    with pytest.raises(StateError, match="existing state root permissions"):
+    with pytest.raises(StateError, match="state root permissions"):
         save_session_lock(root, "session", _lock())
 
     assert stat.S_IMODE(root.stat().st_mode) == before

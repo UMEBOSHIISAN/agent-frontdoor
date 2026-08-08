@@ -23,6 +23,25 @@ def state_path(state_root: Path, session_id: str) -> Path:
     return state_root / f"{digest}.json"
 
 
+def _validate_existing_root(state_root: Path, *, missing_ok: bool) -> bool:
+    try:
+        root_stat = state_root.lstat()
+    except FileNotFoundError:
+        if missing_ok:
+            return False
+        raise StateError(f"state root does not exist: {state_root}")
+    except OSError as error:
+        raise StateError(f"unable to inspect state root: {error}") from error
+    if stat.S_ISLNK(root_stat.st_mode) or not stat.S_ISDIR(root_stat.st_mode):
+        raise StateError(f"state root is not a real directory: {state_root}")
+    permissions = stat.S_IMODE(root_stat.st_mode)
+    if permissions != 0o700:
+        raise StateError(
+            f"state root permissions must be 0700, found {permissions:04o}"
+        )
+    return True
+
+
 def _prepare_root(state_root: Path) -> None:
     try:
         created = False
@@ -31,17 +50,9 @@ def _prepare_root(state_root: Path) -> None:
             created = True
         except FileExistsError:
             pass
-        if state_root.is_symlink() or not state_root.is_dir():
-            raise StateError(f"state root is not a directory: {state_root}")
         if created:
             state_root.chmod(0o700)
-            return
-        permissions = stat.S_IMODE(state_root.stat().st_mode)
-        if permissions & 0o077:
-            raise StateError(
-                "existing state root permissions expose group or other access: "
-                f"{permissions:04o}"
-            )
+        _validate_existing_root(state_root, missing_ok=False)
     except StateError:
         raise
     except OSError as error:
@@ -96,10 +107,21 @@ def load_session_lock(
 ) -> IntentLock | None:
     """Load validated state; malformed state is an explicit failure."""
 
+    if not _validate_existing_root(state_root, missing_ok=True):
+        return None
     path = state_path(state_root, session_id)
     try:
-        if not path.exists():
+        try:
+            path_stat = path.lstat()
+        except FileNotFoundError:
             return None
+        if stat.S_ISLNK(path_stat.st_mode) or not stat.S_ISREG(path_stat.st_mode):
+            raise ValueError("state path is not a real regular file")
+        permissions = stat.S_IMODE(path_stat.st_mode)
+        if permissions != 0o600:
+            raise ValueError(
+                f"state file permissions must be 0600, found {permissions:04o}"
+            )
         value = json.loads(path.read_text(encoding="utf-8"))
         if not isinstance(value, dict):
             raise ValueError("state root value must be an object")

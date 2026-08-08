@@ -104,9 +104,15 @@ _AFFIRMATIVE_COMMAND_DIRECTIVE_PATTERN = re.compile(
 _ERROR_TARGET_PATTERNS = tuple(
     re.compile(pattern, re.IGNORECASE)
     for pattern in (
-        r"\bclient\s+for\s+[`'\"]?([A-Za-z0-9][A-Za-z0-9._:@/-]{0,127})",
-        r"\bserver\s+[`'\"]?([A-Za-z0-9][A-Za-z0-9._:@/-]{0,127})",
-        r"\bcomponent\s+[`'\"]?([A-Za-z0-9][A-Za-z0-9._:@/-]{0,127})",
+        r"\bclient\s+for\s+[`'\"]?"
+        r"([A-Za-z0-9][A-Za-z0-9._:@/-]{0,127})"
+        r"[^\r\n]{0,160}\b(?:failed|error|invalid|rejected|not\s+found)\b",
+        r"\b(?:error|failed|invalid|rejected)\b[^\r\n.]{0,80}"
+        r"\b(?:server|component)\s+[`'\"]?"
+        r"([A-Za-z0-9][A-Za-z0-9._:@/-]{0,127})",
+        r"\b(?:server|component)\s+[`'\"]?"
+        r"([A-Za-z0-9][A-Za-z0-9._:@/-]{0,127})"
+        r"[^\r\n.]{0,80}\b(?:failed|error|invalid|rejected|not\s+found)\b",
     )
 )
 _BACKTICK_ERROR_TARGET_PATTERNS = tuple(
@@ -141,6 +147,18 @@ _SAFE_LABEL_PATTERN = re.compile(
 )
 _SECRET_LIKE_PATTERN = re.compile(
     r"(?:^sk-|bearer|password|secret|token|api[_-]?key)",
+    re.IGNORECASE,
+)
+_CREDENTIAL_PREFIX_PATTERN = re.compile(
+    r"^(?:"
+    r"AKIA|ASIA|AIza|gh[oprsu]_|github_pat_|glpat-|sk-|rk_|pk_|"
+    r"xox[baprs]-|ya29\."
+    r")",
+    re.IGNORECASE,
+)
+_SECRET_CONTEXT_PATTERN = re.compile(
+    r"(?:access[ _-]?key|api[ _-]?key|authorization|bearer|password|secret|token)"
+    r"\s*(?:is\s+)?[:=]?\s*[`'\"]?\s*$",
     re.IGNORECASE,
 )
 _ACTION_TOKEN_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:@/-]{0,127}")
@@ -276,12 +294,45 @@ def _extract_error_targets(prompt: str) -> tuple[str, ...]:
     return tuple(targets)
 
 
-def _display_targets(targets: tuple[str, ...]) -> tuple[str, ...]:
+def _credential_shaped(target: str) -> bool:
+    if _CREDENTIAL_PREFIX_PATTERN.search(target):
+        return True
+    if len(target) < 20:
+        return False
+    classes = sum(
+        any(check(character) for character in target)
+        for check in (str.islower, str.isupper, str.isdigit)
+    )
+    return classes >= 2 and len(set(target.casefold())) >= 10
+
+
+def _target_has_secret_context(prompt: str, target: str) -> bool:
+    prompt_folded = prompt.casefold()
+    target_folded = target.casefold()
+    offset = 0
+    while True:
+        index = prompt_folded.find(target_folded, offset)
+        if index < 0:
+            return False
+        prefix = prompt[max(0, index - 64) : index]
+        if _SECRET_CONTEXT_PATTERN.search(prefix):
+            return True
+        offset = index + len(target)
+
+
+def _display_targets(
+    targets: tuple[str, ...],
+    *,
+    prompt: str,
+) -> tuple[str, ...]:
     return tuple(
         target
         for target in targets
         if _SAFE_LABEL_PATTERN.fullmatch(target)
         and not _SECRET_LIKE_PATTERN.search(target)
+        and not _CREDENTIAL_PREFIX_PATTERN.search(target)
+        and not _credential_shaped(target)
+        and not _target_has_secret_context(prompt, target)
     )
 
 
@@ -305,7 +356,7 @@ def _new_lock(
         target_token_sha256=tuple(
             dict.fromkeys(_digest(target.casefold()) for target in targets)
         ),
-        display_targets=_display_targets(targets),
+        display_targets=_display_targets(targets, prompt=prompt),
     )
     lock_from_dict(lock_to_dict(lock))
     return lock

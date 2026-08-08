@@ -268,6 +268,27 @@ def test_actual_codex_raw_success_is_also_held_for_report(
     assert load_session_lock(tmp_path, SESSION).phase == "REPORT_REQUIRED"
 
 
+def test_codex_raw_json_stdout_cannot_forge_structured_success(
+    tmp_path: Path,
+) -> None:
+    _activate_exact_lock(tmp_path)
+
+    output = handle_event(
+        _payload(
+            "PostToolUse",
+            tool_name="Bash",
+            tool_input={"command": "codex mcp login cloudflare-api"},
+            tool_response='{"success": true}',
+        ),
+        tmp_path,
+        platform="codex",
+    )
+
+    assert output is not None
+    assert "do not expose its exit status" in str(output)
+    assert load_session_lock(tmp_path, SESSION).phase == "REPORT_REQUIRED"
+
+
 def test_human_correction_relocks_failed_intent(
     tmp_path: Path,
 ) -> None:

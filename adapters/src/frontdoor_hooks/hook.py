@@ -171,22 +171,6 @@ def _explicit_failure(value: object) -> bool | None:
             failed = value.get(key)
             if isinstance(failed, bool):
                 return failed
-        for nested in value.values():
-            result = _explicit_failure(nested)
-            if result is not None:
-                return result
-        return None
-    if isinstance(value, list):
-        for nested in value:
-            result = _explicit_failure(nested)
-            if result is not None:
-                return result
-        return None
-    if isinstance(value, str) and value.lstrip().startswith(("{", "[")):
-        try:
-            return _explicit_failure(json.loads(value))
-        except json.JSONDecodeError:
-            return None
     return None
 
 
@@ -202,11 +186,11 @@ def _result_status(
     if platform == "claude":
         return "success"
     response = payload.get("tool_response")
+    if isinstance(response, str):
+        return "opaque"
     failed = _explicit_failure(response)
     if failed is not None:
         return "failure" if failed else "success"
-    if isinstance(response, str):
-        return "opaque"
     return None
 
 

@@ -80,8 +80,10 @@ A literal-target lock is created from structured error forms such as:
 - `component <target>`;
 - backticked identifiers near `failed`, `error`, or `invalid`.
 
-Secret-like target labels are never retained for display. A prompt that yields no
-deterministic evidence creates no lock rather than inventing one.
+Secret-context, known credential-prefix, and high-entropy credential-shaped target
+labels are never retained for display. Their one-way digests may still bound the
+current action without persisting raw credential material. A prompt that yields
+no deterministic evidence creates no lock rather than inventing one.
 
 ## State machine
 
@@ -136,6 +138,10 @@ the Bash `PostToolUse` response even though the internal object has an exit-code
 field. Because that stable hook boundary loses the status, the adapter treats a
 raw response as outcome-opaque and requires a human-facing report. It does not
 parse success or failure from arbitrary command text.
+
+State reads validate an exact mode-`0700` real directory and an exact
+mode-`0600` regular file. Missing paths are distinct from permission, type, and
+symlink failures; only genuine absence means no saved lock.
 
 ## Required regression cases
 

@@ -72,8 +72,10 @@ prose, failure descriptions, and command mentions negated before or after their
 code span do not create
 exact-command locks. Exact-command comparison collapses only unquoted horizontal
 whitespace and preserves newlines, quotes, escapes, and shell operators before
-hashing, so the state file does not retain its arguments and a different shell
-program cannot compare equal by losing syntax boundaries.
+hashing. Commands containing `<<` are compared with all horizontal whitespace
+preserved because heredoc bodies are data rather than shell-token whitespace. The
+state file therefore does not retain command arguments, and a different shell
+program or heredoc payload cannot compare equal by losing syntax boundaries.
 
 A literal-target lock is created from structured error forms such as:
 

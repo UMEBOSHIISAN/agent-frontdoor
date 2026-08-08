@@ -248,6 +248,25 @@ def test_explicit_shell_forms_do_not_require_executable_allowlist(
 
 
 @pytest.mark.parametrize(
+    "prompt",
+    [
+        "```\nThis is prose.\nSecond line.\n```",
+        '```\n{"key": "value"}\n```',
+    ],
+)
+def test_unlabeled_non_shell_fences_do_not_create_locks(prompt: str) -> None:
+    assert derive_lock(prompt) is None
+
+
+def test_unlabeled_command_like_fence_still_creates_exact_lock() -> None:
+    command = "git status"
+    lock = derive_lock(f"```\n{command}\n```")
+
+    assert lock is not None
+    assert evaluate_action(lock, command).allowed
+
+
+@pytest.mark.parametrize(
     "command",
     [
         "git status\ngit diff",
@@ -262,6 +281,16 @@ def test_multiline_shell_fence_preserves_exact_command(command: str) -> None:
     assert lock.mode == "EXACT_COMMAND"
     assert evaluate_action(lock, command).allowed
     assert not evaluate_action(lock, command.replace("\n", " ")).allowed
+
+
+def test_heredoc_payload_whitespace_is_preserved_in_exact_hash() -> None:
+    command = "cat <<'EOF'\nall:\n\t@echo hi\nEOF"
+    spaces_instead_of_tab = "cat <<'EOF'\nall:\n    @echo hi\nEOF"
+    lock = derive_lock(f"```bash\n{command}\n```")
+
+    assert lock is not None
+    assert evaluate_action(lock, command).allowed
+    assert not evaluate_action(lock, spaces_instead_of_tab).allowed
 
 
 @pytest.mark.parametrize(

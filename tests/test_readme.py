@@ -218,3 +218,34 @@ def test_readme_documents_intent_lock_without_blurring_authority() -> None:
         "hosted or specialized execution paths",
     ):
         assert boundary in normalized
+
+
+def test_readme_leads_with_intent_lock_reader_flow() -> None:
+    text = _text()
+    ordered_sections = (
+        "## Why Intent Lock exists / なぜ必要か",
+        "## 30-second demo / 30秒デモ",
+        "## Two distributions, separate trust boundaries",
+        "## Safety model: identity is not authority",
+        "## Core quick start",
+        "## Optional runtime hooks",
+        "## Bounded task-card reference",
+    )
+    positions = [text.index(section) for section in ordered_sections]
+    assert positions == sorted(positions)
+
+    for marker in (
+        'denied = evaluate_action(lock, "npx wrangler whoami")',
+        'allowed = evaluate_action(lock, "codex mcp login cloudflare-api")',
+        "False literal_target_mismatch",
+        "True literal_target_match",
+        "Installing the adapter does not activate",
+    ):
+        assert marker in text
+
+    for duplicated_heading in (
+        "# Agent Frontdoor v0",
+        "## English documentation",
+        "## 日本語ドキュメント",
+    ):
+        assert duplicated_heading not in text

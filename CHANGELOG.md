@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added a closed Mothership 0.2.0 conformance manifest, an `intake.v0`
+  synthetic task card, and owner-schema/CLI tests without adding runtime
+  coupling, authority, or execution.
 - Added a standard-library standalone archive verifier for detached, outer-pack,
   and nested-source integrity checks before extraction.
 - Defined a deterministic friend pack and closed public manifest/receipt

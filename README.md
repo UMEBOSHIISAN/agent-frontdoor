@@ -66,6 +66,14 @@ explicit compatibility decision.
 
 契約は `intake.v0` としてバージョン管理されています。スキーマを変える場合は、暗黙に挙動を変えず、互換性の判断として明示的に行います。
 
+### Mothership suite conformance
+
+Agent Frontdoor owns the `frontdoor-task` / `intake.v0` semantics. Mothership
+0.2.0 freezes the exact owner schema bytes for a four-stage, non-executing
+composition check; neither project installs or invokes the other. Reproduce the
+closed owner manifest and synthetic example using
+[`docs/mothership-suite.md`](docs/mothership-suite.md).
+
 ## Quick start / 最短で試す
 
 ```bash

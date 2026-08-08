@@ -206,17 +206,22 @@ def handle_pre_tool(
 
 def _explicit_failure(value: object) -> bool | None:
     if isinstance(value, Mapping):
+        signals: list[bool] = []
         for key in ("exit_code", "exitCode"):
             code = value.get(key)
             if isinstance(code, int) and not isinstance(code, bool):
-                return code != 0
+                signals.append(code != 0)
         success = value.get("success")
         if isinstance(success, bool):
-            return not success
+            signals.append(not success)
         for key in ("isError", "is_error"):
             failed = value.get(key)
             if isinstance(failed, bool):
-                return failed
+                signals.append(failed)
+        if signals:
+            # Fail closed when recognized status fields conflict. A single
+            # explicit failure must never be overridden by another success.
+            return any(signals)
     return None
 
 

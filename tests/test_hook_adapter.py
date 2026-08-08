@@ -5,6 +5,8 @@ from __future__ import annotations
 from pathlib import Path
 from threading import Event, Thread, current_thread
 
+import pytest
+
 import frontdoor_hooks.hook as hook_module
 from frontdoor_hooks.hook import handle_event
 from frontdoor_hooks.state import load_session_lock
@@ -570,6 +572,40 @@ def test_structured_codex_success_releases_and_removes_adapter_state(
 
     assert output is None
     assert load_session_lock(tmp_path, SESSION) is None
+
+
+@pytest.mark.parametrize(
+    "tool_response",
+    [
+        {"exit_code": 0, "success": False},
+        {"exit_code": 0, "isError": True},
+        {"exit_code": 1, "success": True},
+    ],
+)
+def test_conflicting_codex_status_fields_never_release_lock(
+    tmp_path: Path,
+    tool_response: dict[str, object],
+) -> None:
+    _activate_exact_lock(tmp_path)
+    _accept_exact_tool(tmp_path)
+
+    output = handle_event(
+        _payload(
+            "PostToolUse",
+            tool_name="Bash",
+            tool_use_id="accepted-tool",
+            tool_input={"command": "codex mcp login cloudflare-api"},
+            tool_response=tool_response,
+        ),
+        tmp_path,
+        platform="codex",
+    )
+
+    current = load_session_lock(tmp_path, SESSION)
+    assert output is not None
+    assert "report the direct failure" in str(output)
+    assert current is not None
+    assert current.phase == "REPORT_REQUIRED"
 
 
 def test_literal_target_success_stays_locked_without_failure_feedback(

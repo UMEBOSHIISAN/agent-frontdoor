@@ -229,6 +229,42 @@ def test_fenced_shell_command_derives_exact_lock() -> None:
 
 
 @pytest.mark.parametrize(
+    ("prompt", "command"),
+    [
+        ("```bash\nrg TODO src\n```", "rg TODO src"),
+        ("$ ls -la", "ls -la"),
+        ("```bash\nrm -rf build\n```", "rm -rf build"),
+    ],
+)
+def test_explicit_shell_forms_do_not_require_executable_allowlist(
+    prompt: str,
+    command: str,
+) -> None:
+    lock = derive_lock(prompt)
+
+    assert lock is not None
+    assert lock.mode == "EXACT_COMMAND"
+    assert evaluate_action(lock, command).allowed
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "git status\ngit diff",
+        "git status && \\\n  git diff",
+        "if true; then\n  git status\nfi",
+    ],
+)
+def test_multiline_shell_fence_preserves_exact_command(command: str) -> None:
+    lock = derive_lock(f"Run this exact command:\n```bash\n{command}\n```")
+
+    assert lock is not None
+    assert lock.mode == "EXACT_COMMAND"
+    assert evaluate_action(lock, command).allowed
+    assert not evaluate_action(lock, command.replace("\n", " ")).allowed
+
+
+@pytest.mark.parametrize(
     "prompt",
     [
         "Do not run this command:\n```bash\ngit status\n```",

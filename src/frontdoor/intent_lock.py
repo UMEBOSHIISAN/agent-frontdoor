@@ -86,8 +86,8 @@ _NATURAL_COMMAND_PATTERN = re.compile(
     r"(?:してや|して|やって|お願い(?:します)?)\s*[。.!！]?\s*$"
 )
 _FENCED_COMMAND_PATTERN = re.compile(
-    r"```(?:bash|sh|zsh|shell)?[ \t]*\r?\n([^\r\n]+)\r?\n```",
-    re.IGNORECASE,
+    r"```(?:bash|sh|zsh|shell)?[ \t]*\r?\n(.*?)\r?\n```",
+    re.IGNORECASE | re.DOTALL,
 )
 _INLINE_CODE_PATTERN = re.compile(r"`{1,3}([^`\r\n]+)`{1,3}")
 _SHELL_LINE_PATTERN = re.compile(r"(?m)^\s*\$\s+([^\r\n]+)$")
@@ -357,7 +357,7 @@ def _extract_exact_command(prompt: str) -> str | None:
                 _AFFIRMATIVE_COMMAND_DIRECTIVE_PATTERN.search(prefix)
             )
             if (
-                _looks_like_command(candidate)
+                candidate
                 and not is_negated
                 and (is_standalone or is_affirmative)
             ):
@@ -394,7 +394,7 @@ def _extract_negated_command(prompt: str) -> str | None:
             is_negated = bool(
                 _NEGATED_COMMAND_DIRECTIVE_PATTERN.search(prefix)
             ) or _post_command_is_negated(prompt, match.end())
-            if _looks_like_command(candidate) and is_negated:
+            if candidate and is_negated:
                 return _normalized_command(candidate)
 
     for match in _INLINE_CODE_PATTERN.finditer(prompt):

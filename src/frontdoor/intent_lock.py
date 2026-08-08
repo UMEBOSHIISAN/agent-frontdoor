@@ -150,7 +150,7 @@ _TERMINAL_COMMAND_CANCELLATION_PATTERN = re.compile(
 )
 _STANDALONE_CANCELLATION_PATTERN = re.compile(
     r"(?:"
-    r"stop|abort|(?:cancel|ignore|skip)(?:\s+it)?"
+    r"(?:stop|abort|cancel|ignore|skip)(?:\s+(?:it|this|that))?"
     r"|(?:do\s+not|don't|never)\s+do\s+it"
     r"|やっぱりやめて|やめて|中止して|キャンセルして|実行しないで|実行するな"
     r")[。.!！ ]*",
@@ -388,7 +388,11 @@ def _extract_exact_command(prompt: str) -> str | None:
             )
             if (
                 candidate.strip()
-                and (explicit_shell or _looks_like_command(candidate))
+                and (
+                    explicit_shell
+                    or _looks_like_command(candidate)
+                    or (is_affirmative and bool(_command_parts(candidate)))
+                )
                 and not is_negated
                 and (is_standalone or is_affirmative)
             ):
@@ -405,7 +409,10 @@ def _extract_exact_command(prompt: str) -> str | None:
             _AFFIRMATIVE_COMMAND_DIRECTIVE_PATTERN.search(prefix)
         )
         if (
-            _looks_like_command(candidate)
+            (
+                _looks_like_command(candidate)
+                or (is_affirmative and bool(_command_parts(candidate)))
+            )
             and not is_negated
             and (is_standalone or is_affirmative)
         ):
@@ -432,7 +439,11 @@ def _extract_negated_command(prompt: str) -> str | None:
             ) or _post_command_is_negated(prompt, match.end())
             if (
                 candidate.strip()
-                and (explicit_shell or _looks_like_command(candidate))
+                and (
+                    explicit_shell
+                    or _looks_like_command(candidate)
+                    or bool(_command_parts(candidate))
+                )
                 and is_negated
             ):
                 return _normalized_command(candidate)
@@ -443,7 +454,9 @@ def _extract_negated_command(prompt: str) -> str | None:
         is_negated = bool(
             _NEGATED_COMMAND_DIRECTIVE_PATTERN.search(prefix)
         ) or _post_command_is_negated(prompt, match.end())
-        if _looks_like_command(candidate) and is_negated:
+        if (
+            _looks_like_command(candidate) or bool(_command_parts(candidate))
+        ) and is_negated:
             return _normalized_command(candidate)
     return None
 

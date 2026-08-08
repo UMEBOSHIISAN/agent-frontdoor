@@ -469,6 +469,35 @@ def test_explicit_one_word_commands_create_exact_locks(
     assert evaluate_action(lock, command).allowed
 
 
+@pytest.mark.parametrize(
+    "command",
+    [
+        "pytest -q",
+        "rg TODO .",
+        "ls -la",
+        "brew update",
+        "sudo apt update",
+        "custom-tool --check",
+    ],
+)
+def test_affirmative_inline_commands_do_not_depend_on_executable_list(
+    command: str,
+) -> None:
+    lock = derive_lock(f"Run `{command}`.")
+
+    assert lock is not None
+    assert lock.mode == "EXACT_COMMAND"
+    assert evaluate_action(lock, command).allowed
+
+
+def test_affirmative_unlabeled_fence_accepts_explicit_custom_command() -> None:
+    command = "custom-tool --check"
+    lock = derive_lock(f"Run this exact command:\n```\n{command}\n```")
+
+    assert lock is not None
+    assert evaluate_action(lock, command).allowed
+
+
 def test_unknown_one_word_code_is_not_assumed_to_be_a_command() -> None:
     assert derive_lock("`status`") is None
 
@@ -695,6 +724,16 @@ def test_unrelated_plain_command_cancellation_does_not_hold_active_lock() -> Non
     assert derive_lock("Do not run git diff.", previous=previous) is None
 
 
+def test_explicit_custom_command_cancellation_holds_matching_lock() -> None:
+    previous = derive_lock("Run `custom-tool --check`.")
+    assert previous is not None
+
+    held = derive_lock("Do not run `custom-tool --check`.", previous=previous)
+
+    assert held is not None
+    assert held.phase == "REPORT_REQUIRED"
+
+
 @pytest.mark.parametrize(
     "prompt",
     [
@@ -742,8 +781,11 @@ def test_unrelated_post_correction_prohibition_still_relocks(
     "prompt",
     [
         "stop",
+        "stop it",
+        "stop this",
         "cancel it",
         "abort",
+        "abort it",
         "skip it",
         "do not do it",
         "やめて",

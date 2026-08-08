@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Added the pure `intent-lock.v1` schema and deterministic task-identity state
+  machine for exact commands and literal error targets.
+- Added the separate optional `agent-frontdoor-hooks` distribution with Codex
+  and Claude Code lifecycle adapters, private atomic state, platform fixtures,
+  and fail-closed regression coverage.
+- Added inert configuration examples and activation/removal documentation. The
+  adapter is not activated in local agent settings by this repository.
 - Added a standard-library standalone archive verifier for detached, outer-pack,
   and nested-source integrity checks before extraction.
 - Defined a deterministic friend pack and closed public manifest/receipt

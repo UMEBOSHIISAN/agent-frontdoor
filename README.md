@@ -66,6 +66,34 @@ explicit compatibility decision.
 
 契約は `intake.v0` としてバージョン管理されています。スキーマを変える場合は、暗黙に挙動を変えず、互換性の判断として明示的に行います。
 
+## Intent Lock / 脱線防止
+
+The pure `intent-lock.v1` API keeps a proposed tool action attached to a literal
+command or error target. It was added after repeated excessive derailment showed
+that otherwise reasonable product, documentation, and authentication procedures
+could combine without a common task-identity invariant. Intent matching does
+not grant authority; every independent permission, safety, and human gate still
+applies.
+
+The core package remains read-only. Runtime state and platform event handling are
+kept in the separately installable, optional sibling distribution
+`agent-frontdoor-hooks`. See [`docs/INTENT_LOCK.md`](docs/INTENT_LOCK.md) for the
+contract and [`adapters/README.md`](adapters/README.md) for reviewed installation,
+configuration, and removal steps.
+
+Codex and Claude Code examples are shipped as inert files at
+`adapters/examples/codex-hooks.json` and
+`adapters/examples/claude-settings.json`. They invoke
+`agent-frontdoor-hook --platform codex` and
+`agent-frontdoor-hook --platform claude`, respectively. Installing the adapter
+does not activate either example or edit live settings.
+
+Local hooks are a strong guardrail, not a security boundary: hosted or specialized
+execution paths may fall outside their coverage. Current independent CC review is
+recorded as `CC_UNAUDITED`; the label is disclosure rather than proof.
+
+`intent-lock.v1` は、明示コマンドまたはエラー対象と次のツール操作を同じ依頼に固定する純粋な契約です。同じ依頼との一致は権限を付与せず、既存の許可・安全・人間承認ゲートを一切迂回しません。コアは読み取り専用のままで、状態保存と Codex / Claude Code のイベント差分は任意の別配布 `agent-frontdoor-hooks` に隔離されています。
+
 ## Quick start / 最短で試す
 
 ```bash
@@ -150,13 +178,13 @@ checks in the validator.
 
 ## Safety boundary
 
-Agent Frontdoor performs preflight only. The package has:
+Agent Frontdoor's core distribution performs preflight only. The package has:
 
 - no task execution;
 - no network requests;
 - no worker invocation;
 - no automatic routing;
-- no runtime, daemon, server, or hook integration;
+- no runtime, daemon, server, or hook integration in the core distribution;
 - no deployment, scheduler mutation, secret access, or authority grant;
 - no task-file writes or repair fallback.
 
@@ -378,9 +406,12 @@ The public local interfaces are:
 ```python
 from frontdoor.boundary_drift import detect_boundary_drift
 from frontdoor.formatter import format_card, format_explanation
+from frontdoor.intent_lock import derive_lock, evaluate_action, record_result
 from frontdoor.validator import load_card, validate_card
 ```
 
 `load_card` reads one local JSON file and returns the loaded value plus a typed
 validation result. `validate_card` and `detect_boundary_drift` are deterministic
-and do not mutate their inputs.
+and do not mutate their inputs. `derive_lock`, `evaluate_action`, and
+`record_result` are pure intent-state operations; filesystem lifecycle support is
+available only from the separate `agent-frontdoor-hooks` distribution.

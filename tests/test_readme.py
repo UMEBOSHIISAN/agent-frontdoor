@@ -195,3 +195,26 @@ def test_readme_has_no_legacy_schema_references_or_stale_counts() -> None:
     assert not re.search(r"\b\d+\s+tests?\s+pass(?:ed)?\b", text, re.IGNORECASE)
     assert "READ_ONLY_AUDIT" not in text
     assert "predicted_worker`" not in text
+
+
+def test_readme_documents_intent_lock_without_blurring_authority() -> None:
+    text = _text()
+    normalized = " ".join(text.split())
+    for marker in (
+        "docs/INTENT_LOCK.md",
+        "agent-frontdoor-hooks",
+        "adapters/README.md",
+        "adapters/examples/codex-hooks.json",
+        "adapters/examples/claude-settings.json",
+        "agent-frontdoor-hook --platform codex",
+        "agent-frontdoor-hook --platform claude",
+        "CC_UNAUDITED",
+    ):
+        assert marker in text
+    for boundary in (
+        "does not grant authority",
+        "core package remains read-only",
+        "optional sibling distribution",
+        "hosted or specialized execution paths",
+    ):
+        assert boundary in normalized

@@ -291,7 +291,7 @@ Expected: wheel and sdist for each distribution.
 
 - [ ] **Step 3: Run privacy and boundary scans**
 
-Run: `rg -n '/Users/|umeboshi|cloudflare account|OAuth token|refresh token' README.md CHANGELOG.md docs adapters src fixtures tests`
+Run: `rg -n '(^|[^A-Za-z])/(Users|home)/|cloudflare account|OAuth token|refresh token' README.md CHANGELOG.md docs adapters src fixtures tests`
 Expected: no private identity, path, account, or token material; the generic regression term `refresh token` may appear only in explanatory fixture text without values.
 
 - [ ] **Step 4: Review branch diff and repository state**

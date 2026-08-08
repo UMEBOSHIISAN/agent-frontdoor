@@ -3,7 +3,7 @@
   "allowed_action": "codex mcp login cloudflare-api",
   "denied_actions": [
     "npx wrangler whoami",
-    "npm create cloudflare@latest new-worker",
+    "npm create cloudflare new-worker",
     "rg --files -g wrangler.toml"
   ],
   "expected_mode": "LITERAL_TARGET",

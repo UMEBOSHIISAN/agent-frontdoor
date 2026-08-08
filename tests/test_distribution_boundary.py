@@ -12,6 +12,8 @@ ATTRIBUTES = ROOT / ".gitattributes"
 FRIEND_LAB = ROOT / "docs" / "FRIEND_LAB.md"
 CHANGELOG = ROOT / "CHANGELOG.md"
 PYPROJECT = ROOT / "pyproject.toml"
+ADAPTER_PYPROJECT = ROOT / "adapters" / "pyproject.toml"
+ADAPTER_README = ROOT / "adapters" / "README.md"
 
 
 def test_export_ignore_contains_only_lab_orchestration_boundaries() -> None:
@@ -101,3 +103,22 @@ def test_changelog_records_unreleased_release_hardening() -> None:
     ):
         assert item in text
     assert "## 0.1.0" in text
+
+
+def test_hook_adapter_is_a_separate_optional_distribution() -> None:
+    core = PYPROJECT.read_text(encoding="utf-8")
+    adapter = ADAPTER_PYPROJECT.read_text(encoding="utf-8")
+
+    assert 'name = "agent-frontdoor"' in core
+    assert "agent-frontdoor-hook" not in core
+    assert 'name = "agent-frontdoor-hooks"' in adapter
+    assert 'dependencies = ["agent-frontdoor>=0.1.0,<0.2"]' in adapter
+    assert 'agent-frontdoor-hook = "frontdoor_hooks.hook:main"' in adapter
+    assert ADAPTER_README.exists()
+
+
+def test_changelog_records_intent_lock_as_unreleased_and_unactivated() -> None:
+    text = CHANGELOG.read_text(encoding="utf-8")
+    assert "intent-lock.v1" in text
+    assert "agent-frontdoor-hooks" in text
+    assert "not activated in local agent settings" in text

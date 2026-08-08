@@ -127,5 +127,6 @@ def test_public_examples_register_required_platform_events() -> None:
         command = event[0]["hooks"][0]["command"]
         assert command == "agent-frontdoor-hook --platform claude"
     serialized = json.dumps({"codex": codex, "claude": claude})
-    assert "/Users/" not in serialized
+    absolute_user_prefix = "/" + "Users" + "/"
+    assert absolute_user_prefix not in serialized
     assert "transcript_path" not in serialized

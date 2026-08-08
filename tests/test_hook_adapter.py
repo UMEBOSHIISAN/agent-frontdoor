@@ -101,6 +101,34 @@ def test_pre_tool_denies_lateral_target_and_silently_accepts_match(
     assert matched is None
 
 
+def test_exact_command_requires_a_known_shell_tool_identity(tmp_path: Path) -> None:
+    _activate_exact_lock(tmp_path)
+    command = "codex mcp login cloudflare-api"
+
+    unrelated = handle_event(
+        _payload(
+            "PreToolUse",
+            tool_name="mcp__example__run",
+            tool_input={"command": command},
+        ),
+        tmp_path,
+        platform="codex",
+    )
+    unified_exec = handle_event(
+        _payload(
+            "PreToolUse",
+            tool_name="exec_command",
+            tool_input={"cmd": command},
+        ),
+        tmp_path,
+        platform="codex",
+    )
+
+    assert unrelated is not None
+    assert unrelated["hookSpecificOutput"]["permissionDecision"] == "deny"
+    assert unified_exec is None
+
+
 def test_codex_failed_post_tool_requires_report_and_blocks_next_tool(
     tmp_path: Path,
 ) -> None:
@@ -128,11 +156,6 @@ def test_codex_failed_post_tool_requires_report_and_blocks_next_tool(
     )
 
     assert feedback == {
-        "decision": "block",
-        "reason": (
-            "The direct action failed. Report that result to the human before "
-            "using another tool."
-        ),
         "hookSpecificOutput": {
             "hookEventName": "PostToolUse",
             "additionalContext": (

@@ -115,6 +115,19 @@ def test_hook_adapter_is_a_separate_optional_distribution() -> None:
     assert 'dependencies = ["agent-frontdoor>=0.1.0,<0.2"]' in adapter
     assert 'agent-frontdoor-hook = "frontdoor_hooks.hook:main"' in adapter
     assert ADAPTER_README.exists()
+    adapter_readme = ADAPTER_README.read_text(encoding="utf-8")
+    assert "/ABSOLUTE/PATH/TO/REVIEWED/VENV/bin/agent-frontdoor-hook" in (
+        adapter_readme
+    )
+    assert "replace the placeholder" in adapter_readme
+
+
+def test_both_distributions_use_current_spdx_license_metadata() -> None:
+    for path in (PYPROJECT, ADAPTER_PYPROJECT):
+        pyproject = path.read_text(encoding="utf-8")
+        assert 'requires = ["setuptools>=77"]' in pyproject
+        assert 'license = "MIT"' in pyproject
+        assert "license = {text" not in pyproject
 
 
 def test_changelog_records_intent_lock_as_unreleased_and_unactivated() -> None:

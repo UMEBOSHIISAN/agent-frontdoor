@@ -24,13 +24,19 @@ from frontdoor_hooks.state import (
 )
 
 
-_REPORT_REASON = (
-    "The direct action failed. Report that result to the human before using "
-    "another tool."
-)
 _REPORT_CONTEXT = (
     "INTENT_LOCK_REPORT_REQUIRED: report the direct failure; do not try an "
     "alternative tool or subsystem."
+)
+_SHELL_TOOL_NAMES = frozenset(
+    {
+        "bash",
+        "shell",
+        "exec_command",
+        "functions.exec",
+        "functions.exec_command",
+        "unified_exec",
+    }
 )
 
 
@@ -51,13 +57,18 @@ def _session_id(payload: Mapping[str, object]) -> str | None:
 
 def _tool_action(payload: Mapping[str, object]) -> str:
     tool_input = payload.get("tool_input")
-    if isinstance(tool_input, Mapping):
+    tool_name = payload.get("tool_name")
+    is_shell_tool = (
+        isinstance(tool_name, str)
+        and tool_name.casefold() in _SHELL_TOOL_NAMES
+    )
+    if is_shell_tool and isinstance(tool_input, Mapping):
         for key in ("command", "cmd"):
             value = tool_input.get(key)
             if isinstance(value, str):
                 return value
     envelope = {
-        "tool_name": payload.get("tool_name"),
+        "tool_name": tool_name,
         "tool_input": tool_input,
     }
     return json.dumps(
@@ -189,16 +200,7 @@ def _failure_status(
     return _explicit_failure(payload.get("tool_response"))
 
 
-def _failure_feedback(event: str, platform: str) -> dict[str, object]:
-    if platform == "codex":
-        return {
-            "decision": "block",
-            "reason": _REPORT_REASON,
-            "hookSpecificOutput": {
-                "hookEventName": "PostToolUse",
-                "additionalContext": _REPORT_CONTEXT,
-            },
-        }
+def _failure_feedback(event: str) -> dict[str, object]:
     return {
         "hookSpecificOutput": {
             "hookEventName": event,
@@ -235,7 +237,7 @@ def handle_tool_result(
         return None
     save_session_lock(state_root, session_id, updated)
     event = str(payload.get("hook_event_name"))
-    return _failure_feedback(event, platform)
+    return _failure_feedback(event)
 
 
 def handle_session_end(

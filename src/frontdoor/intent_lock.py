@@ -80,8 +80,13 @@ _EXECUTABLE_ALTERNATION = "|".join(
     sorted(_COMMAND_EXECUTABLES, key=len, reverse=True)
 )
 _NATURAL_COMMAND_PATTERN = re.compile(
-    rf"(?<![A-Za-z0-9_./-])(?P<command>(?:{_EXECUTABLE_ALTERNATION})"
+    rf"^\s*(?P<command>(?:{_EXECUTABLE_ALTERNATION})"
     r"(?:[ \t]+[A-Za-z0-9_./:@%+=,-]+){1,15})"
+    r"(?:してや|して|やって|お願い(?:します)?)\s*[。.!！]?\s*$"
+)
+_FENCED_COMMAND_PATTERN = re.compile(
+    r"```(?:bash|sh|zsh|shell)?[ \t]*\r?\n([^\r\n]+)\r?\n```",
+    re.IGNORECASE,
 )
 _INLINE_CODE_PATTERN = re.compile(r"`{1,3}([^`\r\n]+)`{1,3}")
 _SHELL_LINE_PATTERN = re.compile(r"(?m)^\s*\$\s+([^\r\n]+)$")
@@ -91,6 +96,15 @@ _ERROR_TARGET_PATTERNS = tuple(
         r"\bclient\s+for\s+[`'\"]?([A-Za-z0-9][A-Za-z0-9._:@/-]{0,127})",
         r"\bserver\s+[`'\"]?([A-Za-z0-9][A-Za-z0-9._:@/-]{0,127})",
         r"\bcomponent\s+[`'\"]?([A-Za-z0-9][A-Za-z0-9._:@/-]{0,127})",
+    )
+)
+_BACKTICK_ERROR_TARGET_PATTERNS = tuple(
+    re.compile(pattern, re.IGNORECASE)
+    for pattern in (
+        r"\b(?:failed|error|invalid)\b[^`\r\n]{0,80}`"
+        r"([A-Za-z0-9][A-Za-z0-9._:@/-]{0,127})`",
+        r"`([A-Za-z0-9][A-Za-z0-9._:@/-]{0,127})`"
+        r"[^`\r\n]{0,80}\b(?:failed|error|invalid)\b",
     )
 )
 _CORRECTION_PATTERN = re.compile(
@@ -121,17 +135,53 @@ def _digest(value: str) -> str:
 
 
 def _normalized_command(value: str) -> str:
+    """Collapse only unquoted whitespace while preserving shell syntax."""
+
     candidate = value.strip()
-    try:
-        parts = shlex.split(candidate, posix=True)
-    except ValueError:
-        parts = candidate.split()
-    return " ".join(parts)
+    normalized: list[str] = []
+    quote: str | None = None
+    escaped = False
+    pending_space = False
+    for character in candidate:
+        if escaped:
+            if pending_space and normalized:
+                normalized.append(" ")
+                pending_space = False
+            normalized.append(character)
+            escaped = False
+            continue
+        if character == "\\" and quote != "'":
+            if pending_space and normalized:
+                normalized.append(" ")
+                pending_space = False
+            normalized.append(character)
+            escaped = True
+            continue
+        if character in {"'", '"'}:
+            if quote is None:
+                if pending_space and normalized:
+                    normalized.append(" ")
+                    pending_space = False
+                quote = character
+            elif quote == character:
+                quote = None
+            normalized.append(character)
+            continue
+        if character.isspace() and quote is None:
+            pending_space = True
+            continue
+        if pending_space and normalized:
+            normalized.append(" ")
+            pending_space = False
+        normalized.append(character)
+    return "".join(normalized)
 
 
 def _command_parts(value: str) -> tuple[str, ...]:
-    normalized = _normalized_command(value)
-    return tuple(normalized.split())
+    try:
+        return tuple(shlex.split(_normalized_command(value), posix=True))
+    except ValueError:
+        return ()
 
 
 def _looks_like_command(value: str) -> bool:
@@ -147,13 +197,17 @@ def _looks_like_command(value: str) -> bool:
 
 
 def _extract_exact_command(prompt: str) -> str | None:
-    for pattern in (_SHELL_LINE_PATTERN, _INLINE_CODE_PATTERN):
+    for pattern in (
+        _FENCED_COMMAND_PATTERN,
+        _SHELL_LINE_PATTERN,
+        _INLINE_CODE_PATTERN,
+    ):
         for match in pattern.finditer(prompt):
             candidate = match.group(1).strip()
             if _looks_like_command(candidate):
                 return _normalized_command(candidate)
 
-    match = _NATURAL_COMMAND_PATTERN.search(prompt)
+    match = _NATURAL_COMMAND_PATTERN.fullmatch(prompt)
     if match:
         return _normalized_command(match.group("command"))
     return None
@@ -171,7 +225,7 @@ def _command_target(command: str) -> str | None:
 
 def _extract_error_targets(prompt: str) -> tuple[str, ...]:
     targets: list[str] = []
-    for pattern in _ERROR_TARGET_PATTERNS:
+    for pattern in (*_ERROR_TARGET_PATTERNS, *_BACKTICK_ERROR_TARGET_PATTERNS):
         for match in pattern.finditer(prompt):
             target = match.group(1).rstrip(".:,;")
             if target not in targets:

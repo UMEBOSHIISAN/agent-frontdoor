@@ -83,9 +83,9 @@ def load_session_lock(
     """Load validated state; malformed state is an explicit failure."""
 
     path = state_path(state_root, session_id)
-    if not path.exists():
-        return None
     try:
+        if not path.exists():
+            return None
         value = json.loads(path.read_text(encoding="utf-8"))
         if not isinstance(value, dict):
             raise ValueError("state root value must be an object")

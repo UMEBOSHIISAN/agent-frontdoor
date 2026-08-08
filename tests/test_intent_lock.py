@@ -42,6 +42,21 @@ def test_structured_error_derives_literal_target_without_raw_prompt() -> None:
     assert "refresh token" not in serialized
 
 
+@pytest.mark.parametrize(
+    "prompt",
+    [
+        "Error: `cloudflare-api` failed during startup",
+        "The identifier `cloudflare-api` is invalid",
+    ],
+)
+def test_backticked_identifier_near_error_word_derives_target(prompt: str) -> None:
+    lock = derive_lock(prompt)
+
+    assert lock is not None
+    assert lock.mode == "LITERAL_TARGET"
+    assert lock.display_targets == ("cloudflare-api",)
+
+
 def test_target_lock_denies_adjacent_product_and_allows_literal_target() -> None:
     lock = derive_lock(ERROR_PROMPT)
     assert lock is not None
@@ -75,6 +90,54 @@ def test_natural_language_exact_command_requires_exact_normalized_action() -> No
     assert not evaluate_action(lock, "npx wrangler whoami").allowed
     serialized = json.dumps(lock_to_dict(lock), sort_keys=True)
     assert "codex mcp login" not in serialized
+
+
+def test_fenced_shell_command_derives_exact_lock() -> None:
+    lock = derive_lock(
+        "Run this exact command:\n"
+        "```bash\n"
+        "codex mcp login cloudflare-api\n"
+        "```"
+    )
+
+    assert lock is not None
+    assert lock.mode == "EXACT_COMMAND"
+    assert evaluate_action(lock, "codex mcp login cloudflare-api").allowed
+
+
+@pytest.mark.parametrize(
+    "prompt",
+    [
+        "Run git status please.",
+        "git status please",
+        "Don't run git status; run git diff.",
+        "The error mentions git status but do not execute it.",
+    ],
+)
+def test_prose_and_negated_command_mentions_do_not_create_exact_locks(
+    prompt: str,
+) -> None:
+    assert derive_lock(prompt) is None
+
+
+@pytest.mark.parametrize(
+    ("locked_command", "different_action"),
+    [
+        ("git add 'foo bar'", "git add foo bar"),
+        ("git add 'foo; touch /tmp/other'", "git add foo; touch /tmp/other"),
+        ("bash -c 'echo safe; exit 1'", "bash -c echo safe; exit 1"),
+        ("git add '>'", "git add >"),
+    ],
+)
+def test_exact_command_hash_preserves_quotes_and_shell_boundaries(
+    locked_command: str,
+    different_action: str,
+) -> None:
+    lock = derive_lock(f"`{locked_command}`")
+    assert lock is not None
+
+    assert evaluate_action(lock, locked_command).allowed
+    assert not evaluate_action(lock, different_action).allowed
 
 
 def test_failed_matching_action_requires_report_before_any_other_tool() -> None:

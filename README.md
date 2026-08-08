@@ -83,7 +83,8 @@ configuration, and removal steps.
 
 Codex and Claude Code examples are shipped as inert files at
 `adapters/examples/codex-hooks.json` and
-`adapters/examples/claude-settings.json`. They invoke
+`adapters/examples/claude-settings.json`. After replacing their reviewed absolute
+virtual-environment placeholder, they invoke
 `agent-frontdoor-hook --platform codex` and
 `agent-frontdoor-hook --platform claude`, respectively. Installing the adapter
 does not activate either example or edit live settings.

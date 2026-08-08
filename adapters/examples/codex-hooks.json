@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "agent-frontdoor-hook --platform codex",
+            "command": "/ABSOLUTE/PATH/TO/REVIEWED/VENV/bin/agent-frontdoor-hook --platform codex",
             "timeout": 5,
             "statusMessage": "Locking literal task intent"
           }
@@ -19,7 +19,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "agent-frontdoor-hook --platform codex",
+            "command": "/ABSOLUTE/PATH/TO/REVIEWED/VENV/bin/agent-frontdoor-hook --platform codex",
             "timeout": 5,
             "statusMessage": "Checking task identity"
           }
@@ -32,7 +32,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "agent-frontdoor-hook --platform codex",
+            "command": "/ABSOLUTE/PATH/TO/REVIEWED/VENV/bin/agent-frontdoor-hook --platform codex",
             "timeout": 5,
             "statusMessage": "Recording direct action result"
           }
@@ -44,7 +44,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "agent-frontdoor-hook --platform codex",
+            "command": "/ABSOLUTE/PATH/TO/REVIEWED/VENV/bin/agent-frontdoor-hook --platform codex",
             "timeout": 1
           }
         ]

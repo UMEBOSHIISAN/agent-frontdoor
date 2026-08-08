@@ -30,8 +30,13 @@ Merge the event entries from
 Codex hook configuration. Each entry invokes:
 
 ```bash
-agent-frontdoor-hook --platform codex
+/ABSOLUTE/PATH/TO/REVIEWED/VENV/bin/agent-frontdoor-hook --platform codex
 ```
+
+Before merging the example, replace the placeholder
+`/ABSOLUTE/PATH/TO/REVIEWED/VENV` with the absolute path to the reviewed virtual
+environment created during installation. Do not rely on an interactive shell's
+`PATH`; hook processes may receive a different environment.
 
 The example covers `UserPromptSubmit`, `PreToolUse`, `PostToolUse`, and
 `SessionEnd`. Codex reports command results through `PostToolUse`, so the adapter
@@ -44,7 +49,7 @@ Merge the event entries from
 operator-owned Claude Code settings. Each entry invokes:
 
 ```bash
-agent-frontdoor-hook --platform claude
+/ABSOLUTE/PATH/TO/REVIEWED/VENV/bin/agent-frontdoor-hook --platform claude
 ```
 
 The example also covers `PostToolUseFailure`, which Claude Code emits separately
@@ -77,11 +82,14 @@ removing anything.
 
 ## What the lock enforces
 
-- A direct exact command permits only the normalized exact command.
+- A direct exact command permits only the same command syntax, with differences
+  limited to unquoted whitespace. Quotes, escapes, and shell operators remain
+  significant.
 - A structured error target permits only actions containing the same literal
   target tokens.
-- A failed matching action enters `REPORT_REQUIRED`; the next tool is denied
-  until the failure is surfaced to the human.
+- A failed matching action enters `REPORT_REQUIRED`; Codex retains the original
+  result for reporting, and the next tool is denied until the failure is
+  surfaced to the human.
 - A same-intent match emits no allow decision. Separate permission and authority
   hooks remain independent and may still deny the action.
 

@@ -63,9 +63,12 @@ filename and writes only validated contract JSON.
 ## Deterministic derivation
 
 An exact-command lock is created from a shell-looking command in a fenced block,
-inline code, `$`-prefixed line, or a bounded natural-language command beginning
-with a recognized CLI executable. Exact-command comparison hashes the normalized
-command, so the state file does not retain its arguments.
+inline code, `$`-prefixed line, or a recognized CLI command followed by a bounded
+Japanese request suffix such as `してや`. Free prose, trailing English prose, and
+negated command mentions do not create exact-command locks. Exact-command
+comparison collapses only unquoted whitespace and preserves quotes, escapes, and
+shell operators before hashing, so the state file does not retain its arguments
+and a different shell program cannot compare equal by losing syntax boundaries.
 
 A literal-target lock is created from structured error forms such as:
 
@@ -89,7 +92,7 @@ new explicit command/error -> new epoch and replacement lock
 new substantive unrelated prompt -> prior lock released
 ```
 
-In `EXACT_COMMAND` mode, only the normalized exact command is accepted. In
+In `EXACT_COMMAND` mode, only the syntax-preserving exact command is accepted. In
 `LITERAL_TARGET` mode, every proposed local tool action must contain all target
 tokens. This prevents `cloudflare-api` from becoming an unqualified `wrangler`
 action without trying to infer semantic equivalence.
@@ -101,7 +104,8 @@ The optional adapter consumes hook JSON from stdin and supports:
 - `UserPromptSubmit`: derive, replace, preserve, or release the session lock;
 - `PreToolUse`: deny mismatched actions with the current documented
   `hookSpecificOutput.permissionDecision = deny` shape;
-- Codex `PostToolUse`: detect a failed direct action and require a report;
+- Codex `PostToolUse`: detect a failed direct action, preserve the original tool
+  result, and add report-required context;
 - Claude Code `PostToolUse`: process successful calls;
 - Claude Code `PostToolUseFailure`: require a report after failures;
 - `SessionEnd`: remove only the hashed state file for that session.
@@ -109,6 +113,9 @@ The optional adapter consumes hook JSON from stdin and supports:
 The adapter does not execute workers, commands, network requests, retries, repairs,
 or alternative routes. Multiple-hook authority remains independent; a same-task
 allow decision is represented by silence, never an authority-granting `allow`.
+Only recognized shell-tool identities may supply the raw command used for an
+exact-command comparison; an unrelated function or MCP tool with a coincidental
+`command` field retains its full envelope and does not match.
 
 ## Platform limits
 

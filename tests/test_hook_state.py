@@ -77,6 +77,19 @@ def test_invalid_state_fails_closed_instead_of_becoming_no_lock(
         load_session_lock(tmp_path, "session")
 
 
+def test_state_inspection_error_is_translated_to_state_error(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def deny_inspection(_path: Path) -> bool:
+        raise PermissionError("synthetic unreadable state path")
+
+    monkeypatch.setattr(Path, "exists", deny_inspection)
+
+    with pytest.raises(StateError, match="invalid intent-lock state"):
+        load_session_lock(tmp_path, "session")
+
+
 def test_state_root_file_is_rejected(tmp_path: Path) -> None:
     root = tmp_path / "not-a-directory"
     root.write_text("occupied", encoding="utf-8")

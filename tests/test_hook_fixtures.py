@@ -122,10 +122,16 @@ def test_public_examples_register_required_platform_events() -> None:
     }
     for event in codex["hooks"].values():
         command = event[0]["hooks"][0]["command"]
-        assert command == "agent-frontdoor-hook --platform codex"
+        assert command == (
+            "/ABSOLUTE/PATH/TO/REVIEWED/VENV/bin/agent-frontdoor-hook "
+            "--platform codex"
+        )
     for event in claude["hooks"].values():
         command = event[0]["hooks"][0]["command"]
-        assert command == "agent-frontdoor-hook --platform claude"
+        assert command == (
+            "/ABSOLUTE/PATH/TO/REVIEWED/VENV/bin/agent-frontdoor-hook "
+            "--platform claude"
+        )
     serialized = json.dumps({"codex": codex, "claude": claude})
     absolute_user_prefix = "/" + "Users" + "/"
     assert absolute_user_prefix not in serialized

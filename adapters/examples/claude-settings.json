@@ -5,7 +5,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "agent-frontdoor-hook --platform claude",
+            "command": "/ABSOLUTE/PATH/TO/REVIEWED/VENV/bin/agent-frontdoor-hook --platform claude",
             "timeout": 5
           }
         ]
@@ -17,7 +17,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "agent-frontdoor-hook --platform claude",
+            "command": "/ABSOLUTE/PATH/TO/REVIEWED/VENV/bin/agent-frontdoor-hook --platform claude",
             "timeout": 5
           }
         ]
@@ -29,7 +29,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "agent-frontdoor-hook --platform claude",
+            "command": "/ABSOLUTE/PATH/TO/REVIEWED/VENV/bin/agent-frontdoor-hook --platform claude",
             "timeout": 5
           }
         ]
@@ -41,7 +41,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "agent-frontdoor-hook --platform claude",
+            "command": "/ABSOLUTE/PATH/TO/REVIEWED/VENV/bin/agent-frontdoor-hook --platform claude",
             "timeout": 5
           }
         ]
@@ -52,7 +52,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "agent-frontdoor-hook --platform claude",
+            "command": "/ABSOLUTE/PATH/TO/REVIEWED/VENV/bin/agent-frontdoor-hook --platform claude",
             "timeout": 1
           }
         ]

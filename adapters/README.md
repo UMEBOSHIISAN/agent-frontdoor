@@ -114,7 +114,9 @@ removing anything.
   limited to unquoted horizontal whitespace. Newlines, quotes, escapes, and shell
   operators remain significant.
 - A structured error target permits only actions containing the same literal
-  target tokens.
+  target tokens. Shell control operators, redirections, substitutions,
+  parentheses, and embedded newlines are denied in target mode, preventing an
+  unrelated command from sharing the same tool invocation.
 - A matching action must have a non-empty `tool_use_id`; its result is accepted
   only for that id and lock epoch. Late results from older epochs are ignored.
 - A failed matching action enters `REPORT_REQUIRED`; the next tool is denied

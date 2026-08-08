@@ -72,10 +72,11 @@ prose, failure descriptions, and command mentions negated before or after their
 code span do not create
 exact-command locks. Exact-command comparison collapses only unquoted horizontal
 whitespace and preserves newlines, quotes, escapes, and shell operators before
-hashing. Commands containing `<<` are compared with all horizontal whitespace
-preserved because heredoc bodies are data rather than shell-token whitespace. The
-state file therefore does not retain command arguments, and a different shell
-program or heredoc payload cannot compare equal by losing syntax boundaries.
+hashing. Commands containing heredocs or nested shell expansions are compared with
+all horizontal whitespace preserved because their bodies have separate quoting
+rules and may be data rather than shell-token whitespace. The state file therefore
+does not retain command arguments, and a different shell program, expansion, or
+heredoc payload cannot compare equal by losing syntax boundaries.
 
 A literal-target lock is created from structured error forms such as:
 
@@ -109,7 +110,9 @@ new substantive unrelated prompt -> prior lock released
 In `EXACT_COMMAND` mode, only the syntax-preserving exact command is accepted. In
 `LITERAL_TARGET` mode, every proposed local tool action must contain all target
 tokens. This prevents `cloudflare-api` from becoming an unqualified `wrangler`
-action without trying to infer semantic equivalence.
+action without trying to infer semantic equivalence. Target-mode actions must also
+be one shell command: control operators, redirections, substitutions, parentheses,
+and embedded newlines are rejected even when the target token is present.
 
 ## Adapter boundary
 

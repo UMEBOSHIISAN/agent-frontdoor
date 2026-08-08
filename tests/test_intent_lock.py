@@ -199,6 +199,27 @@ def test_target_lock_denies_adjacent_product_and_allows_literal_target() -> None
     assert allowed.code == "literal_target_match"
 
 
+@pytest.mark.parametrize(
+    "action",
+    [
+        "codex mcp login cloudflare-api; npx wrangler deploy",
+        "echo cloudflare-api && rm -rf /tmp/example",
+        "printf cloudflare-api | sh",
+        "echo cloudflare-api > /tmp/example",
+        "echo $(printf cloudflare-api)",
+        "echo cloudflare-api\nnpx wrangler deploy",
+    ],
+)
+def test_target_lock_rejects_compound_shell_actions(action: str) -> None:
+    lock = derive_lock(ERROR_PROMPT)
+    assert lock is not None
+
+    decision = evaluate_action(lock, action)
+
+    assert not decision.allowed
+    assert decision.code == "literal_target_compound_action"
+
+
 def test_natural_language_exact_command_requires_exact_normalized_action() -> None:
     prompt = "codex mcp login cloudflare-apiしてや"
 
@@ -292,6 +313,16 @@ def test_heredoc_payload_whitespace_is_preserved_in_exact_hash() -> None:
     assert lock is not None
     assert evaluate_action(lock, command).allowed
     assert not evaluate_action(lock, spaces_instead_of_tab).allowed
+
+
+def test_nested_shell_substitution_whitespace_is_preserved_in_exact_hash() -> None:
+    command = 'python3 -c "$(printf "print(\\"a   b\\")")"'
+    modified = 'python3 -c "$(printf "print(\\"a b\\")")"'
+    lock = derive_lock(f"```bash\n{command}\n```")
+
+    assert lock is not None
+    assert evaluate_action(lock, command).allowed
+    assert not evaluate_action(lock, modified).allowed
 
 
 @pytest.mark.parametrize("escaped_whitespace", [" ", "\t"])

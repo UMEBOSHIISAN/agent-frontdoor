@@ -1,6 +1,7 @@
 include .gitattributes
 include CHANGELOG.md
 include docs/FRIEND_LAB.md
+include docs/INTENT_LOCK.md
 recursive-include examples *.json
 recursive-include fixtures *.json
 recursive-include schemas *.json

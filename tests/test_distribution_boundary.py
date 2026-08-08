@@ -189,6 +189,7 @@ def test_core_sdist_excludes_tests_for_the_separate_adapter_distribution() -> No
         "include .gitattributes\n"
         "include CHANGELOG.md\n"
         "include docs/FRIEND_LAB.md\n"
+        "include docs/INTENT_LOCK.md\n"
         "recursive-include examples *.json\n"
         "recursive-include fixtures *.json\n"
         "recursive-include schemas *.json\n"

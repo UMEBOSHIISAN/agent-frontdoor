@@ -262,6 +262,7 @@ _GENERIC_ERROR_TARGETS = frozenset(
     }
 )
 _ACTION_TOKEN_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:@/-]{0,127}")
+_TARGET_SHELL_CONTROL_PATTERN = re.compile(r"[\r\n;&|<>()`$]")
 
 _REPORT_REASON = (
     "A human-facing response is required before using another tool."
@@ -276,10 +277,13 @@ def _normalized_command(value: str) -> str:
     """Normalize horizontal whitespace without erasing shell data."""
 
     candidate = value
-    if "<<" in candidate:
-        # Heredoc bodies are data, not shell-token whitespace. Conservatively
-        # require a byte-for-byte horizontal-whitespace match for the whole
-        # command instead of attempting to reimplement shell parsing here.
+    if any(
+        marker in candidate
+        for marker in ("<<", "$(", "${", "<(", ">(", "`")
+    ):
+        # Heredocs and nested shell expansions have their own quoting rules.
+        # Conservatively require a byte-for-byte horizontal-whitespace match
+        # instead of attempting to reimplement shell parsing here.
         return candidate
     normalized: list[str] = []
     quote: str | None = None
@@ -680,6 +684,12 @@ def evaluate_action(lock: IntentLock, action: str) -> IntentDecision:
             "Proposed action does not match the locked exact command.",
         )
 
+    if _TARGET_SHELL_CONTROL_PATTERN.search(action):
+        return IntentDecision(
+            False,
+            "literal_target_compound_action",
+            "Target-mode actions must be one command without shell control syntax.",
+        )
     if _matches_locked_identity(lock, action):
         return IntentDecision(
             True,

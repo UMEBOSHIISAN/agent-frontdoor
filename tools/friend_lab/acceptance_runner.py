@@ -15,6 +15,7 @@ from pathlib import Path, PurePosixPath
 import re
 import selectors
 import signal
+import stat
 import subprocess
 import sys
 import tarfile
@@ -25,6 +26,7 @@ import zipfile
 
 try:
     from tools.verify_handoff_archive import (
+        MemberRecord,
         PRIVACY_CATEGORIES,
         scan_forbidden_text,
         verify_friend_pack,
@@ -35,6 +37,7 @@ except ModuleNotFoundError as exc:
     verifier_directory = Path(__file__).resolve().parents[1] / "verifier"
     sys.path.insert(0, str(verifier_directory))
     from verify_handoff_archive import (  # type: ignore[no-redef]
+        MemberRecord,
         PRIVACY_CATEGORIES,
         scan_forbidden_text,
         verify_friend_pack,
@@ -305,6 +308,7 @@ class BoundedCommandRunner:
 
 @dataclass(frozen=True)
 class _PackContext:
+    members: tuple[MemberRecord, ...]
     manifest: dict[str, object]
     source_manifest: dict[str, object]
     wheel_manifest: dict[str, object]
@@ -376,6 +380,71 @@ def _actual_pack_files(pack_root: Path) -> dict[str, Path]:
         relative = path.relative_to(pack_root).as_posix()
         actual[relative] = path
     return actual
+
+
+def _regular_member_record(relative: str, path: Path) -> MemberRecord:
+    flags = os.O_RDONLY
+    flags |= getattr(os, "O_CLOEXEC", 0)
+    flags |= getattr(os, "O_NOFOLLOW", 0)
+    descriptor = -1
+    try:
+        before = path.lstat()
+        if not stat.S_ISREG(before.st_mode):
+            raise AcceptanceError("pack root contains non-regular file")
+        descriptor = os.open(path, flags)
+        opened = os.fstat(descriptor)
+        if (
+            not stat.S_ISREG(opened.st_mode)
+            or (before.st_dev, before.st_ino)
+            != (opened.st_dev, opened.st_ino)
+        ):
+            raise AcceptanceError("pack root changed during validation")
+        chunks: list[bytes] = []
+        while True:
+            chunk = os.read(descriptor, 1024 * 1024)
+            if not chunk:
+                break
+            chunks.append(chunk)
+        data = b"".join(chunks)
+        after = os.fstat(descriptor)
+        path_after = path.lstat()
+        stable_fields = (
+            "st_dev",
+            "st_ino",
+            "st_mode",
+            "st_size",
+            "st_mtime_ns",
+            "st_ctime_ns",
+        )
+        if any(
+            getattr(opened, field) != getattr(after, field)
+            or getattr(after, field) != getattr(path_after, field)
+            for field in stable_fields
+        ) or len(data) != after.st_size:
+            raise AcceptanceError("pack root changed during validation")
+    except OSError as exc:
+        raise AcceptanceError("pack root member unreadable") from exc
+    finally:
+        if descriptor >= 0:
+            os.close(descriptor)
+    return MemberRecord(
+        path=relative,
+        mode=after.st_mode & 0o777,
+        size=len(data),
+        sha256=_sha256(data),
+    )
+
+
+def _materialized_pack_members(
+    pack_root: Path, actual: dict[str, Path]
+) -> tuple[MemberRecord, ...]:
+    members = tuple(
+        _regular_member_record(relative, path)
+        for relative, path in sorted(actual.items())
+    )
+    if set(_actual_pack_files(pack_root)) != set(actual):
+        raise AcceptanceError("pack root changed during validation")
+    return members
 
 
 def _safe_zip_name(name: str) -> bool:
@@ -473,6 +542,20 @@ def _validate_wheelhouse(
     pack_root: Path,
     wheel_manifest: dict[str, object],
 ) -> tuple[dict[str, object], str, dict[str, bytes], str, str]:
+    required_fields = {
+        "schema_version",
+        "package_version",
+        "target",
+        "wheels",
+        "build_backend",
+    }
+    if (
+        set(wheel_manifest) != required_fields
+        or wheel_manifest.get("schema_version")
+        != "wheelhouse-manifest.v1"
+        or wheel_manifest.get("package_version") != PACKAGE_VERSION
+    ):
+        raise AcceptanceError("wheelhouse manifest invalid")
     target = wheel_manifest.get("target")
     wheels = wheel_manifest.get("wheels")
     backend = wheel_manifest.get("build_backend")
@@ -611,6 +694,10 @@ def _validate_wheelhouse(
 
 def _validate_pack_root(pack_root: Path) -> _PackContext:
     actual = _actual_pack_files(pack_root)
+    materialized_members = _materialized_pack_members(pack_root, actual)
+    materialized_by_path = {
+        record.path: record for record in materialized_members
+    }
     manifest_data = _read_regular(pack_root / "manifest.json")
     checksum = _read_regular(pack_root / "manifest.sha256").decode(
         "ascii", errors="replace"
@@ -639,14 +726,13 @@ def _validate_pack_root(pack_root: Path) -> _PackContext:
         if relative in expected_paths:
             raise AcceptanceError("pack member record duplicated")
         expected_paths.add(relative)
-        path = actual.get(relative)
-        if path is None:
+        materialized = materialized_by_path.get(relative)
+        if materialized is None:
             raise AcceptanceError("pack member missing")
-        data = _read_regular(path)
         if (
-            record.get("mode") != (path.stat().st_mode & 0o777)
-            or record.get("size") != len(data)
-            or record.get("sha256") != _sha256(data)
+            record.get("mode") != materialized.mode
+            or record.get("size") != materialized.size
+            or record.get("sha256") != materialized.sha256
         ):
             raise AcceptanceError("pack member metadata mismatch")
     if set(actual) != expected_paths:
@@ -687,7 +773,12 @@ def _validate_pack_root(pack_root: Path) -> _PackContext:
     )
     if agent_payloads != _source_package_payloads(source_path):
         raise AcceptanceError("agent wheel source binding mismatch")
+    if _materialized_pack_members(pack_root, _actual_pack_files(pack_root)) != (
+        materialized_members
+    ):
+        raise AcceptanceError("pack root changed during validation")
     return _PackContext(
+        members=materialized_members,
         manifest=manifest,
         source_manifest=source_manifest,
         wheel_manifest=wheel_manifest,
@@ -1113,6 +1204,7 @@ def _run_deterministic_pair(
 def _fallback_context(request: AcceptanceRequest) -> _PackContext:
     zero = "0" * 64
     return _PackContext(
+        members=(),
         manifest={},
         source_manifest={},
         wheel_manifest={},
@@ -1492,7 +1584,13 @@ def run_acceptance(
             expected_source_sha256=request.expected_source_sha256,
             expected_verifier_sha256=request.expected_verifier_sha256,
         )
-        verified = bool(verification.ok) and all(digest_equality.values())
+        verified_members = getattr(verification, "members", None)
+        verified = bool(
+            verification.ok
+            and isinstance(verified_members, tuple)
+            and verified_members == context.members
+            and all(digest_equality.values())
+        )
     except (AcceptanceError, OSError, ValueError):
         verified = False
     state.add_internal("verify-pack", verified)

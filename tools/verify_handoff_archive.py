@@ -100,6 +100,7 @@ class VerificationResult:
     regular_file_count: int
     root_name: str | None
     errors: tuple[str, ...]
+    members: tuple[MemberRecord, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -134,6 +135,7 @@ def _result(
     regular_file_count: int = 0,
     root_name: str | None = None,
     errors: Sequence[str] = (),
+    members: tuple[MemberRecord, ...] = (),
 ) -> VerificationResult:
     stable = _stable_errors(errors)
     return VerificationResult(
@@ -143,6 +145,7 @@ def _result(
         regular_file_count=regular_file_count,
         root_name=root_name,
         errors=stable,
+        members=members,
     )
 
 
@@ -470,6 +473,7 @@ def verify_source_archive_bytes(
         regular_file_count=actual_count,
         root_name=inspection.root_name,
         errors=errors,
+        members=inspection.members,
     )
 
 
@@ -835,6 +839,7 @@ def verify_friend_pack(
         regular_file_count=len(initial.members),
         root_name=initial.root_name,
         errors=errors,
+        members=initial.members,
     )
 
 

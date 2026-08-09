@@ -26,6 +26,7 @@ HEX_EMPTY = hashlib.sha256(b"").hexdigest()
 PUBLIC_REVISION = "a" * 40
 PACK_ROOT_NAME = "agent-frontdoor-friend-pack-0.2.0"
 SOURCE_ROOT_NAME = "agent-frontdoor-0.2.0"
+REAL_VERIFY_FRIEND_PACK = acceptance.verify_friend_pack
 
 
 def _sha256(data: bytes) -> str:
@@ -52,6 +53,53 @@ def _tar_gz(entries: dict[str, tuple[bytes, int]], root: str) -> bytes:
                 info.gid = 0
                 archive.addfile(info, io.BytesIO(data))
     return stream.getvalue()
+
+
+def _bind_real_verified_pack(
+    request: acceptance.AcceptanceRequest,
+    monkeypatch: pytest.MonkeyPatch,
+) -> acceptance.AcceptanceRequest:
+    entries = {
+        path.relative_to(request.pack_root).as_posix(): (
+            path.read_bytes(),
+            path.stat().st_mode & 0o777,
+        )
+        for path in request.pack_root.rglob("*")
+        if path.is_file() and not path.is_symlink()
+    }
+    pack_data = _tar_gz(entries, PACK_ROOT_NAME)
+    request.pack_path.write_bytes(pack_data)
+    monkeypatch.setattr(
+        acceptance, "verify_friend_pack", REAL_VERIFY_FRIEND_PACK
+    )
+    return replace(
+        request,
+        expected_pack_sha256=_sha256(pack_data),
+    )
+
+
+def _write_outer_manifest(pack_root: Path, manifest: dict[str, object]) -> None:
+    manifest_data = _json_bytes(manifest)
+    (pack_root / "manifest.json").write_bytes(manifest_data)
+    (pack_root / "manifest.sha256").write_text(
+        _sha256(manifest_data) + "\n", encoding="ascii"
+    )
+
+
+def _fixture_member_records(
+    pack_root: Path,
+) -> tuple[acceptance.MemberRecord, ...]:
+    return tuple(
+        acceptance.MemberRecord(
+            path=path.relative_to(pack_root).as_posix(),
+            mode=path.stat().st_mode & 0o777,
+            size=len(data),
+            sha256=_sha256(data),
+        )
+        for path in sorted(pack_root.rglob("*"))
+        if path.is_file()
+        for data in (path.read_bytes(),)
+    )
 
 
 def _member(path: str, data: bytes, mode: int = 0o644) -> dict[str, object]:
@@ -446,7 +494,11 @@ def acceptance_request(
     monkeypatch.setattr(
         acceptance,
         "verify_friend_pack",
-        lambda *args, **kwargs: SimpleNamespace(ok=True, errors=()),
+        lambda *args, **kwargs: SimpleNamespace(
+            ok=True,
+            errors=(),
+            members=_fixture_member_records(pack_root),
+        ),
     )
     return acceptance.AcceptanceRequest(
         pack_path=outer_pack,
@@ -639,6 +691,50 @@ def test_missing_out_of_band_equality_stops_before_controls(
     assert fake.called_classes == []
 
 
+@pytest.mark.parametrize("mutation", ["content", "extra", "missing"])
+def test_materialized_pack_must_match_real_verified_archive_before_controls(
+    acceptance_request: acceptance.AcceptanceRequest,
+    monkeypatch: pytest.MonkeyPatch,
+    mutation: str,
+) -> None:
+    acceptance_request = _bind_real_verified_pack(
+        acceptance_request, monkeypatch
+    )
+    pack_root = acceptance_request.pack_root
+    manifest_path = pack_root / "manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    if mutation == "content":
+        _replace_pack_payload(
+            pack_root,
+            "FRIEND_LAB.md",
+            b"# Friend Lob\n",
+        )
+    elif mutation == "extra":
+        relative = "self-consistent-extra.txt"
+        data = b"not present in the verified archive\n"
+        path = pack_root / relative
+        path.write_bytes(data)
+        path.chmod(0o644)
+        manifest["members"].append(_member(relative, data))
+        manifest["members"].sort(key=lambda item: item["path"])
+        _write_outer_manifest(pack_root, manifest)
+    else:
+        relative = "FRIEND_LAB.md"
+        (pack_root / relative).unlink()
+        manifest["members"] = [
+            item for item in manifest["members"] if item["path"] != relative
+        ]
+        _write_outer_manifest(pack_root, manifest)
+    fake = FakeRunner()
+
+    receipt = acceptance.run_acceptance(
+        acceptance_request, command_runner=fake
+    )
+
+    assert receipt["final_classification"] == "NOT_READY"
+    assert fake.called_classes == []
+
+
 @pytest.mark.parametrize(
     "mutation",
     ["missing-closure", "rpds-platform", "backend-hash", "private-target"],
@@ -672,6 +768,39 @@ def test_invalid_wheelhouse_semantics_stop_before_controls(
     fake = FakeRunner()
 
     receipt = acceptance.run_acceptance(acceptance_request, command_runner=fake)
+
+    assert receipt["final_classification"] == "NOT_READY"
+    assert fake.called_classes == []
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    ["extra-field", "schema-version", "package-version"],
+)
+def test_invalid_wheelhouse_envelope_stops_before_controls(
+    acceptance_request: acceptance.AcceptanceRequest,
+    mutation: str,
+) -> None:
+    relative = "wheelhouse/wheelhouse-manifest.json"
+    wheel_manifest = json.loads(
+        (acceptance_request.pack_root / relative).read_text(encoding="utf-8")
+    )
+    if mutation == "extra-field":
+        wheel_manifest["untrusted_extension"] = True
+    elif mutation == "schema-version":
+        wheel_manifest["schema_version"] = "wheelhouse-manifest.v2"
+    else:
+        wheel_manifest["package_version"] = "0.1.0"
+    _replace_pack_payload(
+        acceptance_request.pack_root,
+        relative,
+        _json_bytes(wheel_manifest),
+    )
+    fake = FakeRunner()
+
+    receipt = acceptance.run_acceptance(
+        acceptance_request, command_runner=fake
+    )
 
     assert receipt["final_classification"] == "NOT_READY"
     assert fake.called_classes == []

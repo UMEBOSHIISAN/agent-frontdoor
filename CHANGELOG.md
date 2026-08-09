@@ -6,6 +6,9 @@ No Git tag or GitHub release represents either subsection.
 
 ### Planned 0.2.0
 
+- Added a closed owner-side Mothership 0.2 conformance manifest, an `intake.v0`
+  synthetic task card, and schema/CLI tests without adding runtime coupling,
+  authority, or execution.
 - Reserved `0.2.0` as the first core and adapter release line containing
   `intent-lock.v1`; the adapter rejects the incompatible `0.1.x` core line.
 - Added the pure `intent-lock.v1` schema and deterministic task-identity state

@@ -79,6 +79,7 @@ def test_examples_index_owns_all_public_examples_and_cli_results(capsys) -> None
     for filename in (
         "task-card.json",
         "intent_lock_demo.py",
+        "mothership-task.json",
         "drift_before.json",
         "drift_after.json",
         "safe_before.json",
@@ -87,6 +88,7 @@ def test_examples_index_owns_all_public_examples_and_cli_results(capsys) -> None
         assert filename in text
     for outcome in (
         "VALID example-readme-audit",
+        "VALID demo-review-001",
         "False literal_target_mismatch",
         "True literal_target_match",
         "No command was executed; an intent match is not authority.",

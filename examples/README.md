@@ -7,6 +7,7 @@ activates hooks or changes settings.
 | Example | Run | Expected outcome |
 | --- | --- | --- |
 | [`task-card.json`](task-card.json) | `.venv/bin/agent-frontdoor validate examples/task-card.json` | `VALID example-readme-audit` |
+| [`mothership-task.json`](mothership-task.json) | `.venv/bin/agent-frontdoor validate examples/mothership-task.json` | `VALID demo-review-001`; owner-side Mothership 0.2 conformance input only |
 | [`intent_lock_demo.py`](intent_lock_demo.py) | `.venv/bin/python examples/intent_lock_demo.py` | `False literal_target_mismatch`, `True literal_target_match`, then `No command was executed; an intent match is not authority.` |
 | [`drift_before.json`](drift_before.json) | with `drift_after.json`: `.venv/bin/agent-frontdoor check-drift examples/drift_before.json examples/drift_after.json` | exit `3` and `audit_to_mutation` |
 | [`drift_after.json`](drift_after.json) | paired with `drift_before.json` | exit `3` and `audit_to_mutation` |

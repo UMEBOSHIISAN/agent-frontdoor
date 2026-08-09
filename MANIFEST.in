@@ -17,10 +17,12 @@ include docs/EVIDENCE.md
 include docs/FRIEND_LAB.md
 include docs/GETTING_STARTED.md
 include docs/INTENT_LOCK.md
+include docs/mothership-suite.md
 include docs/TROUBLESHOOTING.md
 recursive-include examples *.json *.md *.py
 recursive-include fixtures *.json
 recursive-include schemas *.json
+recursive-include suite *.json
 include tools/verify_handoff_archive.py
 prune adapters
 prune docs/superpowers

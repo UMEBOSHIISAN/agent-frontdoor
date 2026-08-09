@@ -129,6 +129,7 @@ def test_readme_routes_details_to_every_public_owner() -> None:
         "docs/INTENT_LOCK.md",
         "docs/TROUBLESHOOTING.md",
         "docs/FRIEND_LAB.md",
+        "docs/mothership-suite.md",
         "examples/README.md",
         (
             "https://github.com/UMEBOSHIISAN/agent-frontdoor/"

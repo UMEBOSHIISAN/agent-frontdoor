@@ -16,6 +16,7 @@ GETTING_STARTED = ROOT / "docs" / "GETTING_STARTED.md"
 ARCHITECTURE = ROOT / "docs" / "ARCHITECTURE.md"
 TROUBLESHOOTING = ROOT / "docs" / "TROUBLESHOOTING.md"
 INTENT_LOCK = ROOT / "docs" / "INTENT_LOCK.md"
+MOTHERSHIP_GUIDE = ROOT / "docs" / "mothership-suite.md"
 INTENT_LOCK_SCHEMA = (
     ROOT / "src" / "frontdoor" / "schema" / "intent-lock.v1.json"
 )
@@ -38,6 +39,7 @@ CORE_PUBLIC_MARKDOWN = (
     Path("docs/EVIDENCE.md"),
     Path("docs/CORE_REFERENCE.md"),
     Path("docs/INTENT_LOCK.md"),
+    Path("docs/mothership-suite.md"),
     Path("docs/TROUBLESHOOTING.md"),
     Path("docs/FRIEND_LAB.md"),
     Path("examples/README.md"),
@@ -265,6 +267,28 @@ def test_unreleased_public_docs_do_not_promise_cli_or_exit_stability() -> None:
     core_reference = CORE_REFERENCE.read_text(encoding="utf-8")
     assert "unreleased 0.2 development contract" in core_reference
     assert "may change before a release" in core_reference
+
+
+def test_mothership_conformance_is_owner_side_and_non_executing() -> None:
+    text = MOTHERSHIP_GUIDE.read_text(encoding="utf-8")
+    normalized = " ".join(text.split())
+    for marker in (
+        "owner-side conformance snapshot",
+        "does not prove external Mothership availability or behavior",
+        "does not install, invoke, route through, grant authority, or execute work",
+        ".venv/bin/agent-frontdoor validate examples/mothership-task.json",
+        ".venv/bin/python -m pytest tests/test_mothership_conformance.py -q",
+        "../suite/mothership-0.2-conformance.json",
+        "../examples/mothership-task.json",
+        "../src/frontdoor/schema/intake.v0.json",
+    ):
+        assert marker in normalized
+    for unsupported_claim in (
+        "freezes those exact bytes",
+        "four-stage",
+        "/blob/main/docs/protocols.md",
+    ):
+        assert unsupported_claim not in text
 
 
 def test_troubleshooting_uses_non_escalating_recovery() -> None:

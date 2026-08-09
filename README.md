@@ -147,6 +147,11 @@ install, configure, or invoke one another:
 | [mothership-router](https://github.com/UMEBOSHIISAN/mothership-router) | Emits a human-gated dry-run manifest bound to a registry digest. |
 | [mothership](https://github.com/UMEBOSHIISAN/mothership) | Holds portable contracts, diagnostics, and authority boundaries. |
 
+The owner-side [Mothership 0.2 conformance snapshot](docs/mothership-suite.md)
+binds this repository's `intake.v0` schema bytes and one synthetic card. It
+proves only local schema, example, and CLI compatibility; it does not verify
+another repository, create runtime coupling, grant authority, or execute work.
+
 ## Documentation
 
 | Topic | Canonical public guide |
@@ -159,6 +164,7 @@ install, configure, or invoke one another:
 | Failures and non-escalating recovery | [Troubleshooting](docs/TROUBLESHOOTING.md) |
 | Advanced human-attended offline receiver acceptance | [Friend Lab](docs/FRIEND_LAB.md) |
 | Runnable cards, drift pairs, and pure-Python demo | [Example index](examples/README.md) |
+| Owner-side Mothership 0.2 schema/example compatibility | [Mothership conformance](docs/mothership-suite.md) |
 | Separate optional adapter evaluation and removal | [Adapter guide](https://github.com/UMEBOSHIISAN/agent-frontdoor/blob/main/adapters/README.md) |
 
 Community routes are documented in [Contributing](CONTRIBUTING.md),

@@ -401,6 +401,7 @@ def _expected_core_files() -> set[str]:
         "docs/FRIEND_LAB.md",
         "docs/GETTING_STARTED.md",
         "docs/INTENT_LOCK.md",
+        "docs/mothership-suite.md",
         "docs/TROUBLESHOOTING.md",
         "pyproject.toml",
         "tools/verify_handoff_archive.py",
@@ -410,6 +411,7 @@ def _expected_core_files() -> set[str]:
         _relative_files(ROOT, "examples", (".json", ".md", ".py")),
         _relative_files(ROOT, "fixtures", (".json",)),
         _relative_files(ROOT, "schemas", (".json",)),
+        _relative_files(ROOT, "suite", (".json",)),
         _relative_files(ROOT, "src/frontdoor", (".json", ".py")),
     )
     adapter_tests = {
@@ -787,6 +789,7 @@ CORE_ARTIFACT_EXPECTED_OUTCOMES = (
     ("tests/test_public_docs.py::test_adapter_tree_requires_packaging_metadata", "PASSED"),
     ("tests/test_public_docs.py::test_intended_public_markdown_links_resolve_inside_repository", "PASSED"),
     ("tests/test_public_docs.py::test_local_readme_images_have_nonempty_alt_text", "PASSED"),
+    ("tests/test_mothership_conformance.py::test_closed_manifest_binds_owner_schema_and_example", "PASSED"),
     ("tests/test_distribution_boundary.py::test_distribution_keeps_exact_four_runtime_commands_and_no_lab_entrypoint", "PASSED"),
     ("tests/test_distribution_boundary.py::test_changelog_keeps_both_development_lines_unreleased", "PASSED"),
     ("tests/test_distribution_boundary.py::test_core_pep621_metadata_describes_unreleased_package", "PASSED"),
@@ -823,7 +826,7 @@ def test_clean_core_sdist_runs_its_shipped_public_contracts(
     monkeypatch: pytest.MonkeyPatch,
     hostile_environment: bool,
 ) -> None:
-    assert len(CORE_ARTIFACT_EXPECTED_OUTCOMES) == 17
+    assert len(CORE_ARTIFACT_EXPECTED_OUTCOMES) == 18
     artifact_root = _materialize_validated_regular_members(
         core_sdist,
         tmp_path / "materialized",

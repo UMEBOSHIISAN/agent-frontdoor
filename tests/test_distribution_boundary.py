@@ -306,7 +306,7 @@ def test_controlled_python_environment_disables_file_pip_configuration(
         site_config = probe_venv / "pip.conf"
     sentinel = "731"
     site_config.write_text(
-        f"[global]\ntimeout = {sentinel}\n",
+        f"[global]\ntimeout = {sentinel}\nretries = 4\n",
         encoding="utf-8",
     )
 
@@ -333,7 +333,7 @@ def test_controlled_python_environment_disables_file_pip_configuration(
         for line in mutation.stdout.splitlines()
         if line.startswith("    ")
     )
-    assert mutation_values == ("global.timeout: 731",)
+    assert "global.timeout: 731" in mutation_values
 
     protected = subprocess.run(
         [str(probe_python), "-m", "pip", "config", "debug"],

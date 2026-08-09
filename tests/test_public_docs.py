@@ -1,9 +1,12 @@
+import json
 from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
 EVIDENCE = ROOT / "docs" / "EVIDENCE.md"
+CORE_REFERENCE = ROOT / "docs" / "CORE_REFERENCE.md"
 CORE_SOURCE = ROOT / "src" / "frontdoor"
+INTAKE_SCHEMA = ROOT / "src" / "frontdoor" / "schema" / "intake.v0.json"
 
 
 def test_evidence_doc_scopes_every_published_number() -> None:
@@ -29,3 +32,57 @@ def test_evidence_doc_scopes_every_published_number() -> None:
     assert "fixture-corpus regression evidence" in normalized
     assert "not a real-world effectiveness benchmark" in normalized
     assert "not an independent security audit" in normalized
+
+
+def test_core_reference_owns_intake_cli_gate_and_drift_contracts() -> None:
+    text = CORE_REFERENCE.read_text(encoding="utf-8")
+    schema = json.loads(INTAKE_SCHEMA.read_text(encoding="utf-8"))
+    for field in schema["required"]:
+        assert f"`{field}`" in text
+    for task_class in schema["properties"]["task_class"]["enum"]:
+        assert f"`{task_class}`" in text
+    for gate in schema["properties"]["human_gate"]["enum"]:
+        assert f"`{gate}`" in text
+    for command in (
+        "agent-frontdoor validate task.json",
+        "agent-frontdoor card task.json",
+        "agent-frontdoor explain task.json",
+        "agent-frontdoor check-drift before.json after.json",
+    ):
+        assert command in text
+    for exit_contract in (
+        "`0`: valid card or no drift",
+        "`1`: loaded card is invalid",
+        "`2`: input is unreadable or malformed JSON",
+        "`3`: boundary drift detected",
+    ):
+        assert exit_contract in text
+    for marker in ("`INVALID`", "`ERROR`", "`DRIFT`"):
+        assert marker in text
+
+
+def test_core_reference_owns_blocking_and_boundary_drift_contracts() -> None:
+    text = CORE_REFERENCE.read_text(encoding="utf-8")
+    for category in (
+        "deploy",
+        "production",
+        "scheduler",
+        "secret",
+        "auth",
+        "billing",
+        "delete",
+        "destructive cleanup",
+        "SSOT mutation",
+        "external publish",
+        "authority promotion",
+    ):
+        assert f"`{category}`" in text
+    for transition in (
+        "read-only audit -> mutation recommendation",
+        "design review -> implementation",
+        "installation -> architecture migration",
+        "draft -> external publish",
+        "proposal-only -> authority promotion",
+        "bounded files -> unrelated broad refactor",
+    ):
+        assert transition in text

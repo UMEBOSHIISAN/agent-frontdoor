@@ -1,3 +1,4 @@
+from copy import deepcopy
 import json
 from pathlib import Path
 import re
@@ -18,6 +19,18 @@ PRIVATE_REPORT = (
     "https://github.com/UMEBOSHIISAN/agent-frontdoor/"
     "security/advisories/new"
 )
+EXPECTED_IDS = {
+    "bug.yml": {
+        "area", "revision", "environment", "reproduction", "expected",
+        "actual", "logs", "checks",
+    },
+    "feature.yml": {
+        "area", "problem", "proposal", "alternatives", "boundaries",
+        "evidence", "checks",
+    },
+}
+EXPECTED_LABEL = {"bug.yml": "bug", "feature.yml": "enhancement"}
+ALLOWED_TYPES = {"markdown", "input", "textarea", "dropdown", "checkboxes"}
 
 
 def test_community_files_exist_and_are_placeholder_free() -> None:
@@ -43,6 +56,18 @@ def test_security_policy_uses_only_private_reporting() -> None:
     assert "discussions" not in text.casefold()
 
 
+def test_contributing_activates_venv_before_python_test_commands() -> None:
+    text = (ROOT / "CONTRIBUTING.md").read_text(encoding="utf-8")
+    activation = "source .venv/bin/activate"
+    assert activation in text
+    activation_position = text.index(activation)
+    test_commands = [
+        match.start() for match in re.finditer(r"^python3 -m pytest ", text, re.MULTILINE)
+    ]
+    assert test_commands
+    assert all(activation_position < position for position in test_commands)
+
+
 def _unique_object(pairs: list[tuple[str, object]]) -> dict:
     result = {}
     for key, value in pairs:
@@ -58,38 +83,109 @@ def _github_form(filename: str) -> dict:
     )
 
 
+def _validate_issue_form(form: dict, filename: str) -> None:
+    assert isinstance(form, dict)
+    assert isinstance(form.get("name"), str) and form["name"].strip()
+    assert isinstance(form.get("description"), str) and form["description"].strip()
+    assert isinstance(form.get("body"), list) and form["body"]
+    labels = form.get("labels")
+    assert isinstance(labels, list) and labels
+    assert all(isinstance(label, str) and label.strip() for label in labels)
+    assert EXPECTED_LABEL[filename] in labels
+
+    ids = []
+    for item in form["body"]:
+        assert isinstance(item, dict)
+        item_type = item.get("type")
+        assert isinstance(item_type, str) and item_type.strip()
+        assert item_type in ALLOWED_TYPES
+        attributes = item.get("attributes")
+        assert isinstance(attributes, dict)
+
+        if item_type == "markdown":
+            value = attributes.get("value")
+            assert isinstance(value, str) and value.strip()
+            continue
+
+        item_id = item.get("id")
+        assert isinstance(item_id, str) and item_id.strip()
+        ids.append(item_id)
+        for key in ("label", "description"):
+            value = attributes.get(key)
+            assert isinstance(value, str) and value.strip()
+
+        validations = item.get("validations")
+        assert isinstance(validations, dict)
+        assert type(validations.get("required")) is bool
+
+        if item_type == "dropdown":
+            options = attributes.get("options")
+            assert isinstance(options, list) and options
+            assert all(
+                isinstance(option, str) and option.strip() for option in options
+            )
+
+        if item_type == "checkboxes":
+            options = attributes.get("options")
+            assert isinstance(options, list) and options
+            for option in options:
+                assert isinstance(option, dict)
+                label = option.get("label")
+                assert isinstance(label, str) and label.strip()
+                assert type(option.get("required")) is bool
+
+    assert len(ids) == len(set(ids))
+    assert EXPECTED_IDS[filename] == set(ids)
+
+
 def test_issue_forms_are_complete_json_compatible_yaml() -> None:
-    expected_ids = {
-        "bug.yml": {
-            "area", "revision", "environment", "reproduction", "expected",
-            "actual", "logs", "checks",
-        },
-        "feature.yml": {
-            "area", "problem", "proposal", "alternatives", "boundaries",
-            "evidence", "checks",
-        },
-    }
-    expected_label = {"bug.yml": "bug", "feature.yml": "enhancement"}
-    allowed_types = {"markdown", "input", "textarea", "dropdown", "checkboxes"}
+    for filename in EXPECTED_IDS:
+        _validate_issue_form(_github_form(filename), filename)
 
-    for filename, required_ids in expected_ids.items():
-        form = _github_form(filename)
-        assert isinstance(form.get("name"), str) and form["name"].strip()
-        assert isinstance(form.get("description"), str) and form["description"].strip()
-        assert isinstance(form.get("body"), list) and form["body"]
-        labels = form.get("labels")
-        assert isinstance(labels, list) and labels
-        assert all(isinstance(label, str) and label.strip() for label in labels)
-        assert expected_label[filename] in labels
 
-        assert all(isinstance(item, dict) for item in form["body"])
-        fields = [item for item in form["body"] if "id" in item]
-        ids = [item["id"] for item in fields]
-        assert len(ids) == len(set(ids))
-        assert required_ids == set(ids)
-        assert {item.get("type") for item in form["body"]} <= allowed_types
-        for item in form["body"]:
-            assert isinstance(item.get("attributes"), dict)
+def test_issue_form_validation_rejects_malformed_nested_values() -> None:
+    malformed_forms = []
+
+    invalid_validations = deepcopy(_github_form("bug.yml"))
+    invalid_validations["body"][0]["validations"] = []
+    malformed_forms.append(("validations is not a map", invalid_validations))
+
+    invalid_required = deepcopy(_github_form("bug.yml"))
+    invalid_required["body"][0]["validations"]["required"] = "yes"
+    malformed_forms.append(("validation required is not a boolean", invalid_required))
+
+    missing_dropdown_options = deepcopy(_github_form("bug.yml"))
+    del missing_dropdown_options["body"][0]["attributes"]["options"]
+    malformed_forms.append(("dropdown options are missing", missing_dropdown_options))
+
+    empty_dropdown_option = deepcopy(_github_form("bug.yml"))
+    empty_dropdown_option["body"][0]["attributes"]["options"][0] = ""
+    malformed_forms.append(("dropdown option is empty", empty_dropdown_option))
+
+    invalid_checkbox_options = deepcopy(_github_form("bug.yml"))
+    invalid_checkbox_options["body"][-1]["attributes"]["options"] = {}
+    malformed_forms.append(("checkbox options are not a list", invalid_checkbox_options))
+
+    empty_checkbox_label = deepcopy(_github_form("bug.yml"))
+    empty_checkbox_label["body"][-1]["attributes"]["options"][0]["label"] = ""
+    malformed_forms.append(("checkbox option label is empty", empty_checkbox_label))
+
+    invalid_checkbox_required = deepcopy(_github_form("bug.yml"))
+    invalid_checkbox_required["body"][-1]["attributes"]["options"][0][
+        "required"
+    ] = "yes"
+    malformed_forms.append(
+        ("checkbox option required is not a boolean", invalid_checkbox_required)
+    )
+
+    accepted = []
+    for description, form in malformed_forms:
+        try:
+            _validate_issue_form(form, "bug.yml")
+        except AssertionError:
+            continue
+        accepted.append(description)
+    assert not accepted, f"malformed forms accepted: {accepted}"
 
 
 def test_issue_chooser_is_complete_json_compatible_yaml() -> None:

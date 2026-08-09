@@ -33,11 +33,13 @@ cd agent-frontdoor
 python3 -m venv .venv
 .venv/bin/python -m pip install -e ".[test]"
 .venv/bin/python -m pip install -e adapters
+source .venv/bin/activate
 ```
 
 These commands install source for development. They do not configure a live
 hook. The project has no published release; do not substitute a package-index
-installation or describe the checkout as a released artifact.
+installation or describe the checkout as a released artifact. Keep this
+environment activated for every `python3` verification command below.
 
 ## Test-first workflow
 

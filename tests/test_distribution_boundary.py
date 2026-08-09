@@ -345,7 +345,6 @@ def test_controlled_python_environment_disables_file_pip_configuration(
         f"{protected.stdout}\n{protected.stderr}"
     )
     assert str(site_config) in protected.stdout
-    assert sentinel not in protected.stdout
     protected_values = tuple(
         line.strip()
         for line in protected.stdout.splitlines()

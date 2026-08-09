@@ -16,6 +16,7 @@ from frontdoor_hooks.state import load_session_lock
 ROOT = Path(__file__).resolve().parents[1]
 FIXTURES = ROOT / "fixtures" / "intent-lock"
 EXAMPLES = ROOT / "adapters" / "examples"
+ADAPTER_README = ROOT / "adapters" / "README.md"
 
 
 def _run_hook(
@@ -136,3 +137,42 @@ def test_public_examples_register_required_platform_events() -> None:
     absolute_user_prefix = "/" + "Users" + "/"
     assert absolute_user_prefix not in serialized
     assert "transcript_path" not in serialized
+
+
+def test_documented_codex_smoke_sequence_replays_safely(tmp_path: Path) -> None:
+    text = ADAPTER_README.read_text(encoding="utf-8")
+    smoke = text.split("## Non-live smoke test", maxsplit=1)[1].split(
+        "## Codex example", maxsplit=1
+    )[0]
+    prefix = "printf '%s\\n' '"
+    payloads = []
+    for line in smoke.splitlines():
+        if line.startswith(prefix) and " | \"$hook_bin\"" in line:
+            serialized = line[len(prefix):].split(
+                "' | \"$hook_bin\"", maxsplit=1
+            )[0]
+            payloads.append(json.loads(serialized))
+
+    assert len(payloads) == 6
+    assert [payload["hook_event_name"] for payload in payloads] == [
+        "UserPromptSubmit",
+        "PreToolUse",
+        "PreToolUse",
+        "PostToolUse",
+        "PreToolUse",
+        "SessionEnd",
+    ]
+
+    results = [
+        _run_hook(payload, platform="codex", state_root=tmp_path)
+        for payload in payloads
+    ]
+
+    assert all(result.returncode == 0 for result in results)
+    assert "INTENT_LOCK_ACTIVE" in results[0].stdout
+    assert '"permissionDecision": "deny"' in results[1].stdout
+    assert results[2].stdout == ""
+    assert "INTENT_LOCK_REPORT_REQUIRED" in results[3].stdout
+    assert '"permissionDecision": "deny"' in results[4].stdout
+    assert results[5].stdout == ""
+    assert load_session_lock(tmp_path, "adapter-smoke-codex") is None

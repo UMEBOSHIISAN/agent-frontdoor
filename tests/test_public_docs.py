@@ -8,6 +8,11 @@ CORE_REFERENCE = ROOT / "docs" / "CORE_REFERENCE.md"
 GETTING_STARTED = ROOT / "docs" / "GETTING_STARTED.md"
 ARCHITECTURE = ROOT / "docs" / "ARCHITECTURE.md"
 TROUBLESHOOTING = ROOT / "docs" / "TROUBLESHOOTING.md"
+INTENT_LOCK = ROOT / "docs" / "INTENT_LOCK.md"
+INTENT_LOCK_SCHEMA = (
+    ROOT / "src" / "frontdoor" / "schema" / "intent-lock.v1.json"
+)
+ADAPTER_README = ROOT / "adapters" / "README.md"
 CORE_SOURCE = ROOT / "src" / "frontdoor"
 INTAKE_SCHEMA = ROOT / "src" / "frontdoor" / "schema" / "intake.v0.json"
 
@@ -163,3 +168,47 @@ def test_troubleshooting_uses_non_escalating_recovery() -> None:
     assert "stop adapter adoption" in text
     assert "return the choice to the operator" in text
     assert "Use the read-only core on Windows" not in text
+
+
+def test_intent_lock_reference_has_no_internal_labels() -> None:
+    text = INTENT_LOCK.read_text(encoding="utf-8")
+    schema = json.loads(INTENT_LOCK_SCHEMA.read_text(encoding="utf-8"))
+    assert text.startswith("# Intent Lock Reference\n")
+    for phase in schema["properties"]["phase"]["enum"]:
+        assert f"`{phase}`" in text
+    for mode in schema["properties"]["mode"]["enum"]:
+        assert f"`{mode}`" in text
+    for internal in (
+        "CODEX_SELF_CONFIDENT_ADOPTED",
+        "REPEATED_EXCESSIVE_DERAILMENT",
+        "COMPOSITE_CONFIRMED_WITH_MISSING_COMMON_INVARIANT",
+        "CC_UNAUDITED",
+        "implementation requested by the human",
+    ):
+        assert internal not in text
+    assert "No independent security audit has been completed" in text
+
+
+def test_adapter_readme_requires_smoke_before_activation() -> None:
+    text = ADAPTER_README.read_text(encoding="utf-8")
+    ordered = (
+        "## Install in an isolated environment",
+        "## Non-live smoke test",
+        "## Codex example",
+        "## Claude Code example",
+        "## Uninstall or deactivate",
+    )
+    positions = [text.index(item) for item in ordered]
+    assert positions == sorted(positions)
+    for marker in (
+        "--state-dir",
+        "UserPromptSubmit",
+        "PreToolUse",
+        "permissionDecision",
+        "INTENT_LOCK_REPORT_REQUIRED",
+        "does not modify operator-owned settings",
+        "mode `0700`",
+        "mode `0600`",
+        "Windows is rejected",
+    ):
+        assert marker in text

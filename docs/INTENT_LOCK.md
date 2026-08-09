@@ -1,27 +1,19 @@
-# Intent Lock Design
+# Intent Lock Reference
 
-Date: 2026-08-09
-Status: implementation requested by the human
-Adoption label: `CODEX_SELF_CONFIDENT_ADOPTED`
-Adoption reason: `REPEATED_EXCESSIVE_DERAILMENT`
-Root-cause label: `COMPOSITE_CONFIRMED_WITH_MISSING_COMMON_INVARIANT`
-CC review: `CC_UNAUDITED`
-Training status: `CANDIDATE_ONLY`
+Intent Lock addresses a general failure mode: an agent can replace a literal
+target with an adjacent product, expand a bounded repair into project creation,
+or continue exploring after a direct action fails. Individually reasonable
+procedures do not prevent that drift unless every proposed tool call remains
+attached to the literal target.
 
-## Problem
+This reference describes the deterministic contract and adapter boundary. See
+[Architecture](ARCHITECTURE.md) for the full pipeline,
+[Evidence](EVIDENCE.md) for the published test scope,
+[Troubleshooting](TROUBLESHOOTING.md) for non-escalating recovery, and the
+[public adapter guide](https://github.com/UMEBOSHIISAN/agent-frontdoor/blob/main/adapters/README.md)
+for a non-live evaluation path.
 
-An agent can replace a literal target with an adjacent product, expand a repair
-into project creation, or continue exploring after a direct action fails. In the
-regression incident, a `cloudflare-api` MCP OAuth failure expanded into Wrangler
-installation and Worker-project discussion. Later human corrections did not
-immediately restore the literal command `codex mcp login cloudflare-api`.
-
-The fault was amplified by individually reasonable procedures: product-specific
-skills, documentation-first instructions, authentication policy, and design gates.
-No shared invariant required every proposed tool call to remain attached to the
-literal target.
-
-## Decision
+## Boundary
 
 Agent Frontdoor gains a pure, deterministic `intent-lock.v1` contract. It derives
 a privacy-minimized lock from an exact command or structured error target, evaluates
@@ -151,12 +143,13 @@ Code exposes a broader set of named tools but also has paths outside command-hoo
 coverage. The implementation is therefore a strong runtime guardrail, not a
 security boundary.
 
-Current Codex `ExecCommandToolOutput` serializes only truncated raw output into
-the Bash `PostToolUse` response even though the internal object has an exit-code
-field. Because that stable hook boundary loses the status, the adapter treats any
-response without explicit structured status as outcome-opaque and requires a
-human-facing report. It does not parse success or failure from arbitrary command
-text or mapping shape.
+The adapter currently assumes that Codex `ExecCommandToolOutput` serializes only
+truncated raw output into the Bash `PostToolUse` response even though the internal
+object has an exit-code field. Under that assumption, a response without explicit
+structured status is outcome-opaque and requires a human-facing report; the
+adapter does not parse success or failure from arbitrary command text or mapping
+shape. Check this assumption against the current official hook documentation and
+the synthetic adapter smoke test before activation.
 
 State reads validate an exact mode-`0700` real directory and an exact
 mode-`0600` regular file. Missing paths are distinct from permission, type, and
@@ -195,3 +188,5 @@ become authorized merely because the OSS implementation exists.
 - OpenAI Codex Bash hook response implementation:
   <https://github.com/openai/codex/blob/main/codex-rs/core/src/tools/context.rs>
 - Claude Code hooks: <https://code.claude.com/docs/en/hooks>
+
+No independent security audit has been completed.

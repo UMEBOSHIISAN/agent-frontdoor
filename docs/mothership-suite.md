@@ -1,11 +1,14 @@
-# Mothership suite compatibility
+# Mothership 0.2 owner-side conformance
 
-Agent Frontdoor is the semantic owner of the `frontdoor-task` protocol at `intake.v0`. The owner schema remains
-`src/frontdoor/schema/intake.v0.json`; Mothership 0.2.0 freezes those exact bytes and their SHA-256 for composition with
-the other independently adoptable projects.
+Agent Frontdoor owns the `frontdoor-task` protocol at `intake.v0`. This
+repository publishes an owner-side conformance snapshot that binds the local
+[owner schema](../src/frontdoor/schema/intake.v0.json), its SHA-256, the
+[closed manifest](../suite/mothership-0.2-conformance.json), and one
+[synthetic example](../examples/mothership-task.json).
 
-The closed conformance manifest is `suite/mothership-0.2-conformance.json`. It binds the repository, protocol version,
-owner schema digest, and one fictional example without granting runtime authority.
+The snapshot proves local schema, example, and CLI compatibility only. It does
+not prove external Mothership availability or behavior. It does not install,
+invoke, route through, grant authority, or execute work.
 
 ## Reproduce
 
@@ -14,14 +17,14 @@ PYTHONPATH=src .venv/bin/agent-frontdoor validate examples/mothership-task.json
 PYTHONPATH=src .venv/bin/python -m pytest tests/test_mothership_conformance.py -q
 ```
 
-The first command prints `VALID demo-review-001`. A valid task card remains preflight metadata: `human_gate` describes
-the review boundary but does not approve, route, invoke, or execute work. `card` and `explain` render only intake fields;
-they do not add Mothership protocol metadata or authority claims.
-
-See the exact suite order and snapshot rules in the
-[Mothership protocol reference](https://github.com/UMEBOSHIISAN/mothership/blob/main/docs/protocols.md).
+The first command prints `VALID demo-review-001`. A valid task card remains
+preflight metadata: `human_gate` describes a review boundary but does not
+approve, route, invoke, or execute work. `card` and `explain` render only intake
+fields; they do not add conformance metadata or authority claims.
 
 ## Compatibility boundary
 
-Conformance proves only owner/schema/example compatibility with Mothership 0.2.0. It does not prove publication,
-production accuracy, approval, execution, downstream freshness, or the availability of another repository.
+The manifest's `suite_release` identifies the intended 0.2 compatibility line;
+it is not evidence of a remote tag, release, deployment, or downstream
+freshness. Any multi-repository composition must separately verify the exact
+external revision and its own authority boundary.

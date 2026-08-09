@@ -19,7 +19,10 @@
       "const": "friend-pack-manifest.v1"
     },
     "package_version": {
-      "const": "0.1.0"
+      "enum": [
+        "0.1.0",
+        "0.2.0"
+      ]
     },
     "public_revision": {
       "type": "string",
@@ -31,7 +34,10 @@
       "required": ["path", "sha256", "regular_file_count", "manifest_path"],
       "properties": {
         "path": {
-          "const": "source/agent-frontdoor-0.1.0.tar.gz"
+          "enum": [
+            "source/agent-frontdoor-0.1.0.tar.gz",
+            "source/agent-frontdoor-0.2.0.tar.gz"
+          ]
         },
         "sha256": {
           "$ref": "#/$defs/sha256"
@@ -83,6 +89,54 @@
       }
     }
   },
+  "allOf": [
+    {
+      "if": {
+        "required": [
+          "package_version"
+        ],
+        "properties": {
+          "package_version": {
+            "const": "0.1.0"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "source_archive": {
+            "properties": {
+              "path": {
+                "const": "source/agent-frontdoor-0.1.0.tar.gz"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "required": [
+          "package_version"
+        ],
+        "properties": {
+          "package_version": {
+            "const": "0.2.0"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "source_archive": {
+            "properties": {
+              "path": {
+                "const": "source/agent-frontdoor-0.2.0.tar.gz"
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
   "$defs": {
     "sha256": {
       "type": "string",

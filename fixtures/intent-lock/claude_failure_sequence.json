@@ -1,0 +1,63 @@
+{
+  "session_id": "fixture-claude-session",
+  "events": [
+    {
+      "returncode": 0,
+      "input": {
+        "session_id": "fixture-claude-session",
+        "hook_event_name": "UserPromptSubmit",
+        "prompt": "MCP client for `cloudflare-api` failed to start: invalid_grant: Grant not found"
+      }
+    },
+    {
+      "returncode": 0,
+      "input": {
+        "session_id": "fixture-claude-session",
+        "hook_event_name": "PreToolUse",
+        "tool_name": "Bash",
+        "tool_use_id": "tool-1",
+        "tool_input": {
+          "command": "npx wrangler whoami"
+        }
+      }
+    },
+    {
+      "returncode": 0,
+      "input": {
+        "session_id": "fixture-claude-session",
+        "hook_event_name": "PreToolUse",
+        "tool_name": "Bash",
+        "tool_use_id": "tool-2",
+        "tool_input": {
+          "command": "codex mcp login cloudflare-api"
+        }
+      }
+    },
+    {
+      "returncode": 0,
+      "input": {
+        "session_id": "fixture-claude-session",
+        "hook_event_name": "PostToolUseFailure",
+        "tool_name": "Bash",
+        "tool_use_id": "tool-2",
+        "tool_input": {
+          "command": "codex mcp login cloudflare-api"
+        },
+        "error": "Exit code 1\nError: server not found",
+        "is_interrupt": false
+      }
+    },
+    {
+      "returncode": 0,
+      "input": {
+        "session_id": "fixture-claude-session",
+        "hook_event_name": "PreToolUse",
+        "tool_name": "Bash",
+        "tool_use_id": "tool-3",
+        "tool_input": {
+          "command": "rg cloudflare-api ."
+        }
+      }
+    }
+  ]
+}

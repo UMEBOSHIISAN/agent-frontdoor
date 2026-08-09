@@ -5,9 +5,18 @@ friend pack. It is not an installer, deployment script, remote-management tool,
 model router, or permission grant. It never changes an existing project,
 settings file, hook, service, scheduler, model inventory, or secret store.
 
+## Audience and prerequisites
+
+Friend Lab is an advanced offline receiver workflow, not the standard installation path.
+Start with [GETTING_STARTED.md](GETTING_STARTED.md) for the read-only core and
+[EVIDENCE.md](EVIDENCE.md) for the measured repository boundaries. This attended
+procedure additionally requires three out-of-band, human-confirmed lowercase
+SHA-256 values: the expected pack, source, and verifier digests. Keep them
+independent of the pack before beginning phase 1.
+
 The transfer set contains exactly two files:
 
-1. `agent-frontdoor-friend-pack-0.1.0.tar.gz`
+1. `agent-frontdoor-friend-pack-0.2.0.tar.gz`
 2. `verify_handoff_archive.py`
 
 The expected pack, source, and verifier SHA-256 values arrive through a separate
@@ -34,7 +43,7 @@ Run the detached standard-library verifier while the pack is still unopened:
 
 ```bash
 python3 verify_handoff_archive.py friend-pack \
-  agent-frontdoor-friend-pack-0.1.0.tar.gz \
+  agent-frontdoor-friend-pack-0.2.0.tar.gz \
   --detached-verifier verify_handoff_archive.py \
   --expected-pack-sha256 "$EXPECTED_PACK_SHA256" \
   --expected-source-sha256 "$EXPECTED_SOURCE_SHA256" \
@@ -54,8 +63,8 @@ Choose a new, empty, receiver-owned path and bind it explicitly:
 export FRIEND_TRANSFER_ROOT="$PWD"
 export FRIEND_TEMP_ROOT='<FRIEND_TEMP_ROOT>'
 mkdir "$FRIEND_TEMP_ROOT"
-tar -xzf agent-frontdoor-friend-pack-0.1.0.tar.gz -C "$FRIEND_TEMP_ROOT"
-export FRIEND_PACK_ROOT="$FRIEND_TEMP_ROOT/agent-frontdoor-friend-pack-0.1.0"
+tar -xzf agent-frontdoor-friend-pack-0.2.0.tar.gz -C "$FRIEND_TEMP_ROOT"
+export FRIEND_PACK_ROOT="$FRIEND_TEMP_ROOT/agent-frontdoor-friend-pack-0.2.0"
 export FRIEND_RUN_ROOT="$FRIEND_TEMP_ROOT/friend-lab-run"
 ```
 
@@ -89,7 +98,7 @@ leaf must not already exist:
 
 ```bash
 python3 "$FRIEND_PACK_ROOT/lab/acceptance_runner.py" \
-  --pack "$FRIEND_TRANSFER_ROOT/agent-frontdoor-friend-pack-0.1.0.tar.gz" \
+  --pack "$FRIEND_TRANSFER_ROOT/agent-frontdoor-friend-pack-0.2.0.tar.gz" \
   --detached-verifier "$FRIEND_TRANSFER_ROOT/verify_handoff_archive.py" \
   --pack-root "$FRIEND_PACK_ROOT" \
   --run-root "$FRIEND_RUN_ROOT" \
@@ -120,9 +129,12 @@ source/wheel mismatch stops the run. Do not download or compile a replacement.
 
 ## 7. Run tests and samples
 
-Run the complete suite with bytecode and cache disabled in the source
-environment. Record the freshly collected count; do not copy a historical
-number. Then run the documented positive commands against
+Run the complete core-distribution suite with bytecode and cache disabled in the
+source environment. The separately packaged optional `agent-frontdoor-hooks`
+runtime tests are excluded because this acceptance lane installs only the core
+wheel; they are verified in the adapter's own build/test lane. Record the freshly
+collected count; do not copy a historical number. Then run the documented
+positive commands against
 `fixtures/positive/01_install_only.json`:
 
 ```bash

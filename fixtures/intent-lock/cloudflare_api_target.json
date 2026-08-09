@@ -1,0 +1,11 @@
+{
+  "prompt": "MCP client for `cloudflare-api` failed to start: invalid_grant: Grant not found",
+  "allowed_action": "codex mcp login cloudflare-api",
+  "denied_actions": [
+    "npx wrangler whoami",
+    "npm create cloudflare new-worker",
+    "rg --files -g wrangler.toml"
+  ],
+  "expected_mode": "LITERAL_TARGET",
+  "expected_target": "cloudflare-api"
+}

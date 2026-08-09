@@ -15,6 +15,7 @@ from pathlib import Path, PurePosixPath
 import re
 import selectors
 import signal
+import stat
 import subprocess
 import sys
 import tarfile
@@ -25,6 +26,7 @@ import zipfile
 
 try:
     from tools.verify_handoff_archive import (
+        MemberRecord,
         PRIVACY_CATEGORIES,
         scan_forbidden_text,
         verify_friend_pack,
@@ -35,13 +37,14 @@ except ModuleNotFoundError as exc:
     verifier_directory = Path(__file__).resolve().parents[1] / "verifier"
     sys.path.insert(0, str(verifier_directory))
     from verify_handoff_archive import (  # type: ignore[no-redef]
+        MemberRecord,
         PRIVACY_CATEGORIES,
         scan_forbidden_text,
         verify_friend_pack,
     )
 
 
-PACKAGE_VERSION = "0.1.0"
+PACKAGE_VERSION = "0.2.0"
 PACK_ROOT_NAME = f"agent-frontdoor-friend-pack-{PACKAGE_VERSION}"
 SOURCE_ROOT_NAME = f"agent-frontdoor-{PACKAGE_VERSION}"
 RECEIPT_NAME = "friend-acceptance-receipt.json"
@@ -65,6 +68,11 @@ _REQUIRED_WHEEL_DISTRIBUTIONS = frozenset(
         "wheel",
     }
 )
+_OPTIONAL_ADAPTER_TEST_IGNORES = (
+    "--ignore=tests/test_hook_adapter.py",
+    "--ignore=tests/test_hook_fixtures.py",
+    "--ignore=tests/test_hook_state.py",
+)
 _GAP_ORDER = (
     "REMOTE_EXECUTION",
     "NETWORK_DISCONNECT_UNCONFIRMED",
@@ -77,6 +85,7 @@ _GAP_ORDER = (
 )
 _ALLOWED_RUN_ROOT_ENTRIES = frozenset(
     {
+        PACK_ROOT_NAME,
         "audit-ledger.jsonl",
         "environment",
         "evidence",
@@ -300,6 +309,8 @@ class BoundedCommandRunner:
 
 @dataclass(frozen=True)
 class _PackContext:
+    pack_root: Path
+    members: tuple[MemberRecord, ...]
     manifest: dict[str, object]
     source_manifest: dict[str, object]
     wheel_manifest: dict[str, object]
@@ -371,6 +382,71 @@ def _actual_pack_files(pack_root: Path) -> dict[str, Path]:
         relative = path.relative_to(pack_root).as_posix()
         actual[relative] = path
     return actual
+
+
+def _regular_member_record(relative: str, path: Path) -> MemberRecord:
+    flags = os.O_RDONLY
+    flags |= getattr(os, "O_CLOEXEC", 0)
+    flags |= getattr(os, "O_NOFOLLOW", 0)
+    descriptor = -1
+    try:
+        before = path.lstat()
+        if not stat.S_ISREG(before.st_mode):
+            raise AcceptanceError("pack root contains non-regular file")
+        descriptor = os.open(path, flags)
+        opened = os.fstat(descriptor)
+        if (
+            not stat.S_ISREG(opened.st_mode)
+            or (before.st_dev, before.st_ino)
+            != (opened.st_dev, opened.st_ino)
+        ):
+            raise AcceptanceError("pack root changed during validation")
+        chunks: list[bytes] = []
+        while True:
+            chunk = os.read(descriptor, 1024 * 1024)
+            if not chunk:
+                break
+            chunks.append(chunk)
+        data = b"".join(chunks)
+        after = os.fstat(descriptor)
+        path_after = path.lstat()
+        stable_fields = (
+            "st_dev",
+            "st_ino",
+            "st_mode",
+            "st_size",
+            "st_mtime_ns",
+            "st_ctime_ns",
+        )
+        if any(
+            getattr(opened, field) != getattr(after, field)
+            or getattr(after, field) != getattr(path_after, field)
+            for field in stable_fields
+        ) or len(data) != after.st_size:
+            raise AcceptanceError("pack root changed during validation")
+    except OSError as exc:
+        raise AcceptanceError("pack root member unreadable") from exc
+    finally:
+        if descriptor >= 0:
+            os.close(descriptor)
+    return MemberRecord(
+        path=relative,
+        mode=after.st_mode & 0o777,
+        size=len(data),
+        sha256=_sha256(data),
+    )
+
+
+def _materialized_pack_members(
+    pack_root: Path, actual: dict[str, Path]
+) -> tuple[MemberRecord, ...]:
+    members = tuple(
+        _regular_member_record(relative, path)
+        for relative, path in sorted(actual.items())
+    )
+    if set(_actual_pack_files(pack_root)) != set(actual):
+        raise AcceptanceError("pack root changed during validation")
+    return members
 
 
 def _safe_zip_name(name: str) -> bool:
@@ -468,6 +544,20 @@ def _validate_wheelhouse(
     pack_root: Path,
     wheel_manifest: dict[str, object],
 ) -> tuple[dict[str, object], str, dict[str, bytes], str, str]:
+    required_fields = {
+        "schema_version",
+        "package_version",
+        "target",
+        "wheels",
+        "build_backend",
+    }
+    if (
+        set(wheel_manifest) != required_fields
+        or wheel_manifest.get("schema_version")
+        != "wheelhouse-manifest.v1"
+        or wheel_manifest.get("package_version") != PACKAGE_VERSION
+    ):
+        raise AcceptanceError("wheelhouse manifest invalid")
     target = wheel_manifest.get("target")
     wheels = wheel_manifest.get("wheels")
     backend = wheel_manifest.get("build_backend")
@@ -606,6 +696,10 @@ def _validate_wheelhouse(
 
 def _validate_pack_root(pack_root: Path) -> _PackContext:
     actual = _actual_pack_files(pack_root)
+    materialized_members = _materialized_pack_members(pack_root, actual)
+    materialized_by_path = {
+        record.path: record for record in materialized_members
+    }
     manifest_data = _read_regular(pack_root / "manifest.json")
     checksum = _read_regular(pack_root / "manifest.sha256").decode(
         "ascii", errors="replace"
@@ -634,14 +728,13 @@ def _validate_pack_root(pack_root: Path) -> _PackContext:
         if relative in expected_paths:
             raise AcceptanceError("pack member record duplicated")
         expected_paths.add(relative)
-        path = actual.get(relative)
-        if path is None:
+        materialized = materialized_by_path.get(relative)
+        if materialized is None:
             raise AcceptanceError("pack member missing")
-        data = _read_regular(path)
         if (
-            record.get("mode") != (path.stat().st_mode & 0o777)
-            or record.get("size") != len(data)
-            or record.get("sha256") != _sha256(data)
+            record.get("mode") != materialized.mode
+            or record.get("size") != materialized.size
+            or record.get("sha256") != materialized.sha256
         ):
             raise AcceptanceError("pack member metadata mismatch")
     if set(actual) != expected_paths:
@@ -682,7 +775,13 @@ def _validate_pack_root(pack_root: Path) -> _PackContext:
     )
     if agent_payloads != _source_package_payloads(source_path):
         raise AcceptanceError("agent wheel source binding mismatch")
+    if _materialized_pack_members(pack_root, _actual_pack_files(pack_root)) != (
+        materialized_members
+    ):
+        raise AcceptanceError("pack root changed during validation")
     return _PackContext(
+        pack_root=pack_root,
+        members=materialized_members,
         manifest=manifest,
         source_manifest=source_manifest,
         wheel_manifest=wheel_manifest,
@@ -762,8 +861,6 @@ def _create_isolated_environment(
     }
     for path in paths.values():
         path.mkdir(parents=True, exist_ok=False)
-    pip_config = environment_root / "pip.conf"
-    pip_config.write_bytes(b"")
     env = {
         "PATH": os.defpath,
         "LANG": "C",
@@ -775,7 +872,7 @@ def _create_isolated_environment(
     env.update({name: str(path) for name, path in paths.items()})
     env.update(
         {
-            "PIP_CONFIG_FILE": str(pip_config),
+            "PIP_CONFIG_FILE": os.devnull,
             "PYTHONDONTWRITEBYTECODE": "1",
             "PIP_DISABLE_PIP_VERSION_CHECK": "1",
             "PIP_NO_INDEX": "1",
@@ -1109,11 +1206,14 @@ def _run_deterministic_pair(
 
 def _fallback_context(request: AcceptanceRequest) -> _PackContext:
     zero = "0" * 64
+    pack_root = request.run_root / PACK_ROOT_NAME
     return _PackContext(
+        pack_root=pack_root,
+        members=(),
         manifest={},
         source_manifest={},
         wheel_manifest={},
-        source_path=request.pack_root / "missing-source.tar.gz",
+        source_path=pack_root / "missing-source.tar.gz",
         source_sha256=zero,
         source_manifest_sha256=zero,
         verifier_sha256=(
@@ -1395,8 +1495,7 @@ def _finish(
     try:
         _validate_receipt(
             receipt,
-            state.request.pack_root
-            / "schemas/friend_acceptance_receipt.v1.json",
+            context.pack_root / "schemas/friend_acceptance_receipt.v1.json",
         )
         receipt_data = (
             json.dumps(receipt, sort_keys=True, separators=(",", ":")) + "\n"
@@ -1462,6 +1561,7 @@ def run_acceptance(
     request.run_root.mkdir(parents=True, mode=0o700)
     state = _AcceptanceState(request)
     context = _fallback_context(request)
+    pack_root = context.pack_root
     pack_sha = _observed_digest(request.pack_path)
     detached_sha = _observed_digest(request.detached_verifier_path)
     digest_equality = {
@@ -1477,19 +1577,26 @@ def run_acceptance(
     }
 
     try:
-        context = _validate_pack_root(request.pack_root)
-        digest_equality["source"] = bool(
-            _HEX64.fullmatch(request.expected_source_sha256)
-            and context.source_sha256 == request.expected_source_sha256
-        )
         verification = verify_friend_pack(
             request.pack_path,
             detached_verifier_path=request.detached_verifier_path,
             expected_pack_sha256=request.expected_pack_sha256,
             expected_source_sha256=request.expected_source_sha256,
             expected_verifier_sha256=request.expected_verifier_sha256,
+            materialize_to=pack_root,
         )
-        verified = bool(verification.ok) and all(digest_equality.values())
+        context = _validate_pack_root(pack_root)
+        digest_equality["source"] = bool(
+            _HEX64.fullmatch(request.expected_source_sha256)
+            and context.source_sha256 == request.expected_source_sha256
+        )
+        verified_members = getattr(verification, "members", None)
+        verified = bool(
+            verification.ok
+            and isinstance(verified_members, tuple)
+            and verified_members == context.members
+            and all(digest_equality.values())
+        )
     except (AcceptanceError, OSError, ValueError):
         verified = False
     state.add_internal("verify-pack", verified)
@@ -1503,7 +1610,7 @@ def run_acceptance(
             digest_equality=digest_equality,
         )
 
-    privacy_control_ok = _privacy_control_ok(request.pack_root, context)
+    privacy_control_ok = _privacy_control_ok(pack_root, context)
     state.add_internal("privacy-control", privacy_control_ok)
     if not privacy_control_ok:
         state.gaps.add("CONTROL_FAILURE")
@@ -1522,7 +1629,7 @@ def run_acceptance(
     ledger.chmod(0o600)
     try:
         env = _create_isolated_environment(
-            request.run_root, request.pack_root, ledger
+            request.run_root, pack_root, ledger
         )
     except (AcceptanceError, OSError):
         state.add_internal("environment-isolation", False)
@@ -1542,7 +1649,7 @@ def run_acceptance(
         "write-control",
         (
             sys.executable,
-            str(request.pack_root / "lab/controls/write_outside_probe.py"),
+            str(pack_root / "lab/controls/write_outside_probe.py"),
         ),
         cwd=request.run_root,
         env=env,
@@ -1575,7 +1682,7 @@ def run_acceptance(
         state,
         runner,
         "socket-control",
-        (sys.executable, str(request.pack_root / "lab/controls/socket_probe.py")),
+        (sys.executable, str(pack_root / "lab/controls/socket_probe.py")),
         cwd=request.run_root,
         env=env,
         expect_zero=False,
@@ -1673,7 +1780,7 @@ def run_acceptance(
     wheel_venv = request.run_root / "wheel-venv"
     source_python = source_venv / "bin/python"
     wheel_python = wheel_venv / "bin/python"
-    wheelhouse = request.pack_root / "wheelhouse"
+    wheelhouse = pack_root / "wheelhouse"
     positive_fixture = source_root / "fixtures/positive/01_install_only.json"
 
     positive_phases: tuple[
@@ -1789,6 +1896,7 @@ def run_acceptance(
         "no:cacheprovider",
         "-c",
         os.devnull,
+        *_OPTIONAL_ADAPTER_TEST_IGNORES,
         "tests",
     )
     if _run_phase(
@@ -1828,6 +1936,7 @@ def run_acceptance(
         "no:cacheprovider",
         "-c",
         os.devnull,
+        *_OPTIONAL_ADAPTER_TEST_IGNORES,
         "tests",
     )
     if not _run_deterministic_pair(

@@ -17,14 +17,20 @@
       "const": "source-archive-manifest.v1"
     },
     "package_version": {
-      "const": "0.1.0"
+      "enum": [
+        "0.1.0",
+        "0.2.0"
+      ]
     },
     "public_revision": {
       "type": "string",
       "pattern": "^[0-9a-f]{40}$"
     },
     "archive_root": {
-      "const": "agent-frontdoor-0.1.0"
+      "enum": [
+        "agent-frontdoor-0.1.0",
+        "agent-frontdoor-0.2.0"
+      ]
     },
     "regular_file_count": {
       "type": "integer",
@@ -39,6 +45,46 @@
       }
     }
   },
+  "allOf": [
+    {
+      "if": {
+        "required": [
+          "package_version"
+        ],
+        "properties": {
+          "package_version": {
+            "const": "0.1.0"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "archive_root": {
+            "const": "agent-frontdoor-0.1.0"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "required": [
+          "package_version"
+        ],
+        "properties": {
+          "package_version": {
+            "const": "0.2.0"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "archive_root": {
+            "const": "agent-frontdoor-0.2.0"
+          }
+        }
+      }
+    }
+  ],
   "$defs": {
     "member": {
       "type": "object",

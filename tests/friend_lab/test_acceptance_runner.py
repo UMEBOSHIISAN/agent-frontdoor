@@ -24,8 +24,9 @@ from tools.friend_lab import acceptance_runner as acceptance
 
 HEX_EMPTY = hashlib.sha256(b"").hexdigest()
 PUBLIC_REVISION = "a" * 40
-PACK_ROOT_NAME = "agent-frontdoor-friend-pack-0.1.0"
-SOURCE_ROOT_NAME = "agent-frontdoor-0.1.0"
+PACK_ROOT_NAME = "agent-frontdoor-friend-pack-0.2.0"
+SOURCE_ROOT_NAME = "agent-frontdoor-0.2.0"
+REAL_VERIFY_FRIEND_PACK = acceptance.verify_friend_pack
 
 
 def _sha256(data: bytes) -> str:
@@ -52,6 +53,71 @@ def _tar_gz(entries: dict[str, tuple[bytes, int]], root: str) -> bytes:
                 info.gid = 0
                 archive.addfile(info, io.BytesIO(data))
     return stream.getvalue()
+
+
+def _bind_real_verified_pack(
+    request: acceptance.AcceptanceRequest,
+    monkeypatch: pytest.MonkeyPatch,
+) -> acceptance.AcceptanceRequest:
+    entries = {
+        path.relative_to(request.pack_root).as_posix(): (
+            path.read_bytes(),
+            path.stat().st_mode & 0o777,
+        )
+        for path in request.pack_root.rglob("*")
+        if path.is_file() and not path.is_symlink()
+    }
+    pack_data = _tar_gz(entries, PACK_ROOT_NAME)
+    request.pack_path.write_bytes(pack_data)
+    monkeypatch.setattr(
+        acceptance, "verify_friend_pack", REAL_VERIFY_FRIEND_PACK
+    )
+    return replace(
+        request,
+        expected_pack_sha256=_sha256(pack_data),
+    )
+
+
+def _write_outer_manifest(pack_root: Path, manifest: dict[str, object]) -> None:
+    manifest_data = _json_bytes(manifest)
+    (pack_root / "manifest.json").write_bytes(manifest_data)
+    (pack_root / "manifest.sha256").write_text(
+        _sha256(manifest_data) + "\n", encoding="ascii"
+    )
+
+
+def _fixture_member_records(
+    pack_root: Path,
+) -> tuple[acceptance.MemberRecord, ...]:
+    return tuple(
+        acceptance.MemberRecord(
+            path=path.relative_to(pack_root).as_posix(),
+            mode=path.stat().st_mode & 0o777,
+            size=len(data),
+            sha256=_sha256(data),
+        )
+        for path in sorted(pack_root.rglob("*"))
+        if path.is_file()
+        for data in (path.read_bytes(),)
+    )
+
+
+def _fake_verified_pack(
+    pack_root: Path,
+    *args: object,
+    materialize_to: Path | None = None,
+    **kwargs: object,
+) -> SimpleNamespace:
+    del args, kwargs
+    if materialize_to is None:  # pragma: no cover - fixture contract guard
+        raise AssertionError("snapshot destination required")
+    shutil.copytree(pack_root, materialize_to, symlinks=True)
+    materialize_to.chmod(0o700)
+    return SimpleNamespace(
+        ok=True,
+        errors=(),
+        members=_fixture_member_records(materialize_to),
+    )
 
 
 def _member(path: str, data: bytes, mode: int = 0o644) -> dict[str, object]:
@@ -273,7 +339,7 @@ class FakeRunner:
 def acceptance_request(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> acceptance.AcceptanceRequest:
-    outer_pack = tmp_path / "agent-frontdoor-friend-pack-0.1.0.tar.gz"
+    outer_pack = tmp_path / "agent-frontdoor-friend-pack-0.2.0.tar.gz"
     outer_pack.write_bytes(b"synthetic verified outer pack")
     detached = tmp_path / "verify_handoff_archive.py"
     detached.write_bytes(b"#!/usr/bin/env python3\n")
@@ -285,10 +351,10 @@ def acceptance_request(
         "LICENSE": (b"MIT\n", 0o644),
         "README.md": (b"# Agent Frontdoor\n", 0o644),
         "pyproject.toml": (
-            b"[project]\nname='agent-frontdoor'\nversion='0.1.0'\n",
+            b"[project]\nname='agent-frontdoor'\nversion='0.2.0'\n",
             0o644,
         ),
-        "src/frontdoor/__init__.py": (b"__version__='0.1.0'\n", 0o644),
+        "src/frontdoor/__init__.py": (b"__version__='0.2.0'\n", 0o644),
         "src/frontdoor/schema/intake.v0.json": (b"{}\n", 0o644),
         "tests/test_cli.py": (b"def test_ok(): assert True\n", 0o644),
         "tools/verify_handoff_archive.py": (detached.read_bytes(), 0o755),
@@ -300,14 +366,14 @@ def acceptance_request(
     ]
     source_manifest = {
         "schema_version": "source-archive-manifest.v1",
-        "package_version": "0.1.0",
+        "package_version": "0.2.0",
         "public_revision": PUBLIC_REVISION,
         "archive_root": SOURCE_ROOT_NAME,
         "regular_file_count": len(source_records),
         "members": source_records,
     }
     wheel_versions = {
-        "agent-frontdoor": "0.1.0",
+        "agent-frontdoor": "0.2.0",
         "attrs": "25.3.0",
         "iniconfig": "2.1.0",
         "jsonschema": "4.25.0",
@@ -355,7 +421,7 @@ def acceptance_request(
         )
     wheel_manifest = {
         "schema_version": "wheelhouse-manifest.v1",
-        "package_version": "0.1.0",
+        "package_version": "0.2.0",
         "target": {
             "os_version": "macOS 26.5.2",
             "architecture": "arm64",
@@ -419,7 +485,7 @@ def acceptance_request(
     ]
     manifest = {
         "schema_version": "friend-pack-manifest.v1",
-        "package_version": "0.1.0",
+        "package_version": "0.2.0",
         "public_revision": PUBLIC_REVISION,
         "source_archive": {
             "path": f"source/{SOURCE_ROOT_NAME}.tar.gz",
@@ -446,7 +512,9 @@ def acceptance_request(
     monkeypatch.setattr(
         acceptance,
         "verify_friend_pack",
-        lambda *args, **kwargs: SimpleNamespace(ok=True, errors=()),
+        lambda *args, **kwargs: _fake_verified_pack(
+            pack_root, *args, **kwargs
+        ),
     )
     return acceptance.AcceptanceRequest(
         pack_path=outer_pack,
@@ -500,6 +568,27 @@ def test_source_install_requests_test_extra_before_pytest_collection(
     )
 
 
+def test_core_acceptance_excludes_optional_adapter_runtime_tests(
+    acceptance_request: acceptance.AcceptanceRequest,
+) -> None:
+    fake = FakeRunner()
+
+    acceptance.run_acceptance(acceptance_request, command_runner=fake)
+
+    excluded = {
+        "--ignore=tests/test_hook_adapter.py",
+        "--ignore=tests/test_hook_fixtures.py",
+        "--ignore=tests/test_hook_state.py",
+    }
+    for command_class in ("test-collect", "tests", "wheel-tests"):
+        argv = next(
+            argv
+            for called_class, argv, _env in fake.calls
+            if called_class == command_class
+        )
+        assert excluded.issubset(argv)
+
+
 def test_isolated_environment_does_not_forward_receiver_credentials(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -522,6 +611,57 @@ def test_isolated_environment_does_not_forward_receiver_credentials(
     assert "PYTHONSTARTUP" not in env
     assert env["PATH"] == os.defpath
     assert env["HOME"].startswith(str(run_root))
+
+
+def test_isolated_environment_disables_global_and_site_pip_configs(
+    tmp_path: Path,
+) -> None:
+    run_root = tmp_path / "run"
+    pack_root = tmp_path / "pack"
+    run_root.mkdir()
+    pack_root.mkdir()
+    ledger = run_root / "audit.jsonl"
+    ledger.write_bytes(b"")
+    hostile_global = tmp_path / "global-pip.conf"
+    hostile_global.write_text(
+        "[global]\ntimeout = 731\n",
+        encoding="utf-8",
+    )
+    hostile_site = tmp_path / "site-pip.conf"
+    hostile_site.write_text(
+        "[global]\nretries = 17\n",
+        encoding="utf-8",
+    )
+    env = acceptance._create_isolated_environment(
+        run_root, pack_root, ledger
+    )
+    probe = subprocess.run(
+        (
+            sys.executable,
+            "-c",
+            (
+                "import json, sys; "
+                "import pip._internal.configuration as module; "
+                "from pip._internal.configuration import Configuration, kinds; "
+                "module.get_configuration_files = lambda: {"
+                "kinds.GLOBAL: [sys.argv[1]], kinds.USER: [], "
+                "kinds.SITE: [sys.argv[2]]}; "
+                "configuration = Configuration(isolated=True); "
+                "configuration.load(); "
+                "print(json.dumps(dict(configuration.items()), sort_keys=True))"
+            ),
+            str(hostile_global),
+            str(hostile_site),
+        ),
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=5,
+    )
+
+    assert probe.returncode == 0, f"{probe.stdout}\n{probe.stderr}"
+    assert json.loads(probe.stdout) == {}
+    assert Path(env["PIP_CONFIG_FILE"]).resolve() == Path(os.devnull).resolve()
 
 
 def test_remote_flow_is_capped_with_gap(
@@ -567,6 +707,98 @@ def test_missing_out_of_band_equality_stops_before_controls(
     assert fake.called_classes == []
 
 
+@pytest.mark.parametrize("mutation", ["content", "extra", "missing"])
+def test_original_pack_cannot_override_real_verified_archive_snapshot(
+    acceptance_request: acceptance.AcceptanceRequest,
+    monkeypatch: pytest.MonkeyPatch,
+    mutation: str,
+) -> None:
+    acceptance_request = _bind_real_verified_pack(
+        acceptance_request, monkeypatch
+    )
+    pack_root = acceptance_request.pack_root
+    trusted_friend_lab = (pack_root / "FRIEND_LAB.md").read_bytes()
+    manifest_path = pack_root / "manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    if mutation == "content":
+        _replace_pack_payload(
+            pack_root,
+            "FRIEND_LAB.md",
+            b"# Friend Lob\n",
+        )
+    elif mutation == "extra":
+        relative = "self-consistent-extra.txt"
+        data = b"not present in the verified archive\n"
+        path = pack_root / relative
+        path.write_bytes(data)
+        path.chmod(0o644)
+        manifest["members"].append(_member(relative, data))
+        manifest["members"].sort(key=lambda item: item["path"])
+        _write_outer_manifest(pack_root, manifest)
+    else:
+        relative = "FRIEND_LAB.md"
+        (pack_root / relative).unlink()
+        manifest["members"] = [
+            item for item in manifest["members"] if item["path"] != relative
+        ]
+        _write_outer_manifest(pack_root, manifest)
+    fake = FakeRunner()
+
+    receipt = acceptance.run_acceptance(
+        acceptance_request, command_runner=fake
+    )
+
+    assert receipt["final_classification"] == "PRIVATE_HANDOFF_READY"
+    trusted_pack = Path(fake.calls[0][2]["PYTHONPATH"]).parent
+    assert trusted_pack != pack_root
+    assert (trusted_pack / "FRIEND_LAB.md").read_bytes() == trusted_friend_lab
+    assert not (trusted_pack / "self-consistent-extra.txt").exists()
+
+
+def test_post_verification_original_pack_mutation_cannot_reach_execution(
+    acceptance_request: acceptance.AcceptanceRequest,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    acceptance_request = _bind_real_verified_pack(
+        acceptance_request, monkeypatch
+    )
+    original_sitecustomize = (
+        acceptance_request.pack_root / "lab/sitecustomize.py"
+    )
+    trusted_data = original_sitecustomize.read_bytes()
+    mutated_data = b"# changed after archive verification\n"
+
+    def verify_then_mutate(*args: object, **kwargs: object) -> object:
+        result = REAL_VERIFY_FRIEND_PACK(*args, **kwargs)
+        assert result.ok is True
+        original_sitecustomize.write_bytes(mutated_data)
+        return result
+
+    monkeypatch.setattr(
+        acceptance, "verify_friend_pack", verify_then_mutate
+    )
+    fake = FakeRunner()
+
+    receipt = acceptance.run_acceptance(
+        acceptance_request, command_runner=fake
+    )
+
+    assert receipt["final_classification"] == "PRIVATE_HANDOFF_READY"
+    assert fake.called_classes
+    first_environment = fake.calls[0][2]
+    trusted_lab = Path(first_environment["PYTHONPATH"])
+    assert trusted_lab != acceptance_request.pack_root / "lab"
+    assert trusted_lab.is_relative_to(acceptance_request.run_root)
+    assert (trusted_lab / "sitecustomize.py").read_bytes() == trusted_data
+    assert original_sitecustomize.read_bytes() == mutated_data
+    original_root = str(acceptance_request.pack_root)
+    assert all(
+        original_root not in value
+        for _command_class, argv, environment in fake.calls
+        for value in (*argv, *environment.values())
+    )
+
+
 @pytest.mark.parametrize(
     "mutation",
     ["missing-closure", "rpds-platform", "backend-hash", "private-target"],
@@ -606,13 +838,46 @@ def test_invalid_wheelhouse_semantics_stop_before_controls(
 
 
 @pytest.mark.parametrize(
+    "mutation",
+    ["extra-field", "schema-version", "package-version"],
+)
+def test_invalid_wheelhouse_envelope_stops_before_controls(
+    acceptance_request: acceptance.AcceptanceRequest,
+    mutation: str,
+) -> None:
+    relative = "wheelhouse/wheelhouse-manifest.json"
+    wheel_manifest = json.loads(
+        (acceptance_request.pack_root / relative).read_text(encoding="utf-8")
+    )
+    if mutation == "extra-field":
+        wheel_manifest["untrusted_extension"] = True
+    elif mutation == "schema-version":
+        wheel_manifest["schema_version"] = "wheelhouse-manifest.v2"
+    else:
+        wheel_manifest["package_version"] = "0.1.0"
+    _replace_pack_payload(
+        acceptance_request.pack_root,
+        relative,
+        _json_bytes(wheel_manifest),
+    )
+    fake = FakeRunner()
+
+    receipt = acceptance.run_acceptance(
+        acceptance_request, command_runner=fake
+    )
+
+    assert receipt["final_classification"] == "NOT_READY"
+    assert fake.called_classes == []
+
+
+@pytest.mark.parametrize(
     ("member", "payload"),
     [
-        ("frontdoor/__init__.py", b"__version__='0.1.1'\n"),
+        ("frontdoor/__init__.py", b"__version__='0.2.1'\n"),
         ("frontdoor/private_receiver.py", b"API_KEY=sk-privatevalue123\n"),
         (
-            "agent_frontdoor-0.1.0.dist-info/METADATA",
-            b"Metadata-Version: 2.1\nName: agent-frontdoor\nVersion: 0.1.0\nLicense: MIT\nRequires-Dist: jsonschema>=4\nrequires-dist: evil-package\n",
+            "agent_frontdoor-0.2.0.dist-info/METADATA",
+            b"Metadata-Version: 2.1\nName: agent-frontdoor\nVersion: 0.2.0\nLicense: MIT\nRequires-Dist: jsonschema>=4\nrequires-dist: evil-package\n",
         ),
     ],
 )

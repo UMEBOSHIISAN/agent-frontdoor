@@ -23,8 +23,8 @@ except ModuleNotFoundError:
     verifier = None
 
 
-SOURCE_ROOT = "agent-frontdoor-0.1.0"
-PACK_ROOT = "agent-frontdoor-friend-pack-0.1.0"
+SOURCE_ROOT = "agent-frontdoor-0.2.0"
+PACK_ROOT = "agent-frontdoor-friend-pack-0.2.0"
 PUBLIC_REVISION = "1" * 40
 
 
@@ -101,11 +101,11 @@ def source_entries() -> list[TarEntry]:
         TarEntry(f"{SOURCE_ROOT}/README.md", b"# Agent Frontdoor\n"),
         TarEntry(
             f"{SOURCE_ROOT}/pyproject.toml",
-            b"[project]\nname = 'agent-frontdoor'\nversion = '0.1.0'\n",
+            b"[project]\nname = 'agent-frontdoor'\nversion = '0.2.0'\n",
         ),
         TarEntry(
             f"{SOURCE_ROOT}/src/frontdoor/__init__.py",
-            b"__version__ = '0.1.0'\n",
+            b"__version__ = '0.2.0'\n",
         ),
         TarEntry(
             f"{SOURCE_ROOT}/src/frontdoor/schema/intake.v0.json",
@@ -174,7 +174,7 @@ def verify_source(
 def source_manifest(records: list[FixtureRecord]) -> dict[str, object]:
     return {
         "schema_version": "source-archive-manifest.v1",
-        "package_version": "0.1.0",
+        "package_version": "0.2.0",
         "public_revision": PUBLIC_REVISION,
         "archive_root": SOURCE_ROOT,
         "regular_file_count": len(records),
@@ -220,7 +220,7 @@ def make_friend_pack(
     source_manifest_bytes = json_bytes(source_manifest(records))
     payload: dict[str, tuple[bytes, int]] = {
         "FRIEND_LAB.md": (b"# Friend Lab\n", 0o644),
-        "source/agent-frontdoor-0.1.0.tar.gz": (nested, 0o644),
+        "source/agent-frontdoor-0.2.0.tar.gz": (nested, 0o644),
         "source/source-manifest.json": (source_manifest_bytes, 0o644),
         "verifier/verify_handoff_archive.py": (verifier_bytes, 0o755),
         "lab/controls/privacy_control.txt": (privacy_control, 0o644),
@@ -231,10 +231,10 @@ def make_friend_pack(
     ]
     manifest: dict[str, object] = {
         "schema_version": "friend-pack-manifest.v1",
-        "package_version": "0.1.0",
+        "package_version": "0.2.0",
         "public_revision": PUBLIC_REVISION,
         "source_archive": {
-            "path": "source/agent-frontdoor-0.1.0.tar.gz",
+            "path": "source/agent-frontdoor-0.2.0.tar.gz",
             "sha256": sha256(nested),
             "regular_file_count": len(records),
             "manifest_path": "source/source-manifest.json",
@@ -301,6 +301,7 @@ def verify_pack(fixture: SimpleNamespace, **overrides):
         expected_verifier_sha256=overrides.get(
             "expected_verifier_sha256", fixture.verifier_sha256
         ),
+        materialize_to=overrides.get("materialize_to"),
     )
 
 
@@ -442,6 +443,16 @@ def test_standalone_verifier_does_not_flag_its_own_public_rules() -> None:
     ) == ()
 
 
+def test_distribution_artifact_probe_is_privacy_safe() -> None:
+    api = _api()
+    path = ROOT / "tests" / "test_distribution_boundary.py"
+
+    assert api.scan_forbidden_text(
+        PurePosixPath("tests/test_distribution_boundary.py"),
+        path.read_bytes(),
+    ) == ()
+
+
 def test_source_archive_rejects_wrong_hash() -> None:
     entries = source_entries()
     result = verify_source(tar_bytes(entries), records_for(entries), expected_hash="0" * 64)
@@ -528,6 +539,101 @@ def test_friend_pack_accepts_exact_detached_and_nested_bytes(tmp_path: Path) -> 
     assert result.errors == ()
 
 
+def test_friend_pack_materializes_exact_private_regular_member_snapshot(
+    tmp_path: Path,
+) -> None:
+    fixture = make_friend_pack(tmp_path)
+    run_root = tmp_path / "run"
+    run_root.mkdir(mode=0o700)
+    snapshot = run_root / PACK_ROOT
+
+    result = verify_pack(fixture, materialize_to=snapshot)
+
+    assert result.ok is True
+    assert snapshot.stat().st_mode & 0o777 == 0o700
+    assert all(
+        path.stat().st_mode & 0o777 == 0o700
+        for path in snapshot.rglob("*")
+        if path.is_dir()
+    )
+    actual = tuple(
+        _api().MemberRecord(
+            path=path.relative_to(snapshot).as_posix(),
+            mode=path.stat().st_mode & 0o777,
+            size=len(data),
+            sha256=sha256(data),
+        )
+        for path in sorted(snapshot.rglob("*"))
+        if path.is_file() and not path.is_symlink()
+        for data in (path.read_bytes(),)
+    )
+    assert actual == result.members
+
+
+def test_friend_pack_does_not_materialize_before_authentication(
+    tmp_path: Path,
+) -> None:
+    fixture = make_friend_pack(tmp_path)
+    run_root = tmp_path / "run"
+    run_root.mkdir(mode=0o700)
+    snapshot = run_root / PACK_ROOT
+
+    result = verify_pack(
+        fixture,
+        expected_pack_sha256="0" * 64,
+        materialize_to=snapshot,
+    )
+
+    assert result.ok is False
+    assert not snapshot.exists()
+
+
+def test_friend_pack_rejects_preexisting_snapshot_without_overwrite(
+    tmp_path: Path,
+) -> None:
+    fixture = make_friend_pack(tmp_path)
+    run_root = tmp_path / "run"
+    run_root.mkdir(mode=0o700)
+    snapshot = run_root / PACK_ROOT
+    snapshot.mkdir(mode=0o700)
+    marker = snapshot / "receiver-owned.txt"
+    marker.write_bytes(b"preserve\n")
+
+    result = verify_pack(fixture, materialize_to=snapshot)
+
+    assert result.ok is False
+    assert "snapshot materialization failed" in result.errors
+    assert marker.read_bytes() == b"preserve\n"
+
+
+def test_friend_pack_rejects_partial_snapshot_write(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fixture = make_friend_pack(tmp_path)
+    run_root = tmp_path / "run"
+    run_root.mkdir(mode=0o700)
+    snapshot = run_root / PACK_ROOT
+    api = _api()
+    real_write = api._write_snapshot_member
+    calls = 0
+
+    def fail_second_member(*args: object, **kwargs: object) -> None:
+        nonlocal calls
+        calls += 1
+        if calls == 2:
+            raise OSError("synthetic partial write")
+        real_write(*args, **kwargs)
+
+    monkeypatch.setattr(api, "_write_snapshot_member", fail_second_member)
+
+    result = verify_pack(fixture, materialize_to=snapshot)
+
+    assert result.ok is False
+    assert "snapshot materialization failed" in result.errors
+    assert calls == 2
+
+
 def test_friend_pack_rejects_detached_verifier_digest_mismatch(tmp_path: Path) -> None:
     fixture = make_friend_pack(tmp_path, detached_bytes=b"different\n")
     result = verify_pack(fixture)
@@ -580,7 +686,7 @@ def test_friend_pack_rejects_manifest_checksum_mismatch(tmp_path: Path) -> None:
     "missing",
     [
         "FRIEND_LAB.md",
-        "source/agent-frontdoor-0.1.0.tar.gz",
+        "source/agent-frontdoor-0.2.0.tar.gz",
         "source/source-manifest.json",
         "verifier/verify_handoff_archive.py",
         "lab/controls/privacy_control.txt",

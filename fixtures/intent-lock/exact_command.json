@@ -1,0 +1,10 @@
+{
+  "prompt": "codex mcp login cloudflare-apiしてや",
+  "allowed_action": "codex mcp login cloudflare-api",
+  "denied_actions": [
+    "codex mcp list",
+    "npx wrangler whoami"
+  ],
+  "expected_mode": "EXACT_COMMAND",
+  "expected_target": "cloudflare-api"
+}

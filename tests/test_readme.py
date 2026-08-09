@@ -1,197 +1,191 @@
 """Contract tests for the public Agent Frontdoor README."""
 
-import json
 from pathlib import Path
 import re
-
-from frontdoor.boundary_drift import detect_boundary_drift
-from frontdoor.validator import validate_card
 
 
 ROOT = Path(__file__).resolve().parents[1]
 README = ROOT / "README.md"
-
-REQUIRED_OPENING = [
-    "This is not an agent runtime.",
-    "This is not an autonomous router.",
-    (
-        "This is a preflight contract and validator for safely preparing "
-        "tasks for AI workers."
-    ),
-]
-
-CORE_FIELDS = (
-    "schema_version",
-    "request_id",
-    "human_request",
-    "task_class",
-    "risk_tags",
-    "allowed_actions",
-    "forbidden_actions",
-    "required_evidence",
-    "required_manifest",
-    "human_gate",
-    "predicted_worker_capability",
-    "unknowns",
-    "assumptions",
-    "next_safe_step",
-)
-
-TASK_CLASSES = (
-    "RESEARCH",
-    "DESIGN_REVIEW",
-    "IMPLEMENTATION",
-    "CODE_REVIEW",
-    "AUDIT",
-    "CONTENT_DRAFT",
-    "DATA_ANALYSIS",
-    "INSTALLATION",
-    "OPERATIONS",
-    "UNKNOWN",
-)
 
 
 def _text() -> str:
     return README.read_text(encoding="utf-8")
 
 
-def test_readme_starts_with_required_contract() -> None:
-    assert _text().splitlines()[:3] == REQUIRED_OPENING
-
-
-def test_readme_documents_gate4_offline_boundary_and_exact_cli_examples() -> None:
+def test_readme_presents_integrated_adoption_journey() -> None:
     text = _text()
-    assert "AGENT_FRONTDOOR_REPOSITORY_URL" in text
-    assert (
-        'git clone "$AGENT_FRONTDOOR_REPOSITORY_URL" agent-frontdoor'
-        in text
+    ordered = (
+        "# Agent Frontdoor",
+        "Stop AI coding agents from drifting beyond the task you approved.",
+        "## See the boundary",
+        "## Quick start",
+        "## Choose a route",
+        "## Evidence at a glance",
+        "## Safety and limits",
+        "## Documentation",
+        "## Project status",
     )
-    assert '.venv/bin/python -m pip install -e ".[test]"' in text
-    assert (
-        '.venv/bin/python -m pip install --no-index --find-links "$WHEELHOUSE" '
-        '--no-build-isolation -e ".[test]"'
-        in text
-    )
-    assert (
-        "agent-frontdoor validate fixtures/positive/01_install_only.json"
-        in text
-    )
-    assert "agent-frontdoor card fixtures/positive/01_install_only.json" in text
-    assert ".venv/bin/python -m pip uninstall -y agent-frontdoor" in text
-    assert "--system-site-packages" not in text
-    assert "--upgrade-deps" not in text
-    assert (
-        "agent-frontdoor check-drift examples/drift_before.json "
-        "examples/drift_after.json"
-    ) in text
-    for command in (
-        "agent-frontdoor validate task.json",
-        "agent-frontdoor card task.json",
-        "agent-frontdoor explain task.json",
-        "agent-frontdoor check-drift before.json after.json",
+    positions = [text.index(item) for item in ordered]
+    assert positions == sorted(positions)
+    for marker in (
+        "https://github.com/UMEBOSHIISAN/agent-frontdoor.git",
+        "examples/task-card.json",
+        "VALID example-readme-audit",
+        "Core CLI",
+        "Intent Lock API",
+        "Optional hooks",
     ):
-        assert command in text
-
-
-def test_readme_documents_failure_meanings_without_a_stale_pass_claim() -> None:
-    text = _text()
-    for marker in ("`INVALID`", "`ERROR`", "`DRIFT`"):
         assert marker in text
-    assert "docs/FRIEND_LAB.md" in text
 
 
-def test_readme_check_drift_examples_are_runnable() -> None:
-    examples = ROOT / "examples"
-    drift_before = json.loads(
-        (examples / "drift_before.json").read_text(encoding="utf-8")
-    )
-    drift_after = json.loads(
-        (examples / "drift_after.json").read_text(encoding="utf-8")
-    )
-    safe_before = json.loads(
-        (examples / "safe_before.json").read_text(encoding="utf-8")
-    )
-    safe_after = json.loads(
-        (examples / "safe_after.json").read_text(encoding="utf-8")
-    )
-
-    for card in (drift_before, drift_after, safe_before, safe_after):
-        assert validate_card(card).valid
-
-    drift_result = detect_boundary_drift(drift_before, drift_after)
-    assert drift_result.drifted
-    assert {
-        finding.code for finding in drift_result.findings
-    } == {"audit_to_mutation"}
-
-    safe_result = detect_boundary_drift(safe_before, safe_after)
-    assert not safe_result.drifted
+def test_readme_uses_only_the_approved_public_sections() -> None:
+    headings = [
+        line
+        for line in _text().splitlines()
+        if line.startswith("#")
+    ]
+    assert headings == [
+        "# Agent Frontdoor",
+        "## See the boundary",
+        "## How the gateway works",
+        "## Quick start",
+        "## Choose a route",
+        "## Evidence at a glance",
+        "## Safety and limits",
+        "## Ecosystem",
+        "## Documentation",
+        "## Project status",
+        "## License",
+    ]
 
 
-def test_readme_documents_current_intake_contract() -> None:
+def test_readme_preserves_truthful_safety_and_unreleased_status() -> None:
     text = _text()
-    assert "`src/frontdoor/schema/intake.v0.json`" in text
-    for field in CORE_FIELDS:
-        assert f"`{field}`" in text
-    for task_class in TASK_CLASSES:
-        assert f"`{task_class}`" in text
-    for gate in ("NONE", "CONFIRM", "BLOCKING"):
-        assert f"`{gate}`" in text
+    normalized = " ".join(text.split())
+    for marker in (
+        "This is not an agent runtime.",
+        "This is not an autonomous router.",
+        "does not execute commands",
+        "does not grant authority",
+        "core is read-only",
+        "not a security boundary",
+        "Unreleased source preview",
+        "No Git tag, GitHub release, or PyPI package exists",
+        "No independent security audit has been completed",
+    ):
+        assert marker in normalized
+    for stale in (
+        "<PUBLIC_REPOSITORY_URL>",
+        "CODEX_SELF_CONFIDENT_ADOPTED",
+        "REPEATED_EXCESSIVE_DERAILMENT",
+        "COMPOSITE_CONFIRMED_WITH_MISSING_COMMON_INVARIANT",
+        "CC_UNAUDITED",
+        "public CLI and exit codes are stable",
+        "img.shields.io",
+    ):
+        assert stale not in text
 
 
-def test_readme_documents_blocking_and_boundary_drift_contracts() -> None:
+def test_readme_uses_integrated_accessible_visuals() -> None:
     text = _text()
-    for category in (
-        "deploy",
-        "production",
-        "scheduler",
-        "secret",
-        "auth",
-        "billing",
-        "delete",
-        "destructive cleanup",
-        "SSOT mutation",
-        "external publish",
-        "authority promotion",
+    assert 'src="assets/agent-frontdoor-hero.svg"' in text
+    assert 'src="assets/agent-frontdoor-architecture.svg"' in text
+    assert "three independent read-only checks" in text
+    assert "Task Card -> Validation -> Drift Detection" not in text
+    for independent_route in (
+        "Task Card -> Validation -> VALID / INVALID",
+        "Baseline + revised card -> Drift Detection -> NO DRIFT / DRIFT",
+        (
+            "Prompt + proposed action -> Intent Lock -> "
+            "IntentDecision (allowed, code, reason)"
+        ),
     ):
-        assert f"`{category}`" in text
-    for transition in (
-        "read-only audit -> mutation recommendation",
-        "design review -> implementation",
-        "installation -> architecture migration",
-        "draft -> external publish",
-        "proposal-only -> authority promotion",
-        "bounded files -> unrelated broad refactor",
-    ):
-        assert transition in text
+        assert independent_route in text
+    assert "CLEAR / DRIFT" not in text
+    assert "ALLOW / DENY / HOLD" not in text
+    assert "agent-frontdoor-pulse" not in text
 
 
-def test_readme_documents_exits_metrics_and_safety_boundaries() -> None:
+def test_readme_distinguishes_invalid_cards_from_input_errors() -> None:
     text = _text()
-    for exit_contract in (
-        "`0`: valid card or no drift",
-        "`1`: loaded card is invalid",
-        "`2`: input is unreadable or malformed JSON",
-        "`3`: boundary drift detected",
+    boundary_table = text.split("The same fail-closed rule", 1)[1].split(
+        "## How the gateway works", 1
+    )[0]
+    normalized = boundary_table.casefold()
+    assert "successfully loaded but contract-invalid or unsafe card" in normalized
+    assert "`INVALID` (exit `1`)" in boundary_table
+    assert "unreadable input or malformed json" in normalized
+    assert "`ERROR` (exit `2`)" in boundary_table
+    assert "unsafe or malformed card" not in normalized
+
+
+def test_readme_routes_details_to_every_public_owner() -> None:
+    text = _text()
+    for target in (
+        "docs/GETTING_STARTED.md",
+        "docs/ARCHITECTURE.md",
+        "docs/EVIDENCE.md",
+        "docs/CORE_REFERENCE.md",
+        "docs/INTENT_LOCK.md",
+        "docs/TROUBLESHOOTING.md",
+        "docs/FRIEND_LAB.md",
+        "docs/mothership-suite.md",
+        "examples/README.md",
+        (
+            "https://github.com/UMEBOSHIISAN/agent-frontdoor/"
+            "blob/main/adapters/README.md"
+        ),
+        "CONTRIBUTING.md",
+        "SECURITY.md",
+        "SUPPORT.md",
+        "CODE_OF_CONDUCT.md",
+        "LICENSE",
+        "CHANGELOG.md",
     ):
-        assert exit_contract in text
-    assert (
-        ".venv/bin/pytest tests/test_fixture_metrics.py "
-        "tests/test_no_execution_paths.py -q"
-    ) in text
-    assert ".venv/bin/pytest -q" in text
-    for boundary in (
-        "no task execution",
-        "no network requests",
-        "no worker invocation",
-        "no automatic routing",
+        assert f"]({target})" in text
+
+
+def test_readme_uses_progressive_disclosure_for_detailed_contracts() -> None:
+    headings = {
+        line
+        for line in _text().splitlines()
+        if line.startswith("#")
+    }
+    for detailed_heading in (
+        "### `intake.v0` task card",
+        "## `intake.v0` schema",
+        "### Human gates and fail-closed rules",
+        "## Human gates and fail-closed rules",
+        "### Boundary drift",
+        "## Boundary-drift families",
+        "### Fixtures and hard metrics",
+        "## Fixtures and hard metrics",
+        "## Offline acceptance",
     ):
-        assert boundary in text
+        assert detailed_heading not in headings
+
+
+def test_readme_publishes_exactly_five_stable_evidence_signals() -> None:
+    evidence = _text().split("## Evidence at a glance", 1)[1].split(
+        "## Safety and limits", 1
+    )[0]
+    for marker in (
+        "Positive task-card fixtures",
+        "Negative task-card fixtures",
+        "Drift expectations",
+        "Safe controls",
+        "Core execution/network/worker/routing/source-write paths",
+    ):
+        assert marker in evidence
+    table_rows = [line for line in evidence.splitlines() if line.startswith("|")]
+    assert len(table_rows) == 7
+    assert "836 passed" not in evidence
 
 
 def test_readme_has_no_legacy_schema_references_or_stale_counts() -> None:
     text = _text()
     assert "agent-frontdoor.v0.1" not in text
     assert not re.search(r"\b\d+\s+tests?\s+pass(?:ed)?\b", text, re.IGNORECASE)
+    assert "836 passed" not in text
     assert "READ_ONLY_AUDIT" not in text
     assert "predicted_worker`" not in text

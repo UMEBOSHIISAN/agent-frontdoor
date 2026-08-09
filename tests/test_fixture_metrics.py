@@ -410,11 +410,7 @@ def test_fixture_counts_meet_contract() -> None:
         "negative": len(_fixture_names(NEGATIVE)),
         "drift": len(_fixture_names(DRIFT)),
     }
-    assert (
-        counts["positive"] >= 30
-        and counts["negative"] >= 30
-        and counts["drift"] == 20
-    ), f"fixture corpus is absent or undersized: {counts}"
+    assert counts == {"positive": 31, "negative": 41, "drift": 20}
 
 
 @pytest.mark.parametrize(

@@ -1,0 +1,125 @@
+{
+  "name": "Bug report",
+  "description": "Report reproducible behavior that differs from the documented contract.",
+  "labels": [
+    "bug"
+  ],
+  "body": [
+    {
+      "type": "dropdown",
+      "id": "area",
+      "attributes": {
+        "label": "Area",
+        "description": "Choose the narrowest affected boundary.",
+        "options": [
+          "Read-only core",
+          "Optional hook adapter",
+          "Documentation or examples",
+          "Packaging or distribution",
+          "Other"
+        ]
+      },
+      "validations": {
+        "required": true
+      }
+    },
+    {
+      "type": "input",
+      "id": "revision",
+      "attributes": {
+        "label": "Exact source revision",
+        "description": "Provide the complete commit SHA or reviewed source tag.",
+        "placeholder": "Full commit SHA"
+      },
+      "validations": {
+        "required": true
+      }
+    },
+    {
+      "type": "textarea",
+      "id": "environment",
+      "attributes": {
+        "label": "Python and operating system",
+        "description": "Provide the Python version, operating system, and whether this affects the core or optional adapter."
+      },
+      "validations": {
+        "required": true
+      }
+    },
+    {
+      "type": "textarea",
+      "id": "reproduction",
+      "attributes": {
+        "label": "Minimal reproduction",
+        "description": "List deterministic steps and a minimal redacted input. Do not include credentials, private paths, or live settings.",
+        "render": "shell"
+      },
+      "validations": {
+        "required": true
+      }
+    },
+    {
+      "type": "textarea",
+      "id": "expected",
+      "attributes": {
+        "label": "Expected behavior",
+        "description": "State the documented output, exit code, or boundary you expected."
+      },
+      "validations": {
+        "required": true
+      }
+    },
+    {
+      "type": "textarea",
+      "id": "actual",
+      "attributes": {
+        "label": "Actual behavior",
+        "description": "State the observed output, exit code, or boundary without adding secrets."
+      },
+      "validations": {
+        "required": true
+      }
+    },
+    {
+      "type": "textarea",
+      "id": "logs",
+      "attributes": {
+        "label": "Redacted logs",
+        "description": "Optional. Remove credentials, identifying data, private paths, and real session content before pasting.",
+        "render": "text"
+      },
+      "validations": {
+        "required": false
+      }
+    },
+    {
+      "type": "checkboxes",
+      "id": "checks",
+      "attributes": {
+        "label": "Acknowledgments",
+        "description": "Confirm each item before submitting.",
+        "options": [
+          {
+            "label": "I searched existing issues for the same behavior.",
+            "required": true
+          },
+          {
+            "label": "I removed secrets, credentials, private paths, and identifying data.",
+            "required": true
+          },
+          {
+            "label": "This is not a suspected vulnerability; security reports use the confidential route.",
+            "required": true
+          },
+          {
+            "label": "I agree to follow the Code of Conduct.",
+            "required": true
+          }
+        ]
+      },
+      "validations": {
+        "required": true
+      }
+    }
+  ]
+}

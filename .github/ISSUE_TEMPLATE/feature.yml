@@ -1,0 +1,111 @@
+{
+  "name": "Feature or design proposal",
+  "description": "Propose a bounded change with explicit trust-boundary impact.",
+  "labels": [
+    "enhancement"
+  ],
+  "body": [
+    {
+      "type": "dropdown",
+      "id": "area",
+      "attributes": {
+        "label": "Area",
+        "description": "Choose the narrowest proposed scope.",
+        "options": [
+          "Read-only core",
+          "Optional hook adapter",
+          "Documentation or examples",
+          "Packaging or distribution",
+          "Other"
+        ]
+      },
+      "validations": {
+        "required": true
+      }
+    },
+    {
+      "type": "textarea",
+      "id": "problem",
+      "attributes": {
+        "label": "Problem",
+        "description": "Describe the concrete user or maintainer problem without prescribing an unbounded solution."
+      },
+      "validations": {
+        "required": true
+      }
+    },
+    {
+      "type": "textarea",
+      "id": "proposal",
+      "attributes": {
+        "label": "Bounded proposal",
+        "description": "Describe the smallest change, its in-scope files or interfaces, and its stopping condition."
+      },
+      "validations": {
+        "required": true
+      }
+    },
+    {
+      "type": "textarea",
+      "id": "alternatives",
+      "attributes": {
+        "label": "Alternatives considered",
+        "description": "List simpler approaches, documentation-only options, or reasons to retain current behavior."
+      },
+      "validations": {
+        "required": true
+      }
+    },
+    {
+      "type": "textarea",
+      "id": "boundaries",
+      "attributes": {
+        "label": "Safety-boundary impact",
+        "description": "Address core execution, runtime network access, source writes, adapter state, human gates, and hook activation. State explicitly when each is unchanged."
+      },
+      "validations": {
+        "required": true
+      }
+    },
+    {
+      "type": "textarea",
+      "id": "evidence",
+      "attributes": {
+        "label": "Evidence",
+        "description": "Provide redacted measurements, failing tests, or public documentation that supports the proposal."
+      },
+      "validations": {
+        "required": false
+      }
+    },
+    {
+      "type": "checkboxes",
+      "id": "checks",
+      "attributes": {
+        "label": "Acknowledgments",
+        "description": "Confirm each item before submitting.",
+        "options": [
+          {
+            "label": "I searched existing issues for the same proposal.",
+            "required": true
+          },
+          {
+            "label": "The proposal does not itself authorize implementation, release, activation, or settings changes.",
+            "required": true
+          },
+          {
+            "label": "I removed secrets, credentials, private paths, and identifying data.",
+            "required": true
+          },
+          {
+            "label": "I agree to follow the Code of Conduct.",
+            "required": true
+          }
+        ]
+      },
+      "validations": {
+        "required": true
+      }
+    }
+  ]
+}

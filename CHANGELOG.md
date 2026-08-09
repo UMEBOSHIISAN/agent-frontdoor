@@ -2,9 +2,22 @@
 
 ## Unreleased
 
-- Added a closed Mothership 0.2.0 conformance manifest, an `intake.v0`
-  synthetic task card, and owner-schema/CLI tests without adding runtime
-  coupling, authority, or execution.
+No Git tag or GitHub release represents either subsection.
+
+### Planned 0.2.0
+
+- Added a closed owner-side Mothership 0.2 conformance manifest, an `intake.v0`
+  synthetic task card, and schema/CLI tests without adding runtime coupling,
+  authority, or execution.
+- Reserved `0.2.0` as the first core and adapter release line containing
+  `intent-lock.v1`; the adapter rejects the incompatible `0.1.x` core line.
+- Added the pure `intent-lock.v1` schema and deterministic task-identity state
+  machine for exact commands and literal error targets.
+- Added the separate optional `agent-frontdoor-hooks` distribution with Codex
+  and Claude Code lifecycle adapters, private atomic state, platform fixtures,
+  and fail-closed regression coverage.
+- Added inert configuration examples and activation/removal documentation. The
+  adapter is not activated in local agent settings by this repository.
 - Added a standard-library standalone archive verifier for detached, outer-pack,
   and nested-source integrity checks before extraction.
 - Defined a deterministic friend pack and closed public manifest/receipt
@@ -14,9 +27,10 @@
 - Corrected offline installation instructions to require an exact verified
   wheelhouse without global-package or index fallback.
 
-## 0.1.0 (release candidate)
+### Earlier 0.1 development candidate
 
-Initial release candidate.
+This earlier development history was never tagged or published as a GitHub
+release.
 
 - `intake.v0` JSON Schema contract: 14 core fields, 10 bounded task classes,
   three human-gate states.

@@ -50,17 +50,19 @@ The same fail-closed rule gives task cards and later revisions concrete results:
 
 ```text
 Task Card -> Validation -> VALID / INVALID
-Baseline + revised card -> Drift Detection -> CLEAR / DRIFT
-Prompt + proposed action -> Intent Lock -> ALLOW / DENY / HOLD
+Baseline + revised card -> Drift Detection -> NO DRIFT / DRIFT
+Prompt + proposed action -> Intent Lock -> IntentDecision (allowed, code, reason)
 ```
 
 These are three independent read-only checks, not stages in a composed
 pipeline. The core evaluates local inputs and returns deterministic decisions
-without task execution or state writes. The separately installable
-`agent-frontdoor-hooks` adapter maps supported local Codex and Claude Code
-lifecycle events to Intent Lock only and writes only privacy-minimized session
-state after an operator configures it. Human authority remains external to both
-distributions and separately decides permission, execution, and handoff.
+without task execution or state writes. `IntentDecision.allowed` describes
+task-identity consistency only; it is never an authority grant. The separately
+installable `agent-frontdoor-hooks` adapter maps supported local Codex and
+Claude Code lifecycle events to Intent Lock only and writes only
+privacy-minimized session state after an operator configures it. Human authority
+remains external to both distributions and separately decides permission,
+execution, and handoff.
 
 See the complete component and trust boundaries in
 [Architecture](docs/ARCHITECTURE.md).

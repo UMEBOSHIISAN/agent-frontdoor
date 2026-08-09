@@ -94,10 +94,15 @@ def test_readme_uses_integrated_accessible_visuals() -> None:
     assert "Task Card -> Validation -> Drift Detection" not in text
     for independent_route in (
         "Task Card -> Validation -> VALID / INVALID",
-        "Baseline + revised card -> Drift Detection -> CLEAR / DRIFT",
-        "Prompt + proposed action -> Intent Lock -> ALLOW / DENY / HOLD",
+        "Baseline + revised card -> Drift Detection -> NO DRIFT / DRIFT",
+        (
+            "Prompt + proposed action -> Intent Lock -> "
+            "IntentDecision (allowed, code, reason)"
+        ),
     ):
         assert independent_route in text
+    assert "CLEAR / DRIFT" not in text
+    assert "ALLOW / DENY / HOLD" not in text
     assert "agent-frontdoor-pulse" not in text
 
 

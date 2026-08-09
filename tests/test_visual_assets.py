@@ -120,8 +120,13 @@ def test_architecture_svg_is_accessible_static_and_exact() -> None:
         "Human authority remains external",
         "Three independent primitives",
         "Maps supported lifecycle events to Intent Lock only",
+        "NO DRIFT / DRIFT",
+        "IntentDecision",
+        "allowed · code · reason",
     ):
         assert marker in rendered_text
+    assert "CLEAR / DRIFT" not in rendered_text
+    assert "ALLOW / DENY / HOLD" not in rendered_text
     assert "marker-end" not in text
     assert ">01<" not in text
     assert ">02<" not in text

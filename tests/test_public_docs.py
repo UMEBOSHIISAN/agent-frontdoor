@@ -220,8 +220,11 @@ def test_architecture_defines_independent_primitives_and_authority_boundaries() 
     text = ARCHITECTURE.read_text(encoding="utf-8")
     for independent_route in (
         "Task Card -> Validation -> VALID / INVALID",
-        "Baseline + revised card -> Drift Detection -> CLEAR / DRIFT",
-        "Prompt + proposed action -> Intent Lock -> ALLOW / DENY / HOLD",
+        "Baseline + revised card -> Drift Detection -> NO DRIFT / DRIFT",
+        (
+            "Prompt + proposed action -> Intent Lock -> "
+            "IntentDecision (allowed, code, reason)"
+        ),
     ):
         assert independent_route in text
     assert "three independent primitives" in text
@@ -230,6 +233,10 @@ def test_architecture_defines_independent_primitives_and_authority_boundaries() 
         "Task Card -> Validation -> Drift Detection -> Intent Lock"
         not in text
     )
+    assert "CLEAR / DRIFT" not in text
+    assert "ALLOW / DENY / HOLD" not in text
+    assert "`REPORT_REQUIRED` is a lock phase" in text
+    assert "`allowed=False` with code `report_required`" in text
     for marker in (
         "`agent-frontdoor`",
         "`agent-frontdoor-hooks`",

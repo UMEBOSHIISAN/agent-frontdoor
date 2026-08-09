@@ -21,8 +21,8 @@ authority decision.
 
 ```text
 Task Card -> Validation -> VALID / INVALID
-Baseline + revised card -> Drift Detection -> CLEAR / DRIFT
-Prompt + proposed action -> Intent Lock -> ALLOW / DENY / HOLD
+Baseline + revised card -> Drift Detection -> NO DRIFT / DRIFT
+Prompt + proposed action -> Intent Lock -> IntentDecision (allowed, code, reason)
 ```
 
 These are three independent primitives, not consecutive stages. Callers invoke
@@ -30,6 +30,12 @@ task-card validation for one loaded card, drift detection for one validated
 before/after pair, or Intent Lock for one prompt and proposed action. The core
 returns deterministic local results without routing an output from one
 primitive into another.
+
+Intent Lock returns an `IntentDecision` with `allowed`, `code`, and `reason`.
+The field `allowed` describes task-identity consistency only.
+`REPORT_REQUIRED` is a lock phase, not a third decision result; while that phase
+is active, evaluation returns `allowed=False` with code `report_required`.
+Adapter silence on an identity-consistent action does not grant authority.
 
 The optional adapter maps supported lifecycle events to Intent Lock only and
 can retain privacy-minimized local state needed for a session-scoped lock. It

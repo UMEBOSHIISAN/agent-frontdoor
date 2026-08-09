@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" role="img" aria-labelledby="architecture-title architecture-desc">
   <title id="architecture-title">Agent Frontdoor independent primitives and authority boundaries</title>
-  <desc id="architecture-desc">Three independent primitives live in the read-only core: Validation, Drift Detection, and Intent Lock. The optional adapter connects only to Intent Lock. Human Gate and Safe Handoff remain under external human or host authority.</desc>
+  <desc id="architecture-desc">Three independent primitives live in the read-only core: Validation, Drift Detection, and Intent Lock. Drift Detection returns NO DRIFT or DRIFT. Intent Lock returns an IntentDecision with allowed, code, and reason fields. The optional adapter connects only to Intent Lock. Human Gate and Safe Handoff remain under external human or host authority.</desc>
   <defs>
     <linearGradient id="architecture-bg" x1="0" y1="0" x2="1" y2="1">
       <stop stop-color="#0b1020"/>
@@ -45,7 +45,7 @@
       <text x="330" y="429" fill="#94a3b8" font-size="13">named expansion checks</text>
       <line x1="604" y1="374" x2="604" y2="446" stroke="#4338ca"/>
       <text x="636" y="382" fill="#a5b4fc" font-size="12" font-weight="700" letter-spacing=".8">RESULT</text>
-      <text x="636" y="414" fill="#e0e7ff" font-size="17" font-weight="700">CLEAR / DRIFT</text>
+      <text x="636" y="414" fill="#e0e7ff" font-size="17" font-weight="700">NO DRIFT / DRIFT</text>
     </g>
 
     <g id="intent-lock-primitive">
@@ -58,8 +58,8 @@
       <text x="330" y="569" fill="#94a3b8" font-size="13">literal task identity</text>
       <line x1="604" y1="502" x2="604" y2="606" stroke="#4338ca"/>
       <text x="636" y="510" fill="#a5b4fc" font-size="12" font-weight="700" letter-spacing=".8">RESULT</text>
-      <text x="636" y="542" fill="#e0e7ff" font-size="16" font-weight="700">ALLOW / DENY / HOLD</text>
-      <text x="636" y="570" fill="#94a3b8" font-size="12">identity decision only</text>
+      <text x="636" y="542" fill="#e0e7ff" font-size="17" font-weight="700">IntentDecision</text>
+      <text x="636" y="570" fill="#94a3b8" font-size="12">allowed · code · reason</text>
     </g>
 
     <text x="908" y="154" fill="#86efac" font-size="15" font-weight="750">Human authority remains external</text>

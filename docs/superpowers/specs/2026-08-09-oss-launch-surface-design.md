@@ -248,7 +248,7 @@ by this design. It does not authorize a merge, release, package upload, secret o
 credential change, hook activation, or repository security-setting mutation.
 
 Enabling GitHub private vulnerability reporting, if required, has its own
-separate target and requires this exact token:
+separate target and requires this exact approval string:
 
 `DEPLOY_APPROVED:github.com/UMEBOSHIISAN/agent-frontdoor/settings/private-vulnerability-reporting`
 

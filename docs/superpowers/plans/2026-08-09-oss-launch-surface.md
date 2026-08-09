@@ -800,7 +800,7 @@ def test_community_files_exist_and_are_placeholder_free() -> None:
             "REPEATED_EXCESSIVE_DERAILMENT",
         ):
             assert forbidden not in text, (path, forbidden)
-        assert "/Users/" not in text
+        assert "/" + "Users" + "/" not in text
         assert not re.search(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\b", text)
 
 

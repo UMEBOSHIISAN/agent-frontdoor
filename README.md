@@ -103,6 +103,12 @@ $ echo $?
 
 That last pair is the one worth internalising. **"Read-only audit" quietly becoming "apply the fix" is not a malicious act.** It is the single most natural way for scope to grow between the moment a human said yes and the moment work happens. Frontdoor names it, exits non-zero, and mutates nothing.
 
+<p align="center">
+  <img src="assets/scope-drift.svg" alt="Two individually valid task cards: a read-only audit has become mutation work, and check-drift exits 3" width="100%">
+</p>
+
+Note where the drift is *not*. Neither card is malformed; `validate` returns `VALID` for both. The expansion only exists in the difference between them — which is why a single-document check can never find it, and why the comparison is a separate command rather than a stricter schema.
+
 ---
 
 ## Exit codes are part of the contract

@@ -5,6 +5,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 EVIDENCE = ROOT / "docs" / "EVIDENCE.md"
 CORE_REFERENCE = ROOT / "docs" / "CORE_REFERENCE.md"
+GETTING_STARTED = ROOT / "docs" / "GETTING_STARTED.md"
 CORE_SOURCE = ROOT / "src" / "frontdoor"
 INTAKE_SCHEMA = ROOT / "src" / "frontdoor" / "schema" / "intake.v0.json"
 
@@ -86,3 +87,34 @@ def test_core_reference_owns_blocking_and_boundary_drift_contracts() -> None:
         "bounded files -> unrelated broad refactor",
     ):
         assert transition in text
+
+
+def test_getting_started_reaches_first_success_without_release_claims() -> None:
+    text = GETTING_STARTED.read_text(encoding="utf-8")
+    ordered = (
+        "## Requirements",
+        "## Install from source",
+        "## Validate your first task card",
+        "## Read the task card",
+        "## Next routes",
+        "## Uninstall",
+    )
+    assert [text.index(item) for item in ordered] == sorted(
+        text.index(item) for item in ordered
+    )
+    for marker in (
+        "Python 3.10",
+        "https://github.com/UMEBOSHIISAN/agent-frontdoor.git",
+        '.venv/bin/python -m pip install -e .',
+        ".venv/bin/agent-frontdoor validate examples/task-card.json",
+        "VALID example-readme-audit",
+        ".venv/bin/python -m pip uninstall -y agent-frontdoor",
+        "CORE_REFERENCE.md",
+        "../examples/README.md",
+        "Optional adapter",
+        "POSIX",
+        "Windows",
+    ):
+        assert marker in text
+    assert "<PUBLIC_REPOSITORY_URL>" not in text
+    assert "pip install agent-frontdoor" not in text

@@ -1,0 +1,26 @@
+{
+  "schema_version": "intake.v0",
+  "request_id": "example-readme-audit",
+  "human_request": "Review README.md and report documentation gaps",
+  "task_class": "AUDIT",
+  "risk_tags": [],
+  "allowed_actions": [
+    "read README.md",
+    "report documentation gaps"
+  ],
+  "forbidden_actions": [
+    "modify files",
+    "publish externally"
+  ],
+  "required_evidence": [
+    "findings with file references"
+  ],
+  "required_manifest": null,
+  "human_gate": "NONE",
+  "predicted_worker_capability": "audit",
+  "unknowns": [],
+  "assumptions": [
+    "README.md is available locally"
+  ],
+  "next_safe_step": "Read README.md and report findings"
+}

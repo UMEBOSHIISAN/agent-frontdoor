@@ -74,6 +74,14 @@ def test_friend_lab_manual_has_no_real_receiver_or_private_location() -> None:
     assert "PRIVATE_HANDOFF_READY_WITH_GAPS" in text
 
 
+def test_friend_lab_is_advanced_not_standard_installation() -> None:
+    text = FRIEND_LAB.read_text(encoding="utf-8")
+    assert "## Audience and prerequisites" in text
+    assert "advanced offline receiver workflow" in text.casefold()
+    assert "not the standard installation path" in text.casefold()
+    assert "GETTING_STARTED.md" in text
+
+
 def test_distribution_keeps_exact_four_runtime_commands_and_no_lab_entrypoint() -> None:
     parser = build_parser()
     subparsers = [

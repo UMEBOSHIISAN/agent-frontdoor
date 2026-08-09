@@ -5,6 +5,15 @@ friend pack. It is not an installer, deployment script, remote-management tool,
 model router, or permission grant. It never changes an existing project,
 settings file, hook, service, scheduler, model inventory, or secret store.
 
+## Audience and prerequisites
+
+Friend Lab is an advanced offline receiver workflow, not the standard installation path.
+Start with [GETTING_STARTED.md](GETTING_STARTED.md) for the read-only core and
+[EVIDENCE.md](EVIDENCE.md) for the measured repository boundaries. This attended
+procedure additionally requires three out-of-band, human-confirmed lowercase
+SHA-256 values: the expected pack, source, and verifier digests. Keep them
+independent of the pack before beginning phase 1.
+
 The transfer set contains exactly two files:
 
 1. `agent-frontdoor-friend-pack-0.2.0.tar.gz`

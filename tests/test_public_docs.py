@@ -6,6 +6,8 @@ ROOT = Path(__file__).resolve().parents[1]
 EVIDENCE = ROOT / "docs" / "EVIDENCE.md"
 CORE_REFERENCE = ROOT / "docs" / "CORE_REFERENCE.md"
 GETTING_STARTED = ROOT / "docs" / "GETTING_STARTED.md"
+ARCHITECTURE = ROOT / "docs" / "ARCHITECTURE.md"
+TROUBLESHOOTING = ROOT / "docs" / "TROUBLESHOOTING.md"
 CORE_SOURCE = ROOT / "src" / "frontdoor"
 INTAKE_SCHEMA = ROOT / "src" / "frontdoor" / "schema" / "intake.v0.json"
 
@@ -118,3 +120,41 @@ def test_getting_started_reaches_first_success_without_release_claims() -> None:
         assert marker in text
     assert "<PUBLIC_REPOSITORY_URL>" not in text
     assert "pip install agent-frontdoor" not in text
+
+
+def test_architecture_defines_pipeline_and_authority_boundaries() -> None:
+    text = ARCHITECTURE.read_text(encoding="utf-8")
+    assert (
+        "Task Card -> Validation -> Drift Detection -> Intent Lock "
+        "-> Human Gate -> Safe Handoff"
+    ) in text
+    for marker in (
+        "`agent-frontdoor`",
+        "`agent-frontdoor-hooks`",
+        "read-only",
+        "privacy-minimized local state",
+        "does not grant authority",
+        "not a security boundary",
+        "human authority remains external",
+        "workflow-governance-model",
+        "mothership-router",
+        "mothership",
+    ):
+        assert marker in text
+
+
+def test_troubleshooting_uses_non_escalating_recovery() -> None:
+    text = TROUBLESHOOTING.read_text(encoding="utf-8")
+    for marker in (
+        "`ERROR`", "exit `2`", "`INVALID`", "exit `1`",
+        "`DRIFT`", "exit `3`", "`BLOCKING`", "`REPORT_REQUIRED`",
+        "mode `0700`", "mode `0600`", "Windows", "outcome-opaque",
+    ):
+        assert marker in text
+    for boundary in (
+        "do not retry",
+        "do not switch to an adjacent subsystem",
+        "does not grant authority",
+        "operator-owned settings",
+    ):
+        assert boundary in text

@@ -23,11 +23,15 @@ From the root of a reviewed monorepo checkout:
 python3 -m venv .venv
 .venv/bin/python -m pip install -e .
 .venv/bin/python -m pip install -e adapters
+hook_bin=".venv/bin/agent-frontdoor-hook"
+test -x "$hook_bin"
 ```
 
 The inert configuration files for this flow are under `adapters/examples/`.
 
 ### Unpacked adapter sdist
+
+#### Standard form
 
 An unpacked standalone adapter sdist does not contain the core. Before
 installing the adapter, obtain and review the matching core `agent-frontdoor` 0.2.0
@@ -41,28 +45,37 @@ test -f "$reviewed_core_sdist"
 python3 -m venv .venv
 .venv/bin/python -m pip install "$reviewed_core_sdist"
 .venv/bin/python -m pip install --no-deps .
+hook_bin=".venv/bin/agent-frontdoor-hook"
+test -x "$hook_bin"
 ```
 
-The core command may use configured package indexes for its runtime and build
-requirements. The adapter command still builds the reviewed local directory;
-`--no-deps` prevents dependency resolution from substituting another core.
+Both the standard core and adapter pip commands may use configured package
+indexes to resolve PEP 517 build requirements. The core command may also resolve
+runtime dependencies. The adapter command still builds the reviewed local
+directory, and `--no-deps` prevents runtime dependency resolution from
+substituting another core. `--no-deps` does not disable PEP 517 build isolation
+or index access for build requirements.
 
 #### Bounded offline form
 
 Use this form only with a reviewed isolated environment that already contains
 pip, `setuptools>=77`, and the core runtime dependency `jsonschema>=4`. These
-commands use only the two reviewed local sources: `--no-index` prohibits index
+commands use only the two reviewed local archives: `--no-index` prohibits index
 access, `--no-deps` disables dependency resolution, and
 `--no-build-isolation` prevents a build environment from fetching requirements.
 Missing prerequisites are a hard stop; do not remove the flags to continue.
 
 ```bash
 reviewed_core_sdist="/ABSOLUTE/PATH/TO/REVIEWED/agent_frontdoor-0.2.0.tar.gz"
+reviewed_adapter_sdist="/ABSOLUTE/PATH/TO/REVIEWED/agent_frontdoor_hooks-0.2.0.tar.gz"
 offline_python="/ABSOLUTE/PATH/TO/PREPROVISIONED/OFFLINE/VENV/bin/python"
 test -f "$reviewed_core_sdist"
+test -f "$reviewed_adapter_sdist"
 test -x "$offline_python"
 "$offline_python" -m pip install --no-index --no-deps --no-build-isolation "$reviewed_core_sdist"
-"$offline_python" -m pip install --no-index --no-deps --no-build-isolation .
+"$offline_python" -m pip install --no-index --no-deps --no-build-isolation "$reviewed_adapter_sdist"
+hook_bin="${offline_python%/python}/agent-frontdoor-hook"
+test -x "$hook_bin"
 ```
 
 The inert configuration files for this standalone flow are under `examples/`.
@@ -78,8 +91,9 @@ before merging any entries into operator-owned configuration.
 
 ## Non-live smoke test
 
-Run this sequence only from the reviewed source checkout and before any live
-activation. It uses a disposable state directory.
+Each installation flow above sets `hook_bin` to its reviewed adapter executable.
+Continue in the same shell after the chosen flow and run this sequence before
+any live activation. It uses a disposable state directory.
 The sequence does not modify operator-owned settings. Each synthetic JSON object
 passes to the hook on stdin. The hook evaluates each
 embedded `tool_input.command` as data; this procedure never runs those commands.
@@ -87,7 +101,6 @@ embedded `tool_input.command` as data; this procedure never runs those commands.
 ```bash
 adapter_state_dir="$(mktemp -d)"
 chmod 700 "$adapter_state_dir"
-hook_bin=".venv/bin/agent-frontdoor-hook"
 test -x "$hook_bin"
 
 printf '%s\n' '{"session_id":"adapter-smoke-codex","turn_id":"turn-1","hook_event_name":"UserPromptSubmit","prompt":"MCP client for `cloudflare-api` failed to start: invalid_grant: Grant not found"}' | "$hook_bin" --platform codex --state-dir "$adapter_state_dir"

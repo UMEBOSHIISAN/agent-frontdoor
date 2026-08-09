@@ -20,8 +20,9 @@ INTENT_LOCK_SCHEMA = (
     ROOT / "src" / "frontdoor" / "schema" / "intent-lock.v1.json"
 )
 ADAPTER_README = ROOT / "adapters" / "README.md"
+ADAPTER_ROOT = ROOT / "adapters"
 ADAPTER_PYPROJECT = ROOT / "adapters" / "pyproject.toml"
-ADAPTER_SOURCE_PRESENT = ADAPTER_PYPROJECT.is_file()
+ADAPTER_SOURCE_PRESENT = ADAPTER_ROOT.is_dir()
 CORE_SOURCE = ROOT / "src" / "frontdoor"
 INTAKE_SCHEMA = ROOT / "src" / "frontdoor" / "schema" / "intake.v0.json"
 
@@ -275,6 +276,14 @@ def test_intent_lock_reference_has_no_internal_labels() -> None:
     ):
         assert internal not in text
     assert "No independent security audit has been completed" in text
+
+
+def test_adapter_tree_requires_packaging_metadata() -> None:
+    if not ADAPTER_SOURCE_PRESENT:
+        return
+    assert ADAPTER_PYPROJECT.is_file(), (
+        "adapter tree requires adapters/pyproject.toml"
+    )
 
 
 @pytest.mark.skipif(

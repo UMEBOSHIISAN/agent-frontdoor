@@ -24,11 +24,12 @@ ATTRIBUTES = ROOT / ".gitattributes"
 FRIEND_LAB = ROOT / "docs" / "FRIEND_LAB.md"
 CHANGELOG = ROOT / "CHANGELOG.md"
 PYPROJECT = ROOT / "pyproject.toml"
+ADAPTER_ROOT = ROOT / "adapters"
 ADAPTER_PYPROJECT = ROOT / "adapters" / "pyproject.toml"
 ADAPTER_README = ROOT / "adapters" / "README.md"
 INTENT_LOCK = ROOT / "docs" / "INTENT_LOCK.md"
 ADAPTER_LICENSE = ROOT / "adapters" / "LICENSE"
-ADAPTER_SOURCE_PRESENT = ADAPTER_PYPROJECT.exists()
+ADAPTER_SOURCE_PRESENT = ADAPTER_ROOT.is_dir()
 
 CORE_URLS = {
     "Homepage": "https://github.com/UMEBOSHIISAN/agent-frontdoor",
@@ -189,6 +190,38 @@ def _materialize_validated_regular_members(
     artifact_root = destination / expected_root
     assert artifact_root.is_dir()
     return artifact_root
+
+
+def _controlled_python_environment(
+    overrides: dict[str, str] | None = None,
+) -> dict[str, str]:
+    passthrough = (
+        "LANG",
+        "LC_ALL",
+        "LC_CTYPE",
+        "PATH",
+        "SYSTEMROOT",
+        "TEMP",
+        "TMP",
+        "TMPDIR",
+        "TZ",
+        "WINDIR",
+    )
+    environment = {
+        name: os.environ[name]
+        for name in passthrough
+        if name in os.environ
+    }
+    environment.update(
+        {
+            "COLUMNS": "240",
+            "PYTEST_DISABLE_PLUGIN_AUTOLOAD": "1",
+            "PYTHONNOUSERSITE": "1",
+        }
+    )
+    if overrides is not None:
+        environment.update(overrides)
+    return environment
 
 
 @pytest.fixture(scope="module")
@@ -608,13 +641,101 @@ def test_clean_adapter_sdist_closes_every_relative_document_link(
 
 
 CORE_SDIST_PROBE_ENV = "AGENT_FRONTDOOR_CORE_SDIST_TEST_PROBE"
+PYTEST_OUTCOME = re.compile(
+    r"^(tests/\S+::\S+)\s+(?:PASSED|SKIPPED|FAILED|ERROR)",
+    re.MULTILINE,
+)
+CORE_ARTIFACT_PUBLIC_TEST_NAMES = (
+    "test_evidence_doc_scopes_every_published_number",
+    "test_core_reference_owns_intake_cli_gate_and_drift_contracts",
+    "test_core_reference_owns_blocking_and_boundary_drift_contracts",
+    "test_getting_started_reaches_first_success_without_release_claims",
+    "test_architecture_defines_pipeline_and_authority_boundaries",
+    "test_troubleshooting_uses_non_escalating_recovery",
+    "test_intent_lock_reference_has_no_internal_labels",
+    "test_adapter_tree_requires_packaging_metadata",
+    "test_adapter_readme_requires_smoke_before_activation",
+    "test_intended_public_markdown_links_resolve_inside_repository",
+    "test_local_readme_images_have_nonempty_alt_text",
+)
+CORE_ARTIFACT_BOUNDARY_TEST_NAMES = (
+    "test_distribution_keeps_exact_four_runtime_commands_and_no_lab_entrypoint",
+    "test_core_pep621_metadata_describes_unreleased_package",
+    "test_core_guide_uses_canonical_cross_distribution_links",
+    "test_both_distributions_use_current_spdx_license_metadata",
+    "test_clean_core_sdist_has_exact_closed_member_set",
+    "test_clean_core_sdist_closes_every_relative_document_link",
+)
+CORE_ARTIFACT_PUBLIC_TESTS = tuple(
+    f"tests/test_public_docs.py::{name}"
+    for name in CORE_ARTIFACT_PUBLIC_TEST_NAMES
+)
+CORE_ARTIFACT_BOUNDARY_TESTS = tuple(
+    f"tests/test_distribution_boundary.py::{name}"
+    for name in CORE_ARTIFACT_BOUNDARY_TEST_NAMES
+)
 
 
 @pytest.mark.skipif(
     os.environ.get(CORE_SDIST_PROBE_ENV) == "1",
     reason="inside the bounded core-sdist test probe",
 )
+@pytest.mark.parametrize(
+    "hostile_environment",
+    (False, True),
+    ids=("controlled-baseline", "hostile-parent-environment"),
+)
 def test_clean_core_sdist_runs_its_shipped_public_contracts(
+    core_sdist: SdistSnapshot,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    hostile_environment: bool,
+) -> None:
+    artifact_root = _materialize_validated_regular_members(
+        core_sdist,
+        tmp_path / "materialized",
+    )
+    if hostile_environment:
+        hostile = {
+            "PYTEST_ADDOPTS": (
+                "-k test_core_pep621_metadata_describes_unreleased_package"
+            ),
+            "PYTEST_DISABLE_PLUGIN_AUTOLOAD": "0",
+            "PYTEST_PLUGINS": "frontdoor_nonexistent_pytest_plugin",
+            "PYTHONDEVMODE": "1",
+            "PYTHONHOME": str(tmp_path / "hostile-python-home"),
+            "PYTHONPATH": str(tmp_path / "hostile-python-path"),
+            "PYTHONSTARTUP": str(tmp_path / "hostile-startup.py"),
+            "PYTHONWARNINGS": "error",
+        }
+        for name, value in hostile.items():
+            monkeypatch.setenv(name, value)
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "pytest",
+            "-vv",
+            "--no-header",
+            "--no-summary",
+            "tests/test_public_docs.py",
+            *CORE_ARTIFACT_BOUNDARY_TESTS,
+        ],
+        cwd=artifact_root,
+        env=_controlled_python_environment({CORE_SDIST_PROBE_ENV: "1"}),
+        capture_output=True,
+        text=True,
+    )
+
+    observed = tuple(PYTEST_OUTCOME.findall(result.stdout))
+    assert observed == (
+        CORE_ARTIFACT_PUBLIC_TESTS + CORE_ARTIFACT_BOUNDARY_TESTS
+    ), f"{result.stdout}\n{result.stderr}"
+    assert result.returncode == 0, f"{result.stdout}\n{result.stderr}"
+
+
+def test_partial_adapter_tree_cannot_skip_packaging_metadata(
     core_sdist: SdistSnapshot,
     tmp_path: Path,
 ) -> None:
@@ -622,42 +743,29 @@ def test_clean_core_sdist_runs_its_shipped_public_contracts(
         core_sdist,
         tmp_path / "materialized",
     )
-    selection = (
-        "tests/test_public_docs.py",
-        (
-            "tests/test_distribution_boundary.py::"
-            "test_distribution_keeps_exact_four_runtime_commands_and_no_lab_entrypoint"
-        ),
-        (
-            "tests/test_distribution_boundary.py::"
-            "test_core_pep621_metadata_describes_unreleased_package"
-        ),
-        (
-            "tests/test_distribution_boundary.py::"
-            "test_core_guide_uses_canonical_cross_distribution_links"
-        ),
-        (
-            "tests/test_distribution_boundary.py::"
-            "test_both_distributions_use_current_spdx_license_metadata"
-        ),
-        (
-            "tests/test_distribution_boundary.py::"
-            "test_clean_core_sdist_has_exact_closed_member_set"
-        ),
-        (
-            "tests/test_distribution_boundary.py::"
-            "test_clean_core_sdist_closes_every_relative_document_link"
-        ),
-    )
+    partial_adapter = artifact_root / "adapters"
+    partial_adapter.mkdir()
+    shutil.copy2(ADAPTER_README, partial_adapter / "README.md")
+
     result = subprocess.run(
-        [sys.executable, "-m", "pytest", "-q", *selection],
+        [
+            sys.executable,
+            "-m",
+            "pytest",
+            "-q",
+            (
+                "tests/test_public_docs.py::"
+                "test_adapter_tree_requires_packaging_metadata"
+            ),
+        ],
         cwd=artifact_root,
-        env={**os.environ, CORE_SDIST_PROBE_ENV: "1"},
+        env=_controlled_python_environment({CORE_SDIST_PROBE_ENV: "1"}),
         capture_output=True,
         text=True,
     )
 
-    assert result.returncode == 0, f"{result.stdout}\n{result.stderr}"
+    assert result.returncode == 1, f"{result.stdout}\n{result.stderr}"
+    assert "adapter tree requires adapters/pyproject.toml" in result.stdout
 
 
 @pytest.mark.skipif(
@@ -674,17 +782,13 @@ def test_clean_sdists_install_core_first_and_import_without_an_index(
 
     target = tmp_path / "site"
     target.mkdir()
-    environment = {
-        **{
-            key: value
-            for key, value in os.environ.items()
-            if not key.startswith("PIP_")
-        },
-        "PIP_CONFIG_FILE": os.devnull,
-        "PIP_DISABLE_PIP_VERSION_CHECK": "1",
-        "PIP_NO_INDEX": "1",
-        "PYTHONNOUSERSITE": "1",
-    }
+    environment = _controlled_python_environment(
+        {
+            "PIP_CONFIG_FILE": os.devnull,
+            "PIP_DISABLE_PIP_VERSION_CHECK": "1",
+            "PIP_NO_INDEX": "1",
+        }
+    )
     install = (
         sys.executable,
         "-m",
@@ -750,32 +854,74 @@ def test_clean_adapter_sdist_documents_checkout_and_standalone_flows(
     text = adapter_sdist.markdown["README.md"]
     checkout_start = text.index("### Monorepo checkout")
     standalone_start = text.index("### Unpacked adapter sdist")
+    standard_start = text.index("#### Standard form")
+    offline_start = text.index("#### Bounded offline form")
     smoke_start = text.index("## Non-live smoke test")
-    assert checkout_start < standalone_start < smoke_start
+    activation_start = text.index("## Codex example")
+    assert (
+        checkout_start
+        < standalone_start
+        < standard_start
+        < offline_start
+        < smoke_start
+        < activation_start
+    )
 
     checkout = text[checkout_start:standalone_start]
-    standalone = text[standalone_start:smoke_start]
-    assert ".venv/bin/python -m pip install -e ." in checkout
-    assert ".venv/bin/python -m pip install -e adapters" in checkout
+    standard = text[standard_start:offline_start]
+    offline = text[offline_start:smoke_start]
+    smoke = text[smoke_start:activation_start]
+    checkout_core = ".venv/bin/python -m pip install -e ."
+    checkout_adapter = ".venv/bin/python -m pip install -e adapters"
+    local_hook = 'hook_bin=".venv/bin/agent-frontdoor-hook"'
+    hook_check = 'test -x "$hook_bin"'
+    assert checkout.index(checkout_core) < checkout.index(checkout_adapter)
+    assert checkout.index(checkout_adapter) < checkout.index(local_hook)
+    assert checkout.index(local_hook) < checkout.index(hook_check)
     assert "`adapters/examples/`" in checkout
 
-    assert "matching core `agent-frontdoor` 0.2.0" in standalone
-    assert "agent_frontdoor-0.2.0.tar.gz" in standalone
+    assert "matching core `agent-frontdoor` 0.2.0" in standard
+    assert "agent_frontdoor-0.2.0.tar.gz" in standard
     standard_core = (
         '.venv/bin/python -m pip install "$reviewed_core_sdist"'
     )
     standard_adapter = ".venv/bin/python -m pip install --no-deps ."
-    assert standalone.index(standard_core) < standalone.index(standard_adapter)
+    assert standard.index(standard_core) < standard.index(standard_adapter)
+    assert standard.index(standard_adapter) < standard.index(local_hook)
+    assert standard.index(local_hook) < standard.index(hook_check)
+    assert (
+        "Both the standard core and adapter pip commands may use configured "
+        "package indexes"
+    ) in " ".join(standard.split())
+    assert "PEP 517 build requirements" in standard
+    assert (
+        "`--no-deps` does not disable PEP 517 build isolation or index access"
+        in " ".join(standard.split())
+    )
+
     offline_core = (
         '"$offline_python" -m pip install --no-index --no-deps '
         '--no-build-isolation "$reviewed_core_sdist"'
     )
     offline_adapter = (
         '"$offline_python" -m pip install --no-index --no-deps '
-        "--no-build-isolation ."
+        '--no-build-isolation "$reviewed_adapter_sdist"'
     )
-    assert standalone.index(offline_core) < standalone.index(offline_adapter)
-    assert "`examples/`" in standalone
+    offline_hook = (
+        'hook_bin="${offline_python%/python}/agent-frontdoor-hook"'
+    )
+    assert offline.index(offline_core) < offline.index(offline_adapter)
+    assert offline.index(offline_adapter) < offline.index(offline_hook)
+    assert offline.index(offline_hook) < offline.index(hook_check)
+    assert offline.count("--no-index --no-deps --no-build-isolation") == 2
+    assert "agent_frontdoor_hooks-0.2.0.tar.gz" in offline
+    assert 'test -f "$reviewed_adapter_sdist"' in offline
+    assert "`examples/`" in offline
+
+    assert "Each installation flow above sets `hook_bin`" in smoke
+    assert "hook_bin=" not in smoke
+    assert smoke.count(hook_check) == 1
+    assert smoke.count('"$hook_bin" --platform codex') == 6
 
 
 def test_changelog_records_intent_lock_as_unreleased_and_unactivated() -> None:

@@ -7,9 +7,12 @@ procedures do not prevent that drift unless every proposed tool call remains
 attached to the literal target.
 
 This reference describes the deterministic contract and adapter boundary. See
-[Architecture](ARCHITECTURE.md) for the full pipeline,
-[Evidence](EVIDENCE.md) for the published test scope,
-[Troubleshooting](TROUBLESHOOTING.md) for non-escalating recovery, and the
+[Architecture](https://github.com/UMEBOSHIISAN/agent-frontdoor/blob/main/docs/ARCHITECTURE.md)
+for the full pipeline,
+[Evidence](https://github.com/UMEBOSHIISAN/agent-frontdoor/blob/main/docs/EVIDENCE.md)
+for the published test scope,
+[Troubleshooting](https://github.com/UMEBOSHIISAN/agent-frontdoor/blob/main/docs/TROUBLESHOOTING.md)
+for non-escalating recovery, and the
 [public adapter guide](https://github.com/UMEBOSHIISAN/agent-frontdoor/blob/main/adapters/README.md)
 for a non-live evaluation path.
 

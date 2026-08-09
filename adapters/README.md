@@ -99,12 +99,14 @@ environment created during installation. Do not rely on an interactive shell's
 `PATH`; hook processes may receive a different environment.
 
 The example covers `UserPromptSubmit`, `PreToolUse`, `PostToolUse`, and
-`SessionEnd`. Current Codex Bash `PostToolUse` payloads expose the command output
-as a raw string but omit the process exit status. The adapter therefore treats a
-matching result without an explicit structured status—whether a raw string or a
-content mapping—as outcome-opaque and enters `REPORT_REQUIRED`; it never guesses
-success from output text or envelope shape. If a future or synthetic payload
-supplies an explicit structured status, that status is honored.
+`SessionEnd`. The adapter assumes that Codex Bash `PostToolUse` payloads expose
+the command output as a raw string but omit the process exit status. Under that
+assumption, a matching result without an explicit structured status—whether a
+raw string or a content mapping—is outcome-opaque and enters `REPORT_REQUIRED`;
+the adapter never guesses success from output text or envelope shape. If a
+future or synthetic payload supplies an explicit structured status, that status
+is honored. Check this assumption against the current official Codex hook
+documentation before activation.
 
 ## Claude Code example
 
@@ -168,7 +170,7 @@ literal-target lock, binds an accepted tool-use id to the current epoch, and
 requires a human-facing report after a failed or outcome-opaque result. It never
 treats identity with the original intent as permission or authority. The
 canonical phase, matching, transition, and correlation rules are in the
-[Intent Lock reference](../docs/INTENT_LOCK.md).
+[Intent Lock reference](https://github.com/UMEBOSHIISAN/agent-frontdoor/blob/main/docs/INTENT_LOCK.md).
 
 This is a task-identity guardrail, not a security boundary. Local hooks do not
 necessarily cover hosted or specialized execution paths. Platform behavior can

@@ -191,6 +191,7 @@ def test_intent_lock_reference_has_no_internal_labels() -> None:
 
 def test_adapter_readme_requires_smoke_before_activation() -> None:
     text = ADAPTER_README.read_text(encoding="utf-8")
+    normalized = " ".join(text.split())
     ordered = (
         "## Install in an isolated environment",
         "## Non-live smoke test",
@@ -212,3 +213,10 @@ def test_adapter_readme_requires_smoke_before_activation() -> None:
         "Windows is rejected",
     ):
         assert marker in text
+    assert (
+        "The adapter assumes that Codex Bash `PostToolUse` payloads"
+    ) in normalized
+    assert (
+        "Check this assumption against the current official Codex hook "
+        "documentation before activation."
+    ) in normalized

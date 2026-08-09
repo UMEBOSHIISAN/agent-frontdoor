@@ -49,6 +49,26 @@ def _run_hook(
     )
 
 
+def _documented_codex_smoke_payloads(text: str) -> list[object]:
+    smoke = text.split("## Non-live smoke test", maxsplit=1)[1].split(
+        "## Codex example", maxsplit=1
+    )[0]
+    prefix = "printf '%s\\n' '"
+    suffix = (
+        "' | \"$hook_bin\" --platform codex "
+        "--state-dir \"$adapter_state_dir\""
+    )
+    payloads = []
+    for line in smoke.splitlines():
+        if not line.startswith(prefix):
+            continue
+        if not line.endswith(suffix):
+            raise ValueError("documented command is not an exact smoke pipeline")
+        serialized = line[len(prefix):-len(suffix)]
+        payloads.append(json.loads(serialized))
+    return payloads
+
+
 @pytest.mark.parametrize(
     ("fixture_name", "platform"),
     [
@@ -141,17 +161,7 @@ def test_public_examples_register_required_platform_events() -> None:
 
 def test_documented_codex_smoke_sequence_replays_safely(tmp_path: Path) -> None:
     text = ADAPTER_README.read_text(encoding="utf-8")
-    smoke = text.split("## Non-live smoke test", maxsplit=1)[1].split(
-        "## Codex example", maxsplit=1
-    )[0]
-    prefix = "printf '%s\\n' '"
-    payloads = []
-    for line in smoke.splitlines():
-        if line.startswith(prefix) and " | \"$hook_bin\"" in line:
-            serialized = line[len(prefix):].split(
-                "' | \"$hook_bin\"", maxsplit=1
-            )[0]
-            payloads.append(json.loads(serialized))
+    payloads = _documented_codex_smoke_payloads(text)
 
     assert len(payloads) == 6
     assert [payload["hook_event_name"] for payload in payloads] == [
@@ -176,3 +186,19 @@ def test_documented_codex_smoke_sequence_replays_safely(tmp_path: Path) -> None:
     assert '"permissionDecision": "deny"' in results[4].stdout
     assert results[5].stdout == ""
     assert load_session_lock(tmp_path, "adapter-smoke-codex") is None
+
+
+def test_documented_codex_smoke_rejects_trailing_shell_text() -> None:
+    text = ADAPTER_README.read_text(encoding="utf-8")
+    expected_suffix = (
+        " --platform codex --state-dir \"$adapter_state_dir\""
+    )
+    unsafe = text.replace(
+        expected_suffix,
+        f"{expected_suffix} ; unexpected-shell-text",
+        1,
+    )
+    assert unsafe != text
+
+    with pytest.raises(ValueError, match="exact smoke pipeline"):
+        _documented_codex_smoke_payloads(unsafe)

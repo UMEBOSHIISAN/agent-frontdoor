@@ -16,6 +16,7 @@ CHANGELOG = ROOT / "CHANGELOG.md"
 PYPROJECT = ROOT / "pyproject.toml"
 ADAPTER_PYPROJECT = ROOT / "adapters" / "pyproject.toml"
 ADAPTER_README = ROOT / "adapters" / "README.md"
+INTENT_LOCK = ROOT / "docs" / "INTENT_LOCK.md"
 ADAPTER_LICENSE = ROOT / "adapters" / "LICENSE"
 MANIFEST = ROOT / "MANIFEST.in"
 ADAPTER_SOURCE_PRESENT = ADAPTER_PYPROJECT.exists()
@@ -168,6 +169,21 @@ def test_hook_adapter_distribution_includes_inert_configuration_examples() -> No
     assert "share/agent-frontdoor-hooks/examples" in ADAPTER_README.read_text(
         encoding="utf-8"
     )
+
+
+def test_distributed_guides_use_canonical_cross_distribution_links() -> None:
+    repository = "https://github.com/UMEBOSHIISAN/agent-frontdoor/blob/main"
+    adapter = ADAPTER_README.read_text(encoding="utf-8")
+    intent_lock = INTENT_LOCK.read_text(encoding="utf-8")
+
+    assert f"[Intent Lock reference]({repository}/docs/INTENT_LOCK.md)" in adapter
+    for label, target in (
+        ("Architecture", "docs/ARCHITECTURE.md"),
+        ("Evidence", "docs/EVIDENCE.md"),
+        ("Troubleshooting", "docs/TROUBLESHOOTING.md"),
+        ("public adapter guide", "adapters/README.md"),
+    ):
+        assert f"[{label}]({repository}/{target})" in intent_lock
 
 
 def test_both_distributions_use_current_spdx_license_metadata() -> None:

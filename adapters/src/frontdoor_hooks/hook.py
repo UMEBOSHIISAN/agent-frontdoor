@@ -78,7 +78,8 @@ def _tool_action(payload: Mapping[str, object]) -> tuple[str, bool]:
     tool_name = payload.get("tool_name")
     is_shell_tool = (
         isinstance(tool_name, str)
-        and tool_name.casefold() in _SHELL_TOOL_NAMES
+        and tool_name.isascii()
+        and tool_name.lower() in _SHELL_TOOL_NAMES
     )
     if is_shell_tool and isinstance(tool_input, Mapping):
         for key in ("command", "cmd"):

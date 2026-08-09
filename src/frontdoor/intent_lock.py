@@ -9,7 +9,7 @@ from importlib import resources
 import json
 import re
 import shlex
-from typing import Any
+from typing import Any, Literal
 
 from jsonschema import Draft202012Validator
 
@@ -213,23 +213,11 @@ _CORRECTION_MENTION_PATTERN = re.compile(
     r"(?:最初の依頼|元の依頼|original request|first request)",
     re.IGNORECASE,
 )
-_AMBIGUOUS_RESULT_FOLLOWUP_PATTERN = re.compile(
-    r"^\s*(?:(?:can|could|would)\s+you\s+)?(?:please\s+)?"
-    r"(?:explain\s+)?(?:"
-    r"why\s+(?:did\s+)?(?:it|that|this)\s+"
-    r"(?:fail(?:ed)?|error(?:ed)?|not\s+work|not\s+succeed)"
-    r"|what\s+(?:happened|went\s+wrong)"
-    r"|did\s+(?:it|that|this)\s+(?:fail|work|succeed)"
-    r")\s*[?.!]*\s*$",
-    re.IGNORECASE,
-)
-_SUBSTANTIVE_UNRELATED_PROMPT_PATTERN = re.compile(
+_RESULT_REFERENCE_PATTERN = re.compile(
     r"(?:"
-    r"\b(?:add|analy[sz]e|audit|check|create|delete|edit|explain|find|fix|"
-    r"implement|inspect|list|open|read|remove|review|run|search|show|"
-    r"summari[sz]e|tell|test|update|write)\b"
-    r"|(?:監査|確認|調査|分析|修正|更新|作成|実装|テスト|読ん|教えて|"
-    r"表示|検索|削除|追加)"
+    r"\b(?:error|fail(?:ed|ure)?|happened|outcome|result|succeed(?:ed)?|"
+    r"success|went\s+wrong|work(?:ed)?)\b"
+    r"|(?:エラー|失敗|どうな|なぜ)"
     r")",
     re.IGNORECASE,
 )
@@ -611,11 +599,59 @@ def _hold(prompt: str, previous: IntentLock) -> IntentLock:
     )
 
 
+def _strip_unquoted_shell_comment(action: str) -> str:
+    """Strip a POSIX comment only when `#` begins an unquoted shell word."""
+
+    characters: list[str] = []
+    quote: str | None = None
+    escaped = False
+    at_word_start = True
+    for character in action:
+        if quote == "'":
+            characters.append(character)
+            if character == quote:
+                quote = None
+            continue
+        if quote == '"':
+            characters.append(character)
+            if escaped:
+                escaped = False
+            elif character == "\\":
+                escaped = True
+            elif character == quote:
+                quote = None
+            continue
+        if escaped:
+            characters.append(character)
+            escaped = False
+            at_word_start = False
+            continue
+        if character == "\\":
+            characters.append(character)
+            escaped = True
+            at_word_start = False
+            continue
+        if character in {"'", '"'}:
+            characters.append(character)
+            quote = character
+            at_word_start = False
+            continue
+        if character == "#" and at_word_start:
+            break
+        characters.append(character)
+        at_word_start = character in " \t\r\n;&|()<>"
+    return "".join(characters)
+
+
 def _matches_locked_identity(lock: IntentLock, action: str) -> bool:
     if lock.mode == "EXACT_COMMAND":
         return _digest(_normalized_command(action)) == lock.exact_command_sha256
     try:
-        parts = shlex.split(action, comments=True, posix=True)
+        parts = shlex.split(
+            _strip_unquoted_shell_comment(action),
+            comments=False,
+            posix=True,
+        )
     except ValueError:
         return False
     action_digests = {
@@ -624,6 +660,66 @@ def _matches_locked_identity(lock: IntentLock, action: str) -> bool:
         for token in _ACTION_TOKEN_PATTERN.findall(part)
     }
     return all(digest in action_digests for digest in lock.target_token_sha256)
+
+
+def _targets_match_lock(
+    lock: IntentLock,
+    targets: tuple[str, ...],
+) -> bool:
+    return any(
+        _digest(target.casefold()) in lock.target_token_sha256
+        for target in targets
+    )
+
+
+def _prompt_mentions_lock_target(lock: IntentLock, prompt: str) -> bool:
+    prompt_tokens = {
+        token.casefold() for token in _ACTION_TOKEN_PATTERN.findall(prompt)
+    }
+    return any(
+        target.casefold() in prompt_tokens for target in lock.display_targets
+    )
+
+
+def _is_related_followup(
+    prompt: str,
+    previous: IntentLock,
+    targets: tuple[str, ...],
+) -> bool:
+    if _CORRECTION_MENTION_PATTERN.search(prompt):
+        return True
+    if _prompt_mentions_lock_target(previous, prompt):
+        return True
+    if targets:
+        return _targets_match_lock(previous, targets)
+    return bool(_RESULT_REFERENCE_PATTERN.search(prompt))
+
+
+def _is_substantive_prompt(prompt: str) -> bool:
+    words = re.findall(r"[^\W_]+", prompt, re.UNICODE)
+    if len(words) >= 3:
+        return True
+    return len("".join(words)) >= 12
+
+
+def _classify_report_prompt(
+    prompt: str,
+    previous: IntentLock,
+    targets: tuple[str, ...],
+    *,
+    affirmative_correction: bool,
+) -> Literal["PRESERVE", "REPLACE", "RELEASE"]:
+    if (
+        affirmative_correction
+        or _CONTINUATION_PATTERN.fullmatch(prompt.strip())
+        or _is_related_followup(prompt, previous, targets)
+    ):
+        return "PRESERVE"
+    if targets:
+        return "REPLACE"
+    if _is_substantive_prompt(prompt):
+        return "RELEASE"
+    return "PRESERVE"
 
 
 def derive_lock(
@@ -656,15 +752,6 @@ def derive_lock(
         return _hold(prompt, previous)
 
     targets = _extract_error_targets(prompt)
-    if targets:
-        return _new_lock(
-            prompt,
-            epoch=epoch,
-            mode="LITERAL_TARGET",
-            command=None,
-            targets=targets,
-        )
-
     affirmative_correction = _AFFIRMATIVE_CORRECTION_PATTERN.search(prompt)
     correction_is_cancelled = bool(
         affirmative_correction
@@ -682,18 +769,43 @@ def derive_lock(
     ):
         return _hold(prompt, previous)
 
+    if previous is not None and previous.phase == "REPORT_REQUIRED":
+        transition = _classify_report_prompt(
+            prompt,
+            previous,
+            targets,
+            affirmative_correction=bool(affirmative_correction),
+        )
+        if transition == "PRESERVE":
+            return previous
+        if transition == "REPLACE":
+            return _new_lock(
+                prompt,
+                epoch=epoch,
+                mode="LITERAL_TARGET",
+                command=None,
+                targets=targets,
+            )
+        return None
+
+    if targets:
+        return _new_lock(
+            prompt,
+            epoch=epoch,
+            mode="LITERAL_TARGET",
+            command=None,
+            targets=targets,
+        )
+
     if previous is not None and (
         affirmative_correction
         or _CONTINUATION_PATTERN.fullmatch(prompt.strip())
     ):
         return _relock(prompt, previous)
     if previous is not None:
-        if (
-            _CORRECTION_MENTION_PATTERN.search(prompt)
-            or _AMBIGUOUS_RESULT_FOLLOWUP_PATTERN.fullmatch(prompt)
-        ):
+        if _is_related_followup(prompt, previous, targets):
             return previous
-        if not _SUBSTANTIVE_UNRELATED_PROMPT_PATTERN.search(prompt):
+        if not _is_substantive_prompt(prompt):
             return previous
     return None
 
@@ -713,10 +825,7 @@ def _is_serialized_tool_envelope(action: str) -> bool:
         value = json.loads(action)
     except json.JSONDecodeError:
         return False
-    return isinstance(value, Mapping) and {
-        "tool_name",
-        "tool_input",
-    }.issubset(value)
+    return isinstance(value, (Mapping, list))
 
 
 def evaluate_action(

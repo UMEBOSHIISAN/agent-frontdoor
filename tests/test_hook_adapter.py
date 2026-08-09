@@ -126,39 +126,44 @@ def test_pre_tool_denies_lateral_target_and_silently_accepts_match(
     assert matched is None
 
 
-def test_literal_target_ignores_unquoted_comment_but_keeps_quoted_hash(
+@pytest.mark.parametrize(
+    ("command", "allowed"),
+    [
+        ("npx wrangler whoami # cloudflare-api", False),
+        ("echo foo# cloudflare-api", True),
+        (r"echo foo\# cloudflare-api", True),
+        ('echo "foo# note" cloudflare-api', True),
+        (r'echo "foo\" # cloudflare-api"', True),
+        ("echo 'foo# note' cloudflare-api", True),
+    ],
+)
+def test_literal_target_obeys_posix_comment_boundaries(
     tmp_path: Path,
+    command: str,
+    allowed: bool,
 ) -> None:
     _activate_target_lock(tmp_path)
 
-    comment = handle_event(
+    output = handle_event(
         _payload(
             "PreToolUse",
             tool_name="Bash",
-            tool_use_id="comment-tool",
-            tool_input={"command": "npx wrangler whoami # cloudflare-api"},
-        ),
-        tmp_path,
-        platform="codex",
-    )
-    quoted = handle_event(
-        _payload(
-            "PreToolUse",
-            tool_name="Bash",
-            tool_use_id="quoted-tool",
-            tool_input={"command": 'npx wrangler whoami "# cloudflare-api"'},
+            tool_use_id="comment-boundary-tool",
+            tool_input={"command": command},
         ),
         tmp_path,
         platform="codex",
     )
 
-    assert comment is not None
-    assert comment["hookSpecificOutput"]["permissionDecision"] == "deny"
-    assert comment["hookSpecificOutput"]["permissionDecisionReason"] == (
-        "Proposed action does not contain the locked literal target: "
-        "cloudflare-api."
-    )
-    assert quoted is None
+    if allowed:
+        assert output is None
+    else:
+        assert output is not None
+        assert output["hookSpecificOutput"]["permissionDecision"] == "deny"
+        assert output["hookSpecificOutput"]["permissionDecisionReason"] == (
+            "Proposed action does not contain the locked literal target: "
+            "cloudflare-api."
+        )
 
 
 def test_literal_target_rejects_non_shell_payload_containing_target(
@@ -213,6 +218,48 @@ def test_exact_command_requires_a_known_shell_tool_identity(tmp_path: Path) -> N
     assert unrelated is not None
     assert unrelated["hookSpecificOutput"]["permissionDecision"] == "deny"
     assert unified_exec is None
+
+
+@pytest.mark.parametrize("tool_name", ["Baſh", "Ｂash", "Básh"])
+def test_non_ascii_tool_name_is_never_trusted_as_shell(
+    tmp_path: Path,
+    tool_name: str,
+) -> None:
+    _activate_target_lock(tmp_path)
+
+    output = handle_event(
+        _payload(
+            "PreToolUse",
+            tool_name=tool_name,
+            tool_use_id="confusable-tool",
+            tool_input={"command": "codex mcp login cloudflare-api"},
+        ),
+        tmp_path,
+        platform="codex",
+    )
+
+    assert output is not None
+    assert output["hookSpecificOutput"]["permissionDecision"] == "deny"
+    assert output["hookSpecificOutput"]["permissionDecisionReason"] == (
+        "Literal-target matching requires a recognized shell action."
+    )
+
+
+def test_ascii_tool_name_normalizes_case_only(tmp_path: Path) -> None:
+    _activate_target_lock(tmp_path)
+
+    output = handle_event(
+        _payload(
+            "PreToolUse",
+            tool_name="bAsH",
+            tool_use_id="ascii-tool",
+            tool_input={"command": "codex mcp login cloudflare-api"},
+        ),
+        tmp_path,
+        platform="codex",
+    )
+
+    assert output is None
 
 
 def test_matching_tool_without_tool_use_id_is_denied_as_uncorrelatable(
@@ -541,8 +588,19 @@ def test_ambiguous_correction_keeps_report_required_lock(
     assert load_session_lock(tmp_path, SESSION).phase == "REPORT_REQUIRED"
 
 
-def test_ambiguous_failure_followup_keeps_report_hold_until_unrelated_release(
+@pytest.mark.parametrize(
+    "prompt",
+    [
+        "Why did that fail?",
+        "Tell me what failed",
+        "Review the failure",
+        "Explain why cloudflare-api failed",
+        "Okay?",
+    ],
+)
+def test_related_failure_followup_keeps_report_hold_and_denies_next_tool(
     tmp_path: Path,
+    prompt: str,
 ) -> None:
     _activate_exact_lock(tmp_path)
     _accept_exact_tool(tmp_path)
@@ -559,7 +617,7 @@ def test_ambiguous_failure_followup_keeps_report_hold_until_unrelated_release(
     )
 
     followup = handle_event(
-        _payload("UserPromptSubmit", prompt="Why did that fail?"),
+        _payload("UserPromptSubmit", prompt=prompt),
         tmp_path,
         platform="codex",
     )
@@ -584,19 +642,6 @@ def test_ambiguous_failure_followup_keeps_report_hold_until_unrelated_release(
     assert denied["hookSpecificOutput"]["permissionDecisionReason"] == (
         "A human-facing response is required before using another tool."
     )
-
-    released = handle_event(
-        _payload(
-            "UserPromptSubmit",
-            prompt="Inspect README and report only the documentation findings.",
-        ),
-        tmp_path,
-        platform="codex",
-    )
-
-    assert released is None
-    assert load_session_lock(tmp_path, SESSION) is None
-
 
 def test_codex_failed_post_tool_requires_report_and_blocks_next_tool(
     tmp_path: Path,
@@ -875,7 +920,7 @@ def test_statusless_codex_mapping_is_opaque_instead_of_staying_pending(
     assert current.pending_tool_use_sha256 is None
 
 
-def test_human_correction_relocks_failed_intent(
+def test_human_correction_cannot_bypass_adapter_report_hold(
     tmp_path: Path,
 ) -> None:
     _activate_exact_lock(tmp_path)
@@ -899,17 +944,57 @@ def test_human_correction_relocks_failed_intent(
     )
 
     assert output is not None
-    assert "epoch=2" in output["hookSpecificOutput"]["additionalContext"]
-    assert load_session_lock(tmp_path, SESSION).phase == "DIRECT_REQUIRED"
+    current = load_session_lock(tmp_path, SESSION)
+    assert current is not None
+    assert current.phase == "REPORT_REQUIRED"
+    denied = handle_event(
+        _payload(
+            "PreToolUse",
+            tool_name="Bash",
+            tool_use_id="next-tool",
+            tool_input={"command": "codex mcp login cloudflare-api"},
+        ),
+        tmp_path,
+        platform="claude",
+    )
+    assert denied is not None
+    assert denied["hookSpecificOutput"]["permissionDecision"] == "deny"
+    assert denied["hookSpecificOutput"]["permissionDecisionReason"] == (
+        "A human-facing response is required before using another tool."
+    )
 
 
-def test_substantive_new_prompt_clears_previous_lock(tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    "prompt",
+    [
+        "READMEの文章を監査して結果だけ教えて",
+        "Translate this sentence",
+        "Compare these files",
+    ],
+)
+def test_substantive_new_prompt_clears_report_hold(
+    tmp_path: Path,
+    prompt: str,
+) -> None:
     _activate_exact_lock(tmp_path)
+    _accept_exact_tool(tmp_path)
+    feedback = handle_event(
+        _payload(
+            "PostToolUse",
+            tool_name="Bash",
+            tool_use_id="accepted-tool",
+            tool_input={"command": "codex mcp login cloudflare-api"},
+            tool_response={"exit_code": 1, "output": "failed"},
+        ),
+        tmp_path,
+        platform="codex",
+    )
+    assert feedback is not None
 
     output = handle_event(
         _payload(
             "UserPromptSubmit",
-            prompt="READMEの文章を監査して結果だけ教えて",
+            prompt=prompt,
         ),
         tmp_path,
         platform="codex",

@@ -95,10 +95,11 @@ matching exact command with explicit success succeeds -> RELEASED
 matching tool action fails -> REPORT_REQUIRED
 Codex result with no explicit structured status -> REPORT_REQUIRED
 REPORT_REQUIRED + any tool -> deny and require human-facing report
-affirmative human correction phrase -> DIRECT_REQUIRED on the previous literal intent
+affirmative correction while DIRECT_REQUIRED -> new DIRECT_REQUIRED epoch
+affirmative correction while REPORT_REQUIRED -> preserve the report hold
 negated/cancellation phrase -> REPORT_REQUIRED hold; never re-enable the action
-ambiguous mention or result question such as "Why did that fail?" -> preserve without re-locking
-new explicit command/error -> new epoch and replacement lock
+related target/result question such as "Why did that fail?" -> preserve without re-locking
+new explicit command or unrelated structured error -> new epoch and replacement lock
 new substantive unrelated prompt -> prior lock released
 ```
 
@@ -108,14 +109,17 @@ question is not release evidence.
 
 In `EXACT_COMMAND` mode, only the syntax-preserving exact command is accepted. In
 `LITERAL_TARGET` mode, only a recognized shell action can match, and that command
-must contain all target tokens as shell arguments. An unquoted shell comment does
-not contribute tokens; a `#` inside a quoted argument remains part of that
-argument. Non-shell tool envelopes and inert payload text never satisfy the
+must contain all target tokens as shell arguments. A `#` starts a comment only
+when it begins an unquoted shell word. An escaped or mid-word `#`, or a `#` inside
+a quoted argument, remains part of that argument. A standalone serialized JSON
+object or array is treated as an inert tool envelope regardless of its field
+names; JSON text inside an actual shell-command argument remains ordinary command
+text. Other non-shell envelopes and inert payload text likewise never satisfy the
 literal-target check. This prevents `cloudflare-api` from becoming an unqualified
-`wrangler` action without trying to infer semantic equivalence. Target-mode
-actions must also be one shell command: control operators, redirections,
-substitutions, parentheses, and embedded newlines are rejected even when the
-target token is present. Direct API callers identify non-shell input with
+`wrangler` action without trying to infer semantic equivalence. Target-mode actions
+must also be one shell command: control operators, redirections, substitutions,
+parentheses, and embedded newlines are rejected even when the target token is
+present. Direct API callers identify non-shell input with
 `evaluate_action(..., shell_action=False)`.
 
 ## Adapter boundary
@@ -138,7 +142,9 @@ or alternative routes. Multiple-hook authority remains independent; a same-task
 allow decision is represented by silence, never an authority-granting `allow`.
 Only recognized shell-tool identities may supply the raw command used for exact-
 command or literal-target comparison; an unrelated function or MCP tool with a
-coincidental `command` field retains its full envelope and does not match.
+coincidental `command` field retains its full envelope and does not match. Shell-
+tool names must be ASCII, and only ASCII letter case is normalized; Unicode or
+confusable names are never trusted as shell tools.
 Result events are applied only when their `tool_use_id` matches the digest bound
 at `PreToolUse`. A result from an older epoch, even for the same command, is
 ignored and cannot release or fail the current lock.
@@ -183,7 +189,8 @@ stdout, or stderr.
 5. An exact-command mismatch is denied even when it names the same vendor.
 6. A failed or outcome-opaque matching action moves to `REPORT_REQUIRED`.
 7. No later tool call is allowed before the result is reported to the human.
-8. Affirmative `最初の依頼` and `do the original request` re-lock the prior intent.
+8. Affirmative `最初の依頼` and `do the original request` re-lock a direct prior
+   intent but cannot bypass an active `REPORT_REQUIRED` hold.
 9. A negated, cancelled, or ambiguous correction preserves a blocking lock and
    never re-enables the prior action.
 10. A stale result from an older epoch cannot mutate the current lock.

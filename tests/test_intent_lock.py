@@ -215,25 +215,58 @@ def test_target_lock_ignores_target_in_unquoted_shell_comment() -> None:
     )
 
 
-def test_target_lock_preserves_hash_inside_quoted_shell_argument() -> None:
+@pytest.mark.parametrize(
+    "action",
+    [
+        "echo foo# cloudflare-api",
+        r"echo foo\# cloudflare-api",
+        'echo "foo# note" cloudflare-api',
+        r'echo "foo\" # cloudflare-api"',
+        "echo 'foo# note' cloudflare-api",
+        'npx wrangler whoami "# cloudflare-api"',
+    ],
+)
+def test_target_lock_preserves_non_comment_hashes(action: str) -> None:
     lock = derive_lock(ERROR_PROMPT)
     assert lock is not None
 
-    decision = evaluate_action(lock, 'npx wrangler whoami "# cloudflare-api"')
+    decision = evaluate_action(lock, action)
 
     assert decision.allowed
     assert decision.code == "literal_target_match"
 
 
-def test_target_lock_rejects_non_shell_payload_containing_target() -> None:
+@pytest.mark.parametrize(
+    "payload",
+    [
+        json.dumps(
+            {
+                "tool_name": "apply_patch",
+                "tool_input": {"patch": "*** Add File: cloudflare-api"},
+            }
+        ),
+        json.dumps(
+            {
+                "type": "tool",
+                "name": "apply_patch",
+                "input": "cloudflare-api",
+            }
+        ),
+        json.dumps(
+            {"name": "apply_patch", "arguments": ["cloudflare-api"]},
+            separators=(",", ":"),
+        ),
+        json.dumps(
+            {"toolName": "apply_patch", "toolInput": "cloudflare-api"}
+        ),
+        json.dumps(["apply_patch", {"text": "cloudflare-api"}]),
+    ],
+)
+def test_target_lock_rejects_serialized_envelope_containing_target(
+    payload: str,
+) -> None:
     lock = derive_lock(ERROR_PROMPT)
     assert lock is not None
-    payload = json.dumps(
-        {
-            "tool_name": "apply_patch",
-            "tool_input": {"patch": "*** Add File: cloudflare-api"},
-        }
-    )
 
     decision = evaluate_action(lock, payload)
 
@@ -242,6 +275,22 @@ def test_target_lock_rejects_non_shell_payload_containing_target() -> None:
         code="literal_target_non_shell_action",
         reason="Literal-target matching requires a recognized shell action.",
     )
+
+
+@pytest.mark.parametrize(
+    "action",
+    [
+        "echo '{\"name\":\"cloudflare-api\"}'",
+        "printf '%s' '[\"cloudflare-api\"]'",
+    ],
+)
+def test_target_lock_allows_shell_commands_with_json_argument_text(
+    action: str,
+) -> None:
+    lock = derive_lock(ERROR_PROMPT)
+    assert lock is not None
+
+    assert evaluate_action(lock, action).allowed
 
 
 @pytest.mark.parametrize(
@@ -670,20 +719,42 @@ def test_released_lock_is_terminal_for_later_results() -> None:
 def test_human_relock_preserves_previous_intent(prompt: str) -> None:
     previous = derive_lock("`codex mcp login cloudflare-api`")
     assert previous is not None
-    failed = record_result(
+
+    relocked = derive_lock(prompt, previous=previous)
+
+    assert relocked is not None
+    assert relocked.intent_epoch == previous.intent_epoch + 1
+    assert relocked.phase == "DIRECT_REQUIRED"
+    assert relocked.mode == previous.mode
+    assert relocked.exact_command_sha256 == previous.exact_command_sha256
+    assert relocked.target_token_sha256 == previous.target_token_sha256
+
+
+@pytest.mark.parametrize(
+    "prompt",
+    [
+        "まず最初の依頼して",
+        "do the original request",
+        "やって",
+        "proceed",
+    ],
+)
+def test_human_correction_cannot_bypass_report_hold(prompt: str) -> None:
+    previous = derive_lock("`codex mcp login cloudflare-api`")
+    assert previous is not None
+    held = record_result(
         previous,
         "codex mcp login cloudflare-api",
         failed=True,
     )
 
-    relocked = derive_lock(prompt, previous=failed)
+    preserved = derive_lock(prompt, previous=held)
 
-    assert relocked is not None
-    assert relocked.intent_epoch == failed.intent_epoch + 1
-    assert relocked.phase == "DIRECT_REQUIRED"
-    assert relocked.mode == failed.mode
-    assert relocked.exact_command_sha256 == failed.exact_command_sha256
-    assert relocked.target_token_sha256 == failed.target_token_sha256
+    assert preserved is held
+    assert evaluate_action(
+        preserved,
+        "codex mcp login cloudflare-api",
+    ).code == "report_required"
 
 
 @pytest.mark.parametrize(
@@ -863,6 +934,10 @@ def test_ambiguous_original_request_mention_preserves_previous_hold() -> None:
         "Why did that fail?",
         "Can you explain why that failed?",
         "What happened?",
+        "Tell me what failed",
+        "Review the failure",
+        "Explain why cloudflare-api failed",
+        "Explain why component cloudflare-api failed",
         "Okay?",
     ],
 )
@@ -884,14 +959,34 @@ def test_no_new_evidence_preserves_previous_report_hold(prompt: str) -> None:
     ).code == "report_required"
 
 
-def test_substantive_unrelated_prompt_releases_previous_lock() -> None:
+def test_related_result_question_preserves_direct_lock() -> None:
     previous = derive_lock("`codex mcp login cloudflare-api`")
     assert previous is not None
 
-    assert derive_lock(
+    assert derive_lock("Why did that fail?", previous=previous) is previous
+
+
+@pytest.mark.parametrize(
+    "prompt",
+    [
         "READMEの文章を監査して結果だけ教えて",
-        previous=previous,
-    ) is None
+        "Translate this sentence",
+        "Compare these files",
+    ],
+)
+def test_substantive_unrelated_prompt_releases_previous_lock(
+    prompt: str,
+) -> None:
+    previous = derive_lock("`codex mcp login cloudflare-api`")
+    assert previous is not None
+    held = record_result(
+        previous,
+        "codex mcp login cloudflare-api",
+        failed=True,
+    )
+    assert held.phase == "REPORT_REQUIRED"
+
+    assert derive_lock(prompt, previous=held) is None
 
 
 def test_unrelated_negated_command_does_not_cancel_active_exact_lock() -> None:

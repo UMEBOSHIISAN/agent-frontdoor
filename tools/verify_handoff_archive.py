@@ -9,8 +9,10 @@ import hashlib
 import io
 import ipaddress
 import json
+import os
 from pathlib import Path, PurePosixPath
 import re
+import stat
 from typing import Sequence
 import tarfile
 
@@ -432,6 +434,147 @@ def _compare_member_records(
     return _stable_errors(errors)
 
 
+def _directory_flags() -> int:
+    return (
+        os.O_RDONLY
+        | getattr(os, "O_CLOEXEC", 0)
+        | getattr(os, "O_DIRECTORY", 0)
+        | getattr(os, "O_NOFOLLOW", 0)
+    )
+
+
+def _open_snapshot_directory(parent_fd: int, name: str) -> int:
+    try:
+        os.mkdir(name, mode=0o700, dir_fd=parent_fd)
+    except FileExistsError:
+        pass
+    descriptor = os.open(name, _directory_flags(), dir_fd=parent_fd)
+    opened = os.fstat(descriptor)
+    if not stat.S_ISDIR(opened.st_mode):
+        os.close(descriptor)
+        raise OSError("snapshot component is not a directory")
+    if opened.st_mode & 0o077:
+        os.close(descriptor)
+        raise OSError("snapshot directory is not private")
+    return descriptor
+
+
+def _write_snapshot_member(
+    root_fd: int,
+    record: MemberRecord,
+    data: bytes,
+) -> None:
+    parts = PurePosixPath(record.path).parts
+    if not parts or any(part in {"", ".", ".."} for part in parts):
+        raise OSError("snapshot member path invalid")
+    parent_fd = os.dup(root_fd)
+    descriptor = -1
+    try:
+        for component in parts[:-1]:
+            child_fd = _open_snapshot_directory(parent_fd, component)
+            os.close(parent_fd)
+            parent_fd = child_fd
+        flags = (
+            os.O_RDWR
+            | os.O_CREAT
+            | os.O_EXCL
+            | getattr(os, "O_CLOEXEC", 0)
+            | getattr(os, "O_NOFOLLOW", 0)
+        )
+        descriptor = os.open(
+            parts[-1], flags, record.mode, dir_fd=parent_fd
+        )
+        os.fchmod(descriptor, record.mode)
+        remaining = memoryview(data)
+        while remaining:
+            written = os.write(descriptor, remaining)
+            if written <= 0:
+                raise OSError("snapshot member write incomplete")
+            remaining = remaining[written:]
+        os.fsync(descriptor)
+        observed = os.fstat(descriptor)
+        if (
+            not stat.S_ISREG(observed.st_mode)
+            or observed.st_mode & 0o777 != record.mode
+            or observed.st_size != record.size
+        ):
+            raise OSError("snapshot member metadata mismatch")
+        os.lseek(descriptor, 0, os.SEEK_SET)
+        digest = hashlib.sha256()
+        while True:
+            chunk = os.read(descriptor, 1024 * 1024)
+            if not chunk:
+                break
+            digest.update(chunk)
+        if digest.hexdigest() != record.sha256:
+            raise OSError("snapshot member digest mismatch")
+    finally:
+        if descriptor >= 0:
+            os.close(descriptor)
+        os.close(parent_fd)
+
+
+def _materialize_verified_snapshot(
+    inspection: _ArchiveInspection,
+    destination: Path,
+) -> tuple[str, ...]:
+    if (
+        inspection.errors
+        or inspection.root_name != _PACK_ROOT
+        or destination.name != _PACK_ROOT
+    ):
+        return ("snapshot destination invalid",)
+    parent_fd = root_fd = -1
+    try:
+        parent = destination.parent
+        parent_before = parent.lstat()
+        if (
+            not stat.S_ISDIR(parent_before.st_mode)
+            or parent_before.st_mode & 0o077
+        ):
+            raise OSError("snapshot parent is not private")
+        parent_fd = os.open(parent, _directory_flags())
+        parent_opened = os.fstat(parent_fd)
+        if (
+            not stat.S_ISDIR(parent_opened.st_mode)
+            or (parent_before.st_dev, parent_before.st_ino)
+            != (parent_opened.st_dev, parent_opened.st_ino)
+            or parent_opened.st_mode & 0o077
+        ):
+            raise OSError("snapshot parent changed")
+        os.mkdir(destination.name, mode=0o700, dir_fd=parent_fd)
+        root_fd = os.open(
+            destination.name, _directory_flags(), dir_fd=parent_fd
+        )
+        os.fchmod(root_fd, 0o700)
+        by_path = {record.path: record for record in inspection.members}
+        if set(by_path) != set(inspection.payloads):
+            raise OSError("snapshot member set mismatch")
+        for relative in sorted(by_path):
+            record = by_path[relative]
+            data = inspection.payloads[relative]
+            if (
+                len(data) != record.size
+                or _sha256_bytes(data) != record.sha256
+            ):
+                raise OSError("snapshot payload mismatch")
+            _write_snapshot_member(root_fd, record, data)
+        parent_after = destination.parent.lstat()
+        if (parent_after.st_dev, parent_after.st_ino) != (
+            parent_opened.st_dev,
+            parent_opened.st_ino,
+        ):
+            raise OSError("snapshot parent changed")
+    except (OSError, ValueError):
+        return ("snapshot materialization failed",)
+    finally:
+        if root_fd >= 0:
+            os.close(root_fd)
+        if parent_fd >= 0:
+            os.close(parent_fd)
+    return ()
+
+
 def verify_source_archive_bytes(
     data: bytes,
     *,
@@ -636,6 +779,7 @@ def verify_friend_pack(
     expected_pack_sha256: str,
     expected_source_sha256: str,
     expected_verifier_sha256: str,
+    materialize_to: Path | None = None,
 ) -> VerificationResult:
     """Verify detached trust, outer pack membership, and nested source bytes."""
 
@@ -832,6 +976,11 @@ def verify_friend_pack(
                 expected_members=source_records,
             )
             errors.extend(nested_result.errors)
+
+    if not _stable_errors(errors) and materialize_to is not None:
+        errors.extend(
+            _materialize_verified_snapshot(initial, materialize_to)
+        )
 
     return _result(
         "friend-pack",

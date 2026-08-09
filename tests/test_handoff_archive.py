@@ -301,6 +301,7 @@ def verify_pack(fixture: SimpleNamespace, **overrides):
         expected_verifier_sha256=overrides.get(
             "expected_verifier_sha256", fixture.verifier_sha256
         ),
+        materialize_to=overrides.get("materialize_to"),
     )
 
 
@@ -536,6 +537,101 @@ def test_friend_pack_accepts_exact_detached_and_nested_bytes(tmp_path: Path) -> 
     assert result.sha256 == fixture.pack_sha256
     assert result.root_name == PACK_ROOT
     assert result.errors == ()
+
+
+def test_friend_pack_materializes_exact_private_regular_member_snapshot(
+    tmp_path: Path,
+) -> None:
+    fixture = make_friend_pack(tmp_path)
+    run_root = tmp_path / "run"
+    run_root.mkdir(mode=0o700)
+    snapshot = run_root / PACK_ROOT
+
+    result = verify_pack(fixture, materialize_to=snapshot)
+
+    assert result.ok is True
+    assert snapshot.stat().st_mode & 0o777 == 0o700
+    assert all(
+        path.stat().st_mode & 0o777 == 0o700
+        for path in snapshot.rglob("*")
+        if path.is_dir()
+    )
+    actual = tuple(
+        _api().MemberRecord(
+            path=path.relative_to(snapshot).as_posix(),
+            mode=path.stat().st_mode & 0o777,
+            size=len(data),
+            sha256=sha256(data),
+        )
+        for path in sorted(snapshot.rglob("*"))
+        if path.is_file() and not path.is_symlink()
+        for data in (path.read_bytes(),)
+    )
+    assert actual == result.members
+
+
+def test_friend_pack_does_not_materialize_before_authentication(
+    tmp_path: Path,
+) -> None:
+    fixture = make_friend_pack(tmp_path)
+    run_root = tmp_path / "run"
+    run_root.mkdir(mode=0o700)
+    snapshot = run_root / PACK_ROOT
+
+    result = verify_pack(
+        fixture,
+        expected_pack_sha256="0" * 64,
+        materialize_to=snapshot,
+    )
+
+    assert result.ok is False
+    assert not snapshot.exists()
+
+
+def test_friend_pack_rejects_preexisting_snapshot_without_overwrite(
+    tmp_path: Path,
+) -> None:
+    fixture = make_friend_pack(tmp_path)
+    run_root = tmp_path / "run"
+    run_root.mkdir(mode=0o700)
+    snapshot = run_root / PACK_ROOT
+    snapshot.mkdir(mode=0o700)
+    marker = snapshot / "receiver-owned.txt"
+    marker.write_bytes(b"preserve\n")
+
+    result = verify_pack(fixture, materialize_to=snapshot)
+
+    assert result.ok is False
+    assert "snapshot materialization failed" in result.errors
+    assert marker.read_bytes() == b"preserve\n"
+
+
+def test_friend_pack_rejects_partial_snapshot_write(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fixture = make_friend_pack(tmp_path)
+    run_root = tmp_path / "run"
+    run_root.mkdir(mode=0o700)
+    snapshot = run_root / PACK_ROOT
+    api = _api()
+    real_write = api._write_snapshot_member
+    calls = 0
+
+    def fail_second_member(*args: object, **kwargs: object) -> None:
+        nonlocal calls
+        calls += 1
+        if calls == 2:
+            raise OSError("synthetic partial write")
+        real_write(*args, **kwargs)
+
+    monkeypatch.setattr(api, "_write_snapshot_member", fail_second_member)
+
+    result = verify_pack(fixture, materialize_to=snapshot)
+
+    assert result.ok is False
+    assert "snapshot materialization failed" in result.errors
+    assert calls == 2
 
 
 def test_friend_pack_rejects_detached_verifier_digest_mismatch(tmp_path: Path) -> None:

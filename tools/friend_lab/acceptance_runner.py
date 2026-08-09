@@ -85,6 +85,7 @@ _GAP_ORDER = (
 )
 _ALLOWED_RUN_ROOT_ENTRIES = frozenset(
     {
+        PACK_ROOT_NAME,
         "audit-ledger.jsonl",
         "environment",
         "evidence",
@@ -308,6 +309,7 @@ class BoundedCommandRunner:
 
 @dataclass(frozen=True)
 class _PackContext:
+    pack_root: Path
     members: tuple[MemberRecord, ...]
     manifest: dict[str, object]
     source_manifest: dict[str, object]
@@ -778,6 +780,7 @@ def _validate_pack_root(pack_root: Path) -> _PackContext:
     ):
         raise AcceptanceError("pack root changed during validation")
     return _PackContext(
+        pack_root=pack_root,
         members=materialized_members,
         manifest=manifest,
         source_manifest=source_manifest,
@@ -1203,12 +1206,14 @@ def _run_deterministic_pair(
 
 def _fallback_context(request: AcceptanceRequest) -> _PackContext:
     zero = "0" * 64
+    pack_root = request.run_root / PACK_ROOT_NAME
     return _PackContext(
+        pack_root=pack_root,
         members=(),
         manifest={},
         source_manifest={},
         wheel_manifest={},
-        source_path=request.pack_root / "missing-source.tar.gz",
+        source_path=pack_root / "missing-source.tar.gz",
         source_sha256=zero,
         source_manifest_sha256=zero,
         verifier_sha256=(
@@ -1490,8 +1495,7 @@ def _finish(
     try:
         _validate_receipt(
             receipt,
-            state.request.pack_root
-            / "schemas/friend_acceptance_receipt.v1.json",
+            context.pack_root / "schemas/friend_acceptance_receipt.v1.json",
         )
         receipt_data = (
             json.dumps(receipt, sort_keys=True, separators=(",", ":")) + "\n"
@@ -1557,6 +1561,7 @@ def run_acceptance(
     request.run_root.mkdir(parents=True, mode=0o700)
     state = _AcceptanceState(request)
     context = _fallback_context(request)
+    pack_root = context.pack_root
     pack_sha = _observed_digest(request.pack_path)
     detached_sha = _observed_digest(request.detached_verifier_path)
     digest_equality = {
@@ -1572,17 +1577,18 @@ def run_acceptance(
     }
 
     try:
-        context = _validate_pack_root(request.pack_root)
-        digest_equality["source"] = bool(
-            _HEX64.fullmatch(request.expected_source_sha256)
-            and context.source_sha256 == request.expected_source_sha256
-        )
         verification = verify_friend_pack(
             request.pack_path,
             detached_verifier_path=request.detached_verifier_path,
             expected_pack_sha256=request.expected_pack_sha256,
             expected_source_sha256=request.expected_source_sha256,
             expected_verifier_sha256=request.expected_verifier_sha256,
+            materialize_to=pack_root,
+        )
+        context = _validate_pack_root(pack_root)
+        digest_equality["source"] = bool(
+            _HEX64.fullmatch(request.expected_source_sha256)
+            and context.source_sha256 == request.expected_source_sha256
         )
         verified_members = getattr(verification, "members", None)
         verified = bool(
@@ -1604,7 +1610,7 @@ def run_acceptance(
             digest_equality=digest_equality,
         )
 
-    privacy_control_ok = _privacy_control_ok(request.pack_root, context)
+    privacy_control_ok = _privacy_control_ok(pack_root, context)
     state.add_internal("privacy-control", privacy_control_ok)
     if not privacy_control_ok:
         state.gaps.add("CONTROL_FAILURE")
@@ -1623,7 +1629,7 @@ def run_acceptance(
     ledger.chmod(0o600)
     try:
         env = _create_isolated_environment(
-            request.run_root, request.pack_root, ledger
+            request.run_root, pack_root, ledger
         )
     except (AcceptanceError, OSError):
         state.add_internal("environment-isolation", False)
@@ -1643,7 +1649,7 @@ def run_acceptance(
         "write-control",
         (
             sys.executable,
-            str(request.pack_root / "lab/controls/write_outside_probe.py"),
+            str(pack_root / "lab/controls/write_outside_probe.py"),
         ),
         cwd=request.run_root,
         env=env,
@@ -1676,7 +1682,7 @@ def run_acceptance(
         state,
         runner,
         "socket-control",
-        (sys.executable, str(request.pack_root / "lab/controls/socket_probe.py")),
+        (sys.executable, str(pack_root / "lab/controls/socket_probe.py")),
         cwd=request.run_root,
         env=env,
         expect_zero=False,
@@ -1774,7 +1780,7 @@ def run_acceptance(
     wheel_venv = request.run_root / "wheel-venv"
     source_python = source_venv / "bin/python"
     wheel_python = wheel_venv / "bin/python"
-    wheelhouse = request.pack_root / "wheelhouse"
+    wheelhouse = pack_root / "wheelhouse"
     positive_fixture = source_root / "fixtures/positive/01_install_only.json"
 
     positive_phases: tuple[

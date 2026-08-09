@@ -102,6 +102,24 @@ def _fixture_member_records(
     )
 
 
+def _fake_verified_pack(
+    pack_root: Path,
+    *args: object,
+    materialize_to: Path | None = None,
+    **kwargs: object,
+) -> SimpleNamespace:
+    del args, kwargs
+    if materialize_to is None:  # pragma: no cover - fixture contract guard
+        raise AssertionError("snapshot destination required")
+    shutil.copytree(pack_root, materialize_to, symlinks=True)
+    materialize_to.chmod(0o700)
+    return SimpleNamespace(
+        ok=True,
+        errors=(),
+        members=_fixture_member_records(materialize_to),
+    )
+
+
 def _member(path: str, data: bytes, mode: int = 0o644) -> dict[str, object]:
     return {
         "path": path,
@@ -494,10 +512,8 @@ def acceptance_request(
     monkeypatch.setattr(
         acceptance,
         "verify_friend_pack",
-        lambda *args, **kwargs: SimpleNamespace(
-            ok=True,
-            errors=(),
-            members=_fixture_member_records(pack_root),
+        lambda *args, **kwargs: _fake_verified_pack(
+            pack_root, *args, **kwargs
         ),
     )
     return acceptance.AcceptanceRequest(
@@ -692,7 +708,7 @@ def test_missing_out_of_band_equality_stops_before_controls(
 
 
 @pytest.mark.parametrize("mutation", ["content", "extra", "missing"])
-def test_materialized_pack_must_match_real_verified_archive_before_controls(
+def test_original_pack_cannot_override_real_verified_archive_snapshot(
     acceptance_request: acceptance.AcceptanceRequest,
     monkeypatch: pytest.MonkeyPatch,
     mutation: str,
@@ -701,6 +717,7 @@ def test_materialized_pack_must_match_real_verified_archive_before_controls(
         acceptance_request, monkeypatch
     )
     pack_root = acceptance_request.pack_root
+    trusted_friend_lab = (pack_root / "FRIEND_LAB.md").read_bytes()
     manifest_path = pack_root / "manifest.json"
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     if mutation == "content":
@@ -731,8 +748,55 @@ def test_materialized_pack_must_match_real_verified_archive_before_controls(
         acceptance_request, command_runner=fake
     )
 
-    assert receipt["final_classification"] == "NOT_READY"
-    assert fake.called_classes == []
+    assert receipt["final_classification"] == "PRIVATE_HANDOFF_READY"
+    trusted_pack = Path(fake.calls[0][2]["PYTHONPATH"]).parent
+    assert trusted_pack != pack_root
+    assert (trusted_pack / "FRIEND_LAB.md").read_bytes() == trusted_friend_lab
+    assert not (trusted_pack / "self-consistent-extra.txt").exists()
+
+
+def test_post_verification_original_pack_mutation_cannot_reach_execution(
+    acceptance_request: acceptance.AcceptanceRequest,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    acceptance_request = _bind_real_verified_pack(
+        acceptance_request, monkeypatch
+    )
+    original_sitecustomize = (
+        acceptance_request.pack_root / "lab/sitecustomize.py"
+    )
+    trusted_data = original_sitecustomize.read_bytes()
+    mutated_data = b"# changed after archive verification\n"
+
+    def verify_then_mutate(*args: object, **kwargs: object) -> object:
+        result = REAL_VERIFY_FRIEND_PACK(*args, **kwargs)
+        assert result.ok is True
+        original_sitecustomize.write_bytes(mutated_data)
+        return result
+
+    monkeypatch.setattr(
+        acceptance, "verify_friend_pack", verify_then_mutate
+    )
+    fake = FakeRunner()
+
+    receipt = acceptance.run_acceptance(
+        acceptance_request, command_runner=fake
+    )
+
+    assert receipt["final_classification"] == "PRIVATE_HANDOFF_READY"
+    assert fake.called_classes
+    first_environment = fake.calls[0][2]
+    trusted_lab = Path(first_environment["PYTHONPATH"])
+    assert trusted_lab != acceptance_request.pack_root / "lab"
+    assert trusted_lab.is_relative_to(acceptance_request.run_root)
+    assert (trusted_lab / "sitecustomize.py").read_bytes() == trusted_data
+    assert original_sitecustomize.read_bytes() == mutated_data
+    original_root = str(acceptance_request.pack_root)
+    assert all(
+        original_root not in value
+        for _command_class, argv, environment in fake.calls
+        for value in (*argv, *environment.values())
+    )
 
 
 @pytest.mark.parametrize(

@@ -272,8 +272,43 @@ def test_target_lock_rejects_serialized_envelope_containing_target(
 
     assert decision == IntentDecision(
         allowed=False,
-        code="literal_target_non_shell_action",
-        reason="Literal-target matching requires a recognized shell action.",
+        code="non_shell_action",
+        reason="Intent matching requires a recognized shell action.",
+    )
+
+
+def test_exact_lock_rejects_matching_action_in_non_shell_context() -> None:
+    lock = derive_lock("`git status`")
+    assert lock is not None
+
+    decision = evaluate_action(lock, "git status", shell_action=False)
+
+    assert decision == IntentDecision(
+        allowed=False,
+        code="non_shell_action",
+        reason="Intent matching requires a recognized shell action.",
+    )
+
+
+def test_exact_lock_rejects_matching_serialized_tool_envelope() -> None:
+    envelope = json.dumps(
+        {
+            "tool_name": "apply_patch",
+            "tool_input": {"patch": "*** Add File: cloudflare-api"},
+        },
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    lock = derive_lock(f"Run `{envelope}`.")
+    assert lock is not None
+    assert lock.mode == "EXACT_COMMAND"
+
+    decision = evaluate_action(lock, envelope)
+
+    assert decision == IntentDecision(
+        allowed=False,
+        code="non_shell_action",
+        reason="Intent matching requires a recognized shell action.",
     )
 
 
@@ -938,7 +973,13 @@ def test_ambiguous_original_request_mention_preserves_previous_hold() -> None:
         "Review the failure",
         "Explain why cloudflare-api failed",
         "Explain why component cloudflare-api failed",
+        "Explain the problem.",
+        "Can you explain this issue?",
+        "`codex mcp login cloudflare-api`",
+        "do the original request",
+        "proceed",
         "Okay?",
+        "What about that?",
     ],
 )
 def test_no_new_evidence_preserves_previous_report_hold(prompt: str) -> None:
@@ -959,11 +1000,98 @@ def test_no_new_evidence_preserves_previous_report_hold(prompt: str) -> None:
     ).code == "report_required"
 
 
-def test_related_result_question_preserves_direct_lock() -> None:
+@pytest.mark.parametrize("prompt", ["Why did that fail?", "Did it work?"])
+def test_related_result_question_preserves_direct_lock(prompt: str) -> None:
     previous = derive_lock("`codex mcp login cloudflare-api`")
     assert previous is not None
 
-    assert derive_lock("Why did that fail?", previous=previous) is previous
+    assert derive_lock(prompt, previous=previous) is previous
+
+
+@pytest.mark.parametrize(
+    "prompt",
+    [
+        "Check https://example.com/private.",
+        "Explain the problem with https://example.com/private.",
+    ],
+)
+def test_report_hold_matches_hidden_target_digest(prompt: str) -> None:
+    previous = derive_lock(
+        "component https://example.com/private failed during startup"
+    )
+    assert previous is not None
+    assert previous.display_targets == ()
+    held = record_result(
+        previous,
+        "curl https://example.com/private",
+        failed=True,
+    )
+
+    assert derive_lock(prompt, previous=held) is held
+
+
+def test_report_hold_preserves_same_structured_error_target() -> None:
+    previous = derive_lock(ERROR_PROMPT)
+    assert previous is not None
+    held = record_result(
+        previous,
+        "codex mcp login cloudflare-api",
+        failed=True,
+    )
+
+    assert derive_lock(
+        "component cloudflare-api failed again",
+        previous=held,
+    ) is held
+
+
+@pytest.mark.parametrize(
+    (
+        "initial_prompt",
+        "initial_action",
+        "replacement_prompt",
+        "replacement_action",
+        "expected_mode",
+    ),
+    [
+        (
+            "`codex mcp login cloudflare-api`",
+            "codex mcp login cloudflare-api",
+            "`git status`",
+            "git status",
+            "EXACT_COMMAND",
+        ),
+        (
+            ERROR_PROMPT,
+            "codex mcp login cloudflare-api",
+            "component docs failed during validation",
+            "echo docs",
+            "LITERAL_TARGET",
+        ),
+    ],
+)
+def test_report_hold_replaces_genuinely_different_explicit_task(
+    initial_prompt: str,
+    initial_action: str,
+    replacement_prompt: str,
+    replacement_action: str,
+    expected_mode: str,
+) -> None:
+    previous = derive_lock(initial_prompt)
+    assert previous is not None
+    held = record_result(
+        previous,
+        initial_action,
+        failed=True,
+    )
+
+    replacement = derive_lock(replacement_prompt, previous=held)
+
+    assert replacement is not None
+    assert replacement.phase == "DIRECT_REQUIRED"
+    assert replacement.mode == expected_mode
+    assert replacement.intent_epoch == held.intent_epoch + 1
+    assert evaluate_action(replacement, replacement_action).allowed
 
 
 @pytest.mark.parametrize(
@@ -972,6 +1100,13 @@ def test_related_result_question_preserves_direct_lock() -> None:
         "READMEの文章を監査して結果だけ教えて",
         "Translate this sentence",
         "Compare these files",
+        "Fix docs.",
+        "Run tests.",
+        "Write a work report for README.",
+        "Write report.",
+        "Review work.",
+        "Why is the sky blue?",
+        "なぜ空は青いのですか",
     ],
 )
 def test_substantive_unrelated_prompt_releases_previous_lock(

@@ -213,11 +213,24 @@ _CORRECTION_MENTION_PATTERN = re.compile(
     r"(?:最初の依頼|元の依頼|original request|first request)",
     re.IGNORECASE,
 )
-_RESULT_REFERENCE_PATTERN = re.compile(
+_STRONG_RESULT_REFERENCE_PATTERN = re.compile(
     r"(?:"
-    r"\b(?:error|fail(?:ed|ure)?|happened|outcome|result|succeed(?:ed)?|"
-    r"success|went\s+wrong|work(?:ed)?)\b"
-    r"|(?:エラー|失敗|どうな|なぜ)"
+    r"\b(?:error|fail(?:ed|ure)?|happened|issue|outcome|problem|result|"
+    r"succeed(?:ed)?|success|went\s+wrong)\b"
+    r"|(?:エラー|失敗|問題|障害|どうな)"
+    r")",
+    re.IGNORECASE,
+)
+_SHORT_ACKNOWLEDGEMENT_PATTERN = re.compile(
+    r"(?:ok(?:ay)?|yes|yeah|yep|sure|right|understood|got\s+it|"
+    r"うん|はい|了解)[。?.!！ ]*",
+    re.IGNORECASE,
+)
+_DEICTIC_REFERENCE_PATTERN = re.compile(
+    r"(?:"
+    r"\bit\b"
+    r"|\b(?:this|that|these|those)\b(?=\s*[?.!]*\s*$)"
+    r"|(?:これ|それ|あれ)(?:は|を|が|について)?[。?？!！]*\s*$"
     r")",
     re.IGNORECASE,
 )
@@ -569,6 +582,18 @@ def _new_lock(
     return lock
 
 
+def _new_exact_lock(prompt: str, *, epoch: int, command: str) -> IntentLock:
+    target = _command_target(command)
+    targets = (target,) if target is not None else (command.split()[0],)
+    return _new_lock(
+        prompt,
+        epoch=epoch,
+        mode="EXACT_COMMAND",
+        command=command,
+        targets=targets,
+    )
+
+
 def _relock(prompt: str, previous: IntentLock) -> IntentLock:
     return IntentLock(
         schema_version=previous.schema_version,
@@ -673,11 +698,14 @@ def _targets_match_lock(
 
 
 def _prompt_mentions_lock_target(lock: IntentLock, prompt: str) -> bool:
-    prompt_tokens = {
-        token.casefold() for token in _ACTION_TOKEN_PATTERN.findall(prompt)
+    prompt_digests = {
+        _digest(token.rstrip(".:,;").casefold())
+        for token in _ACTION_TOKEN_PATTERN.findall(prompt)
+        if token.rstrip(".:,;")
     }
     return any(
-        target.casefold() in prompt_tokens for target in lock.display_targets
+        target_digest in prompt_digests
+        for target_digest in lock.target_token_sha256
     )
 
 
@@ -692,7 +720,24 @@ def _is_related_followup(
         return True
     if targets:
         return _targets_match_lock(previous, targets)
-    return bool(_RESULT_REFERENCE_PATTERN.search(prompt))
+    return bool(
+        _STRONG_RESULT_REFERENCE_PATTERN.search(prompt)
+        or _has_bounded_deictic_reference(prompt)
+    )
+
+
+def _has_bounded_deictic_reference(prompt: str) -> bool:
+    stripped = prompt.strip()
+    words = re.findall(r"[^\W_]+", stripped, re.UNICODE)
+    return (
+        len(stripped) <= 80
+        and len(words) <= 8
+        and bool(_DEICTIC_REFERENCE_PATTERN.search(stripped))
+    )
+
+
+def _has_substantive_content(prompt: str) -> bool:
+    return bool(re.search(r"[^\W_]", prompt, re.UNICODE))
 
 
 def _is_substantive_prompt(prompt: str) -> bool:
@@ -705,19 +750,35 @@ def _is_substantive_prompt(prompt: str) -> bool:
 def _classify_report_prompt(
     prompt: str,
     previous: IntentLock,
+    command: str | None,
     targets: tuple[str, ...],
     *,
     affirmative_correction: bool,
 ) -> Literal["PRESERVE", "REPLACE", "RELEASE"]:
     if (
-        affirmative_correction
-        or _CONTINUATION_PATTERN.fullmatch(prompt.strip())
-        or _is_related_followup(prompt, previous, targets)
+        _prompt_mentions_lock_target(previous, prompt)
+        or (
+            command is not None
+            and _matches_locked_identity(previous, command)
+        )
+        or (targets and _targets_match_lock(previous, targets))
     ):
         return "PRESERVE"
-    if targets:
+    if (
+        affirmative_correction
+        or _CORRECTION_MENTION_PATTERN.search(prompt)
+        or _CONTINUATION_PATTERN.fullmatch(prompt.strip())
+    ):
+        return "PRESERVE"
+    if command is not None or targets:
         return "REPLACE"
-    if _is_substantive_prompt(prompt):
+    if (
+        _STRONG_RESULT_REFERENCE_PATTERN.search(prompt)
+        or _SHORT_ACKNOWLEDGEMENT_PATTERN.fullmatch(prompt.strip())
+        or _has_bounded_deictic_reference(prompt)
+    ):
+        return "PRESERVE"
+    if _has_substantive_content(prompt):
         return "RELEASE"
     return "PRESERVE"
 
@@ -730,17 +791,6 @@ def derive_lock(
 
     command = _extract_exact_command(prompt)
     epoch = 1 if previous is None else previous.intent_epoch + 1
-    if command is not None:
-        target = _command_target(command)
-        targets = (target,) if target is not None else (command.split()[0],)
-        return _new_lock(
-            prompt,
-            epoch=epoch,
-            mode="EXACT_COMMAND",
-            command=command,
-            targets=targets,
-        )
-
     negated_command = _extract_negated_command(prompt)
     if negated_command is None and previous is not None:
         negated_command = _extract_plain_negated_command(prompt)
@@ -773,12 +823,19 @@ def derive_lock(
         transition = _classify_report_prompt(
             prompt,
             previous,
+            command,
             targets,
             affirmative_correction=bool(affirmative_correction),
         )
         if transition == "PRESERVE":
             return previous
         if transition == "REPLACE":
+            if command is not None:
+                return _new_exact_lock(
+                    prompt,
+                    epoch=epoch,
+                    command=command,
+                )
             return _new_lock(
                 prompt,
                 epoch=epoch,
@@ -787,6 +844,13 @@ def derive_lock(
                 targets=targets,
             )
         return None
+
+    if command is not None:
+        return _new_exact_lock(
+            prompt,
+            epoch=epoch,
+            command=command,
+        )
 
     if targets:
         return _new_lock(
@@ -841,6 +905,13 @@ def evaluate_action(
     if lock.phase == "RELEASED":
         return IntentDecision(True, "released", "Intent lock is released.")
 
+    if not shell_action or _is_serialized_tool_envelope(action):
+        return IntentDecision(
+            False,
+            "non_shell_action",
+            "Intent matching requires a recognized shell action.",
+        )
+
     if lock.mode == "EXACT_COMMAND":
         if _matches_locked_identity(lock, action):
             return IntentDecision(
@@ -854,12 +925,6 @@ def evaluate_action(
             "Proposed action does not match the locked exact command.",
         )
 
-    if not shell_action or _is_serialized_tool_envelope(action):
-        return IntentDecision(
-            False,
-            "literal_target_non_shell_action",
-            "Literal-target matching requires a recognized shell action.",
-        )
     if _TARGET_SHELL_CONTROL_PATTERN.search(action):
         return IntentDecision(
             False,

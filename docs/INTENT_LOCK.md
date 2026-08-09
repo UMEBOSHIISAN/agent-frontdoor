@@ -98,29 +98,37 @@ REPORT_REQUIRED + any tool -> deny and require human-facing report
 affirmative correction while DIRECT_REQUIRED -> new DIRECT_REQUIRED epoch
 affirmative correction while REPORT_REQUIRED -> preserve the report hold
 negated/cancellation phrase -> REPORT_REQUIRED hold; never re-enable the action
-related target/result question such as "Why did that fail?" -> preserve without re-locking
-new explicit command or unrelated structured error -> new epoch and replacement lock
-new substantive unrelated prompt -> prior lock released
+REPORT_REQUIRED + same target/action or bounded related-result evidence -> preserve
+REPORT_REQUIRED + genuinely different explicit command/error -> replacement lock
+REPORT_REQUIRED + meaningful unrelated prompt, even a short one -> prior lock released
 ```
 
-A follow-up with no new deterministic task evidence preserves the prior lock.
-Release requires explicit new task wording; an unrecognized acknowledgement or
-question is not release evidence.
+During `REPORT_REQUIRED`, related evidence is bounded to a prompt-token digest
+matching the stored target digests, strong prior-result terms such as `failed`,
+`problem`, `issue`, or `happened`, and short acknowledgements or bounded deictic
+references such as `What about that?`. Digest comparison also covers targets
+that are intentionally hidden from display. Affirmative correction and
+standalone continuation wording preserve the same report hold. Generic `work`,
+`report`, `why`, or `なぜ`, and string length alone are not related evidence.
+Therefore short unrelated tasks such as `Fix docs.` and `Run tests.` release the
+hold, while a genuinely different explicit command or structured error replaces
+it with a new lock. The same explicit action or target never bypasses the required
+report by creating a new epoch.
 
-In `EXACT_COMMAND` mode, only the syntax-preserving exact command is accepted. In
-`LITERAL_TARGET` mode, only a recognized shell action can match, and that command
-must contain all target tokens as shell arguments. A `#` starts a comment only
-when it begins an unquoted shell word. An escaped or mid-word `#`, or a `#` inside
-a quoted argument, remains part of that argument. A standalone serialized JSON
-object or array is treated as an inert tool envelope regardless of its field
-names; JSON text inside an actual shell-command argument remains ordinary command
-text. Other non-shell envelopes and inert payload text likewise never satisfy the
-literal-target check. This prevents `cloudflare-api` from becoming an unqualified
-`wrangler` action without trying to infer semantic equivalence. Target-mode actions
-must also be one shell command: control operators, redirections, substitutions,
-parentheses, and embedded newlines are rejected even when the target token is
-present. Direct API callers identify non-shell input with
-`evaluate_action(..., shell_action=False)`.
+Both identity modes first require a recognized shell-action context. A caller
+marked with `evaluate_action(..., shell_action=False)`, or a standalone parsed
+JSON object or array, is denied with `non_shell_action` before exact-command or
+literal-target comparison. JSON text inside an actual shell-command argument
+remains ordinary command text. In `EXACT_COMMAND` mode, only the syntax-preserving
+exact command is then accepted. In `LITERAL_TARGET` mode, the command must contain
+all target tokens as shell arguments. A `#` starts a comment only when it begins
+an unquoted shell word. An escaped or mid-word `#`, or a `#` inside a quoted
+argument, remains part of that argument. Other non-shell envelopes and inert
+payload text likewise never satisfy the identity check. This prevents
+`cloudflare-api` from becoming an unqualified `wrangler` action without trying to
+infer semantic equivalence. Target-mode actions must also be one shell command:
+control operators, redirections, substitutions, parentheses, and embedded
+newlines are rejected even when the target token is present.
 
 ## Adapter boundary
 

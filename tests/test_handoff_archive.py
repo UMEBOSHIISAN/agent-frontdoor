@@ -442,6 +442,16 @@ def test_standalone_verifier_does_not_flag_its_own_public_rules() -> None:
     ) == ()
 
 
+def test_distribution_artifact_probe_is_privacy_safe() -> None:
+    api = _api()
+    path = ROOT / "tests" / "test_distribution_boundary.py"
+
+    assert api.scan_forbidden_text(
+        PurePosixPath("tests/test_distribution_boundary.py"),
+        path.read_bytes(),
+    ) == ()
+
+
 def test_source_archive_rejects_wrong_hash() -> None:
     entries = source_entries()
     result = verify_source(tar_bytes(entries), records_for(entries), expected_hash="0" * 64)

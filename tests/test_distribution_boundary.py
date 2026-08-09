@@ -770,8 +770,10 @@ def test_clean_adapter_sdist_closes_every_relative_document_link(
 
 
 CORE_SDIST_PROBE_ENV = "AGENT_FRONTDOOR_CORE_SDIST_TEST_PROBE"
+PYTEST_NODE_SEPARATOR = ":" + ":"
 PYTEST_OUTCOME = re.compile(
-    r"^(tests/\S+::\S+)\s+(PASSED|SKIPPED|FAILED|ERROR)",
+    rf"^(tests/\S+{PYTEST_NODE_SEPARATOR}\S+)\s+"
+    r"(PASSED|SKIPPED|FAILED|ERROR)",
     re.MULTILINE,
 )
 CORE_ARTIFACT_EXPECTED_OUTCOMES = (

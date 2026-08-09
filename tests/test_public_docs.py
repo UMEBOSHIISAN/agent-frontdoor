@@ -6,6 +6,8 @@ from pathlib import Path
 import re
 from urllib.parse import unquote, urlsplit
 
+import pytest
+
 
 ROOT = Path(__file__).resolve().parents[1]
 EVIDENCE = ROOT / "docs" / "EVIDENCE.md"
@@ -18,10 +20,12 @@ INTENT_LOCK_SCHEMA = (
     ROOT / "src" / "frontdoor" / "schema" / "intent-lock.v1.json"
 )
 ADAPTER_README = ROOT / "adapters" / "README.md"
+ADAPTER_PYPROJECT = ROOT / "adapters" / "pyproject.toml"
+ADAPTER_SOURCE_PRESENT = ADAPTER_PYPROJECT.is_file()
 CORE_SOURCE = ROOT / "src" / "frontdoor"
 INTAKE_SCHEMA = ROOT / "src" / "frontdoor" / "schema" / "intake.v0.json"
 
-PUBLIC_MARKDOWN = (
+CORE_PUBLIC_MARKDOWN = (
     Path("README.md"),
     Path("CHANGELOG.md"),
     Path("CONTRIBUTING.md"),
@@ -36,8 +40,10 @@ PUBLIC_MARKDOWN = (
     Path("docs/TROUBLESHOOTING.md"),
     Path("docs/FRIEND_LAB.md"),
     Path("examples/README.md"),
-    Path("adapters/README.md"),
     Path(".github/pull_request_template.md"),
+)
+PUBLIC_MARKDOWN = CORE_PUBLIC_MARKDOWN + (
+    (Path("adapters/README.md"),) if ADAPTER_SOURCE_PRESENT else ()
 )
 
 MARKDOWN_LINK = re.compile(
@@ -100,10 +106,17 @@ def test_evidence_doc_scopes_every_published_number() -> None:
         "e866efa025f5299d638adfb4bf903a8de2594c0e",
         "836 passed",
         "2026-08-09",
-        "python3 -m pytest -q tests/test_fixture_metrics.py tests/test_no_execution_paths.py",
-        "python3 -m pytest -q",
+        "python3 -m venv .venv",
+        ". .venv/bin/activate",
+        '.venv/bin/python -m pip install -e ".[test]"',
+        (
+            ".venv/bin/python -m pytest -q "
+            "tests/test_fixture_metrics.py tests/test_no_execution_paths.py"
+        ),
+        ".venv/bin/python -m pytest -q",
     ):
         assert marker in text
+    assert "python3 -m pytest" not in text
     source_files = sorted(CORE_SOURCE.glob("*.py"))
     assert source_files
     assert f"`0 / {len(source_files)}` prohibited matches" in text
@@ -193,10 +206,13 @@ def test_getting_started_reaches_first_success_without_release_claims() -> None:
         "Optional adapter",
         "POSIX",
         "Windows",
+        "runtime quick start intentionally omits test extras",
+        "EVIDENCE.md",
     ):
         assert marker in text
     assert "<PUBLIC_REPOSITORY_URL>" not in text
     assert "pip install agent-frontdoor" not in text
+    assert '-e ".[test]"' not in text
 
 
 def test_architecture_defines_pipeline_and_authority_boundaries() -> None:
@@ -261,6 +277,10 @@ def test_intent_lock_reference_has_no_internal_labels() -> None:
     assert "No independent security audit has been completed" in text
 
 
+@pytest.mark.skipif(
+    not ADAPTER_SOURCE_PRESENT,
+    reason="optional adapter source is not part of the core sdist",
+)
 def test_adapter_readme_requires_smoke_before_activation() -> None:
     text = ADAPTER_README.read_text(encoding="utf-8")
     normalized = " ".join(text.split())

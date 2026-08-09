@@ -11,7 +11,13 @@ does not edit any Codex or Claude Code settings and does not activate a hook.
 
 ## Install in an isolated environment
 
-From a reviewed source checkout:
+The adapter depends on the matching unreleased `agent-frontdoor` 0.2 source
+line. Review both distributions and the example configuration before trusting
+the command as a local hook.
+
+### Monorepo checkout
+
+From the root of a reviewed monorepo checkout:
 
 ```bash
 python3 -m venv .venv
@@ -19,15 +25,54 @@ python3 -m venv .venv
 .venv/bin/python -m pip install -e adapters
 ```
 
-The adapter depends on the matching unreleased `agent-frontdoor` 0.2 source line.
-Review both distributions and the example configuration before trusting the
-command as a local hook. The state adapter requires a POSIX operating system;
+The inert configuration files for this flow are under `adapters/examples/`.
+
+### Unpacked adapter sdist
+
+An unpacked standalone adapter sdist does not contain the core. Before
+installing the adapter, obtain and review the matching core `agent-frontdoor` 0.2.0
+artifact or local source path. This standard form names the reviewed core
+sdist explicitly, installs it first, and then installs the adapter from the
+current unpacked directory without asking pip to resolve a different core:
+
+```bash
+reviewed_core_sdist="/ABSOLUTE/PATH/TO/REVIEWED/agent_frontdoor-0.2.0.tar.gz"
+test -f "$reviewed_core_sdist"
+python3 -m venv .venv
+.venv/bin/python -m pip install "$reviewed_core_sdist"
+.venv/bin/python -m pip install --no-deps .
+```
+
+The core command may use configured package indexes for its runtime and build
+requirements. The adapter command still builds the reviewed local directory;
+`--no-deps` prevents dependency resolution from substituting another core.
+
+#### Bounded offline form
+
+Use this form only with a reviewed isolated environment that already contains
+pip, `setuptools>=77`, and the core runtime dependency `jsonschema>=4`. These
+commands use only the two reviewed local sources: `--no-index` prohibits index
+access, `--no-deps` disables dependency resolution, and
+`--no-build-isolation` prevents a build environment from fetching requirements.
+Missing prerequisites are a hard stop; do not remove the flags to continue.
+
+```bash
+reviewed_core_sdist="/ABSOLUTE/PATH/TO/REVIEWED/agent_frontdoor-0.2.0.tar.gz"
+offline_python="/ABSOLUTE/PATH/TO/PREPROVISIONED/OFFLINE/VENV/bin/python"
+test -f "$reviewed_core_sdist"
+test -x "$offline_python"
+"$offline_python" -m pip install --no-index --no-deps --no-build-isolation "$reviewed_core_sdist"
+"$offline_python" -m pip install --no-index --no-deps --no-build-isolation .
+```
+
+The inert configuration files for this standalone flow are under `examples/`.
+
+For either flow, the state adapter requires a POSIX operating system.
 Windows is rejected explicitly because this source line cannot enforce its
 required mode `0700` / mode `0600` state permissions with the Python standard
 library.
 
-In a source checkout or sdist, the inert JSON files are under `examples/`. A
-wheel installation copies the same files to
+Wheel installation copies the same inert files to
 `<VIRTUAL_ENV>/share/agent-frontdoor-hooks/examples/`; inspect those copies
 before merging any entries into operator-owned configuration.
 

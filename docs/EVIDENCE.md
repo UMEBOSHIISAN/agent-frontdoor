@@ -20,16 +20,25 @@ release status.
 
 ## Reproduce the hard contracts
 
-Run the focused hard-contract checks:
+From a reviewed source checkout, create and activate an isolated test
+environment, then install the supported test extra:
 
 ```bash
-python3 -m pytest -q tests/test_fixture_metrics.py tests/test_no_execution_paths.py
+python3 -m venv .venv
+. .venv/bin/activate
+.venv/bin/python -m pip install -e ".[test]"
+```
+
+Run the focused hard-contract checks with that environment's interpreter:
+
+```bash
+.venv/bin/python -m pytest -q tests/test_fixture_metrics.py tests/test_no_execution_paths.py
 ```
 
 Run the complete suite:
 
 ```bash
-python3 -m pytest -q
+.venv/bin/python -m pytest -q
 ```
 
 ## Dated full-suite baseline

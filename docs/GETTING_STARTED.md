@@ -14,7 +14,9 @@ does not activate hooks, edit settings, execute tasks, or grant authority.
 ## Install from source
 
 Clone the public source repository and install the core into an isolated virtual
-environment. This source install has no test extras.
+environment. This runtime quick start intentionally omits test extras. For the
+supported isolated `.[test]` setup used to reproduce repository evidence, see
+[Evidence](EVIDENCE.md).
 
 ```bash
 git clone https://github.com/UMEBOSHIISAN/agent-frontdoor.git

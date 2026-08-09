@@ -767,8 +767,6 @@ def _create_isolated_environment(
     }
     for path in paths.values():
         path.mkdir(parents=True, exist_ok=False)
-    pip_config = environment_root / "pip.conf"
-    pip_config.write_bytes(b"")
     env = {
         "PATH": os.defpath,
         "LANG": "C",
@@ -780,7 +778,7 @@ def _create_isolated_environment(
     env.update({name: str(path) for name, path in paths.items()})
     env.update(
         {
-            "PIP_CONFIG_FILE": str(pip_config),
+            "PIP_CONFIG_FILE": os.devnull,
             "PYTHONDONTWRITEBYTECODE": "1",
             "PIP_DISABLE_PIP_VERSION_CHECK": "1",
             "PIP_NO_INDEX": "1",

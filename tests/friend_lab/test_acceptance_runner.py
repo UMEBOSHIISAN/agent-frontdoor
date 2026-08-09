@@ -545,6 +545,57 @@ def test_isolated_environment_does_not_forward_receiver_credentials(
     assert env["HOME"].startswith(str(run_root))
 
 
+def test_isolated_environment_disables_global_and_site_pip_configs(
+    tmp_path: Path,
+) -> None:
+    run_root = tmp_path / "run"
+    pack_root = tmp_path / "pack"
+    run_root.mkdir()
+    pack_root.mkdir()
+    ledger = run_root / "audit.jsonl"
+    ledger.write_bytes(b"")
+    hostile_global = tmp_path / "global-pip.conf"
+    hostile_global.write_text(
+        "[global]\ntimeout = 731\n",
+        encoding="utf-8",
+    )
+    hostile_site = tmp_path / "site-pip.conf"
+    hostile_site.write_text(
+        "[global]\nretries = 17\n",
+        encoding="utf-8",
+    )
+    env = acceptance._create_isolated_environment(
+        run_root, pack_root, ledger
+    )
+    probe = subprocess.run(
+        (
+            sys.executable,
+            "-c",
+            (
+                "import json, sys; "
+                "import pip._internal.configuration as module; "
+                "from pip._internal.configuration import Configuration, kinds; "
+                "module.get_configuration_files = lambda: {"
+                "kinds.GLOBAL: [sys.argv[1]], kinds.USER: [], "
+                "kinds.SITE: [sys.argv[2]]}; "
+                "configuration = Configuration(isolated=True); "
+                "configuration.load(); "
+                "print(json.dumps(dict(configuration.items()), sort_keys=True))"
+            ),
+            str(hostile_global),
+            str(hostile_site),
+        ),
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=5,
+    )
+
+    assert probe.returncode == 0, f"{probe.stdout}\n{probe.stderr}"
+    assert json.loads(probe.stdout) == {}
+    assert Path(env["PIP_CONFIG_FILE"]).resolve() == Path(os.devnull).resolve()
+
+
 def test_remote_flow_is_capped_with_gap(
     acceptance_request: acceptance.AcceptanceRequest,
 ) -> None:

@@ -19,6 +19,7 @@ def test_export_ignore_contains_only_lab_orchestration_boundaries() -> None:
     assert ATTRIBUTES.read_text(encoding="utf-8") == (
         "/tools/friend_lab export-ignore\n"
         "/tests/friend_lab export-ignore\n"
+        "/.github export-ignore\n"
     )
 
 

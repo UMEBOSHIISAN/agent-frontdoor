@@ -10,8 +10,8 @@ owner schema digest, and one fictional example without granting runtime authorit
 ## Reproduce
 
 ```sh
-.venv/bin/agent-frontdoor validate examples/mothership-task.json
-.venv/bin/python -m pytest tests/test_mothership_conformance.py -q
+PYTHONPATH=src .venv/bin/agent-frontdoor validate examples/mothership-task.json
+PYTHONPATH=src .venv/bin/python -m pytest tests/test_mothership_conformance.py -q
 ```
 
 The first command prints `VALID demo-review-001`. A valid task card remains preflight metadata: `human_gate` describes

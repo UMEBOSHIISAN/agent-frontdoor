@@ -1,3 +1,7 @@
+This is not an agent runtime.
+This is not an autonomous router.
+This is a preflight contract and validator for safely preparing tasks for AI workers.
+
 <p align="center">
   <img src="assets/agent-frontdoor-logo.svg" alt="Agent Frontdoor logo" width="180">
 </p>
@@ -112,6 +116,13 @@ Measured, not aspirational:
 | `2` | Input is unreadable or malformed JSON | `ERROR` |
 | `3` | A validated before/after pair crossed a named boundary | `DRIFT` |
 
+Stable wording for integrations:
+
+- `0`: valid card or no drift
+- `1`: loaded card is invalid
+- `2`: input is unreadable or malformed JSON
+- `3`: boundary drift detected
+
 For `check-drift`, an unreadable input takes precedence over a loaded-invalid card. Diagnostics go to stderr; successful output and drift findings go to stdout. **None of these results executes or repairs anything.**
 
 ---
@@ -133,12 +144,32 @@ The package is deliberately boring and local:
 
 ---
 
+## Contract and conformance
+
+The contract is versioned as `intake.v0` in
+[`src/frontdoor/schema/intake.v0.json`](src/frontdoor/schema/intake.v0.json).
+The public CLI and exit codes are stable; changing the schema version is an
+explicit compatibility decision.
+
+契約は `intake.v0` としてバージョン管理されています。スキーマを変える場合は、暗黙に挙動を変えず、互換性の判断として明示的に行います。
+
+### Mothership suite conformance
+
+Agent Frontdoor owns the `frontdoor-task` / `intake.v0` semantics. Mothership
+0.2.0 freezes the exact owner schema bytes for a four-stage, non-executing
+composition check; neither project installs or invokes the other. Reproduce the
+closed owner manifest and synthetic example using
+[`docs/mothership-suite.md`](docs/mothership-suite.md).
+
+---
+
 ## Quick start
 
 Python 3.10 or newer.
 
 ```bash
-git clone https://github.com/UMEBOSHIISAN/agent-frontdoor.git
+export AGENT_FRONTDOOR_REPOSITORY_URL='https://github.com/UMEBOSHIISAN/agent-frontdoor.git'
+git clone "$AGENT_FRONTDOOR_REPOSITORY_URL" agent-frontdoor
 cd agent-frontdoor
 python3 -m venv .venv
 .venv/bin/python -m pip install --upgrade pip
@@ -237,6 +268,15 @@ The validator additionally rejects schema errors, an action that is both allowed
 | draft → external publish | internal text became a public post |
 | proposal-only → authority promotion | a suggestion that granted itself a tier |
 | bounded files → unrelated broad refactor | three files became the repository |
+
+Stable machine-facing family names use ASCII arrows:
+
+- read-only audit -> mutation recommendation
+- design review -> implementation
+- installation -> architecture migration
+- draft -> external publish
+- proposal-only -> authority promotion
+- bounded files -> unrelated broad refactor
 
 The comparator uses deterministic lexical heuristics over validated task classes, risk-tag additions, allowed actions, and `next_safe_step`. **It never mutates either card.**
 

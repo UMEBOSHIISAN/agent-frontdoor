@@ -1,0 +1,12 @@
+{
+  "schema_version": "mothership.conformance.v1",
+  "suite_release": "0.2.0",
+  "repository": "agent-frontdoor",
+  "protocol_kind": "frontdoor-task",
+  "protocol_version": "intake.v0",
+  "schema_path": "src/frontdoor/schema/intake.v0.json",
+  "schema_sha256": "6d6ed4aea9d3f5612c5292a2f46c72634776dc27998b61cdcdbdba3f35e7ca7e",
+  "example_path": "examples/mothership-task.json",
+  "authority_effect": false,
+  "execution_effect": false
+}

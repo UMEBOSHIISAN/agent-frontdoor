@@ -55,8 +55,8 @@
       ]
     },
     "target_token_sha256": {
+      "description": "SHA-256 digests of required literal-target tokens; empty for EXACT_COMMAND.",
       "type": "array",
-      "minItems": 1,
       "uniqueItems": true,
       "items": {
         "type": "string",
@@ -64,6 +64,7 @@
       }
     },
     "display_targets": {
+      "description": "Privacy-safe literal-target labels; empty for EXACT_COMMAND.",
       "type": "array",
       "uniqueItems": true,
       "items": {
@@ -103,6 +104,12 @@
           "exact_command_sha256": {
             "type": "string",
             "pattern": "^[0-9a-f]{64}$"
+          },
+          "target_token_sha256": {
+            "maxItems": 0
+          },
+          "display_targets": {
+            "maxItems": 0
           }
         }
       }
@@ -122,6 +129,9 @@
         "properties": {
           "exact_command_sha256": {
             "type": "null"
+          },
+          "target_token_sha256": {
+            "minItems": 1
           }
         }
       }

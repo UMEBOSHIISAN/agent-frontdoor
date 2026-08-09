@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from hashlib import sha256
 from io import StringIO
 from pathlib import Path
 from threading import Event, Thread, current_thread
@@ -159,6 +160,40 @@ def test_user_prompt_creates_lock_and_injects_bounded_context(
     }
     assert load_session_lock(tmp_path, SESSION) is not None
     assert "invalid_grant" not in str(output)
+
+
+def test_exact_command_sensitive_argument_never_reaches_state_or_hook_stdout(
+    tmp_path: Path,
+    monkeypatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    option = "--" + "creden" + "tial"
+    sensitive_value = "hunt" + "er2"
+    prompt = f"Run `acme-login {option} {sensitive_value}`."
+    monkeypatch.setattr(
+        hook_module.sys,
+        "stdin",
+        StringIO(json.dumps(_payload("UserPromptSubmit", prompt=prompt))),
+    )
+
+    exit_code = hook_module.main(
+        ["--platform", "codex", "--state-dir", str(tmp_path)]
+    )
+
+    captured = capsys.readouterr()
+    current = load_session_lock(tmp_path, SESSION)
+    state_json = "\n".join(
+        path.read_text(encoding="utf-8") for path in tmp_path.glob("*.json")
+    )
+    assert exit_code == 0
+    assert current is not None
+    assert current.mode == "EXACT_COMMAND"
+    assert current.target_token_sha256 == ()
+    assert current.display_targets == ()
+    assert sha256(sensitive_value.encode("utf-8")).hexdigest() not in state_json
+    assert sensitive_value not in state_json
+    assert sensitive_value not in captured.out
+    assert sensitive_value not in captured.err
 
 
 def test_pre_tool_denies_lateral_target_and_silently_accepts_match(
@@ -490,7 +525,7 @@ def test_concurrent_pre_tool_cannot_restore_replaced_intent(
     assert not replacement.is_alive()
     assert results == [None]
     assert current is not None
-    assert current.display_targets == ("diff",)
+    assert current.display_targets == ()
     assert current.pending_tool_use_sha256 is None
 
 
@@ -550,7 +585,7 @@ def test_concurrent_old_result_cannot_delete_replacement_intent(
     assert not old_result.is_alive()
     assert not replacement.is_alive()
     assert current is not None
-    assert current.display_targets == ("diff",)
+    assert current.display_targets == ()
 
 
 def test_concurrent_old_failure_cannot_overwrite_replacement_intent(
@@ -615,7 +650,7 @@ def test_concurrent_old_failure_cannot_overwrite_replacement_intent(
     assert not old_failure.is_alive()
     assert not replacement.is_alive()
     assert current is not None
-    assert current.display_targets == ("diff",)
+    assert current.display_targets == ()
     assert current.phase == "DIRECT_REQUIRED"
 
 
@@ -799,7 +834,7 @@ def test_same_error_target_keeps_report_hold_and_denies_next_tool(
             "new task: `git status`",
             "git status",
             "EXACT_COMMAND",
-            ("status",),
+            (),
         ),
         (
             ERROR_PROMPT,
@@ -815,7 +850,7 @@ def test_same_error_target_keeps_report_hold_and_denies_next_tool(
             "NEW TASK: `codex mcp login cloudflare-api`",
             "codex mcp login cloudflare-api",
             "EXACT_COMMAND",
-            ("cloudflare-api",),
+            (),
         ),
     ],
 )
@@ -1309,6 +1344,33 @@ def test_malformed_persisted_state_fails_closed_for_pre_tool(
     _activate_exact_lock(tmp_path)
     path = next(tmp_path.glob("*.json"))
     path.write_text("{}", encoding="utf-8")
+
+    output = handle_event(
+        _payload(
+            "PreToolUse",
+            tool_name="Bash",
+            tool_input={"command": "codex mcp login cloudflare-api"},
+        ),
+        tmp_path,
+        platform="codex",
+    )
+
+    assert output is not None
+    assert output["hookSpecificOutput"]["permissionDecision"] == "deny"
+    assert output["hookSpecificOutput"]["permissionDecisionReason"] == (
+        "INTENT_LOCK_STATE_ERROR: Intent Lock state is unavailable; "
+        "the event is blocked."
+    )
+
+
+def test_legacy_exact_state_with_target_digest_fails_closed(
+    tmp_path: Path,
+) -> None:
+    _activate_exact_lock(tmp_path)
+    path = next(tmp_path.glob("*.json"))
+    state = json.loads(path.read_text(encoding="utf-8"))
+    state["target_token_sha256"] = ["b" * 64]
+    path.write_text(json.dumps(state), encoding="utf-8")
 
     output = handle_event(
         _payload(

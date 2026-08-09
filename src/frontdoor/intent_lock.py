@@ -220,9 +220,6 @@ _CONTINUATION_PATTERN = re.compile(
 )
 _ENGLISH_NEW_TASK_MARKER = "new task:"
 _JAPANESE_NEW_TASK_MARKER = "別件:"
-_SAFE_LABEL_PATTERN = re.compile(
-    r"^[A-Za-z0-9][A-Za-z0-9._:@/-]{0,127}$"
-)
 _DISPLAY_LABEL_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$")
 _SECRET_LIKE_PATTERN = re.compile(
     r"(?:^sk-|bearer|password|secret|token|api[_-]?key)",
@@ -474,16 +471,6 @@ def _extract_plain_negated_command(prompt: str) -> str | None:
     return _normalized_command(candidate)
 
 
-def _command_target(command: str) -> str | None:
-    parts = _command_parts(command)
-    candidates = [
-        part
-        for part in parts[1:]
-        if not part.startswith("-") and _SAFE_LABEL_PATTERN.fullmatch(part)
-    ]
-    return candidates[-1] if candidates else None
-
-
 def _extract_error_targets(prompt: str) -> tuple[str, ...]:
     targets: list[str] = []
     for pattern in (*_ERROR_TARGET_PATTERNS, *_BACKTICK_ERROR_TARGET_PATTERNS):
@@ -557,7 +544,11 @@ def _new_lock(
         target_token_sha256=tuple(
             dict.fromkeys(_digest(target.casefold()) for target in targets)
         ),
-        display_targets=_display_targets(targets, prompt=prompt),
+        display_targets=(
+            ()
+            if mode == "EXACT_COMMAND"
+            else _display_targets(targets, prompt=prompt)
+        ),
         pending_tool_use_sha256=None,
     )
     lock_from_dict(lock_to_dict(lock))
@@ -565,14 +556,12 @@ def _new_lock(
 
 
 def _new_exact_lock(prompt: str, *, epoch: int, command: str) -> IntentLock:
-    target = _command_target(command)
-    targets = (target,) if target is not None else (command.split()[0],)
     return _new_lock(
         prompt,
         epoch=epoch,
         mode="EXACT_COMMAND",
         command=command,
-        targets=targets,
+        targets=(),
     )
 
 

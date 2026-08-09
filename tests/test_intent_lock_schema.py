@@ -55,8 +55,8 @@ def test_exact_command_mode_requires_a_hash_and_literal_target_requires_null() -
         "intent_epoch": 1,
         "source_prompt_sha256": "a" * 64,
         "phase": "DIRECT_REQUIRED",
-        "target_token_sha256": ["b" * 64],
-        "display_targets": ["cloudflare-api"],
+        "target_token_sha256": [],
+        "display_targets": [],
         "pending_tool_use_sha256": None,
     }
 
@@ -72,12 +72,49 @@ def test_exact_command_mode_requires_a_hash_and_literal_target_requires_null() -
     )
     assert not list(
         validator.iter_errors(
-            {**base, "mode": "LITERAL_TARGET", "exact_command_sha256": None}
+            {
+                **base,
+                "mode": "LITERAL_TARGET",
+                "exact_command_sha256": None,
+                "target_token_sha256": ["b" * 64],
+            }
         )
     )
     assert list(
         validator.iter_errors(
-            {**base, "mode": "LITERAL_TARGET", "exact_command_sha256": "c" * 64}
+            {
+                **base,
+                "mode": "LITERAL_TARGET",
+                "exact_command_sha256": "c" * 64,
+                "target_token_sha256": ["b" * 64],
+            }
+        )
+    )
+
+
+def test_exact_command_mode_rejects_target_tokens_and_display_targets() -> None:
+    validator = Draft202012Validator(_schema())
+    exact_lock = {
+        "schema_version": "intent-lock.v1",
+        "intent_epoch": 1,
+        "source_prompt_sha256": "a" * 64,
+        "phase": "DIRECT_REQUIRED",
+        "mode": "EXACT_COMMAND",
+        "exact_command_sha256": "c" * 64,
+        "target_token_sha256": [],
+        "display_targets": [],
+        "pending_tool_use_sha256": None,
+    }
+
+    assert not list(validator.iter_errors(exact_lock))
+    assert list(
+        validator.iter_errors(
+            {**exact_lock, "target_token_sha256": ["b" * 64]}
+        )
+    )
+    assert list(
+        validator.iter_errors(
+            {**exact_lock, "display_targets": ["display-label"]}
         )
     )
 

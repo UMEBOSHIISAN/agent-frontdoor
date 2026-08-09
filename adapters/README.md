@@ -195,10 +195,14 @@ By default, state is stored below:
 Set `AGENT_FRONTDOOR_STATE_DIR` or pass `--state-dir` to select an explicit
 alternative. The directory is restricted to mode `0700`; atomically written
 state files use mode `0600`. Filenames are SHA-256 digests of session IDs. State
-contains prompt and target hashes, a hash binding the accepted tool-use id to its
-lock epoch, and safe opaque display labels, but never the raw prompt, raw command,
-raw session ID, raw tool-use ID, tool result, transcript path, OAuth token, network
-endpoint, path-like target, or other credential material.
+contains prompt and literal-target hashes, a hash binding the accepted tool-use id
+to its lock epoch, and safe opaque literal-target display labels, but never the raw
+prompt, raw command, raw session ID, raw tool-use ID, tool result, transcript
+path, OAuth token, network endpoint, path-like target, or other credential
+material. Exact-command arguments are never retained as display labels.
+Earlier unreleased preview state containing per-argument hashes or labels for an
+exact command is rejected and fails closed; `SessionEnd` can remove that session
+state before a fresh session derives a new lock.
 Before binding an accepted action, the adapter atomically creates an empty private
 pending marker. A second tool-use id is denied while that claim is active; there
 is no retry or wait loop. A matching result, a new user prompt, or `SessionEnd`

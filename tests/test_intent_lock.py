@@ -165,6 +165,34 @@ def test_exact_command_network_targets_are_hashed_but_never_displayed(
 
 
 @pytest.mark.parametrize(
+    ("option_fragments", "value_fragments"),
+    [
+        (("pass", "word"), ("hunt", "er2")),
+        (("to", "ken"), ("short", "value")),
+        (("creden", "tial"), ("abc", "123")),
+    ],
+)
+def test_exact_command_arguments_are_never_persisted_individually(
+    option_fragments: tuple[str, str],
+    value_fragments: tuple[str, str],
+) -> None:
+    option = "".join(option_fragments)
+    sensitive_value = "".join(value_fragments)
+    command = f"acme-login --{option} {sensitive_value}"
+
+    lock = derive_lock(f"Run `{command}`.")
+
+    assert lock is not None
+    assert lock.mode == "EXACT_COMMAND"
+    assert lock.target_token_sha256 == ()
+    assert lock.display_targets == ()
+    serialized = json.dumps(lock_to_dict(lock), sort_keys=True)
+    assert sha256(sensitive_value.encode("utf-8")).hexdigest() not in serialized
+    assert sensitive_value not in serialized
+    assert evaluate_action(lock, command).allowed
+
+
+@pytest.mark.parametrize(
     "prompt",
     [
         "Error: server not found",
@@ -357,7 +385,7 @@ def test_natural_language_exact_command_requires_exact_normalized_action() -> No
 
     assert lock is not None
     assert lock.mode == "EXACT_COMMAND"
-    assert lock.display_targets == ("cloudflare-api",)
+    assert lock.display_targets == ()
     assert lock.exact_command_sha256 is not None
     assert evaluate_action(lock, "codex   mcp login cloudflare-api").allowed
     assert not evaluate_action(lock, "codex mcp list").allowed

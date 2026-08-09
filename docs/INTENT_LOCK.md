@@ -48,8 +48,8 @@ not substitute another subsystem.
 - phase `DIRECT_REQUIRED`, `REPORT_REQUIRED`, or `RELEASED`;
 - mode `EXACT_COMMAND` or `LITERAL_TARGET`;
 - an optional normalized-command SHA-256;
-- SHA-256 digests for required target tokens;
-- safe display labels for human-readable denial messages;
+- SHA-256 digests for required literal-target tokens;
+- safe literal-target display labels for human-readable denial messages;
 - an optional SHA-256 digest binding an accepted tool-use id to one lock epoch.
 
 The contract never stores the raw prompt, raw session id, transcript path, tool
@@ -70,8 +70,9 @@ whitespace and preserves newlines, quotes, escapes, and shell operators before
 hashing. Commands containing heredocs or nested shell expansions are compared with
 all horizontal whitespace preserved because their bodies have separate quoting
 rules and may be data rather than shell-token whitespace. The state file therefore
-does not retain command arguments, and a different shell program, expansion, or
-heredoc payload cannot compare equal by losing syntax boundaries.
+does not retain raw command arguments or display labels derived from them, and a
+different shell program, expansion, or heredoc payload cannot compare equal by
+losing syntax boundaries.
 
 A literal-target lock is created from structured error forms such as:
 
@@ -86,6 +87,9 @@ labels made from letters, digits, `_`, and `-` are displayable. One-way digests
 may still bound the current action without persisting raw target material. A
 prompt that yields no deterministic evidence creates no lock rather than
 inventing one.
+
+Exact-command hook context identifies its target only as `hashed`; the normalized
+whole-command digest remains the sole exact-command comparison value.
 
 ## State machine
 
@@ -168,6 +172,10 @@ confusable names are never trusted as shell tools.
 Result events are applied only when their `tool_use_id` matches the digest bound
 at `PreToolUse`. A result from an older epoch, even for the same command, is
 ignored and cannot release or fail the current lock.
+Exact-command state written by earlier unreleased preview revisions may contain
+per-argument target hashes or display labels. That state is invalid under the
+current schema and fails closed instead of being migrated. A `SessionEnd` event
+can remove it before a fresh session derives new state.
 An empty private marker is created with an atomic exclusive create before the
 binding is saved. While that marker and pending digest exist, a different tool-use
 id is denied. There is no retry loop; a competing or stale claim fails closed until

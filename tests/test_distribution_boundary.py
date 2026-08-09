@@ -128,6 +128,7 @@ def _build_sdist(source: Path, workspace: Path, label: str) -> SdistSnapshot:
             str(distribution),
         ],
         cwd=project,
+        env=_controlled_python_environment(workspace / f"{label}-home"),
         check=True,
         capture_output=True,
         text=True,
@@ -193,6 +194,7 @@ def _materialize_validated_regular_members(
 
 
 def _controlled_python_environment(
+    home: Path,
     overrides: dict[str, str] | None = None,
 ) -> dict[str, str]:
     passthrough = (
@@ -212,16 +214,77 @@ def _controlled_python_environment(
         for name in passthrough
         if name in os.environ
     }
+    if overrides is not None:
+        environment.update(overrides)
+    home = home.resolve()
+    config_home = home / "config"
+    config_home.mkdir(parents=True)
+    pip_config = config_home / "pip.conf"
+    pip_config.write_text("", encoding="utf-8")
     environment.update(
         {
             "COLUMNS": "240",
+            "HOME": str(home),
+            "PIP_CONFIG_FILE": str(pip_config),
             "PYTEST_DISABLE_PLUGIN_AUTOLOAD": "1",
             "PYTHONNOUSERSITE": "1",
+            "USERPROFILE": str(home),
+            "XDG_CONFIG_HOME": str(config_home),
         }
     )
-    if overrides is not None:
-        environment.update(overrides)
     return environment
+
+
+def test_controlled_python_environment_overrides_host_user_configuration(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    hostile_home = tmp_path / "hostile-home"
+    hostile_config = tmp_path / "hostile-config"
+    hostile_home.mkdir()
+    hostile_config.mkdir()
+    hostile_pip_config = hostile_config / "pip.conf"
+    hostile_pip_config.write_text(
+        "[global]\nno-index = false\n",
+        encoding="utf-8",
+    )
+    for name, value in {
+        "HOME": str(hostile_home),
+        "USERPROFILE": str(hostile_home),
+        "XDG_CONFIG_HOME": str(hostile_config),
+        "PIP_CONFIG_FILE": str(hostile_pip_config),
+    }.items():
+        monkeypatch.setenv(name, value)
+
+    controlled_home = tmp_path / "controlled-home"
+    environment = _controlled_python_environment(controlled_home)
+    controlled_config = controlled_home / "config"
+    controlled_pip_config = controlled_config / "pip.conf"
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            (
+                "import os, sys; from pathlib import Path; "
+                "home, config, pip_config = map(Path, sys.argv[1:]); "
+                "assert Path.home().resolve() == home.resolve(); "
+                "assert Path(os.environ['USERPROFILE']).resolve() == home.resolve(); "
+                "assert Path(os.environ['XDG_CONFIG_HOME']).resolve() == "
+                "config.resolve(); "
+                "assert Path(os.environ['PIP_CONFIG_FILE']).resolve() == "
+                "pip_config.resolve(); "
+                "assert pip_config.read_bytes() == b''"
+            ),
+            str(controlled_home),
+            str(controlled_config),
+            str(controlled_pip_config),
+        ],
+        env=environment,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0, f"{result.stdout}\n{result.stderr}"
 
 
 @pytest.fixture(scope="module")
@@ -642,38 +705,39 @@ def test_clean_adapter_sdist_closes_every_relative_document_link(
 
 CORE_SDIST_PROBE_ENV = "AGENT_FRONTDOOR_CORE_SDIST_TEST_PROBE"
 PYTEST_OUTCOME = re.compile(
-    r"^(tests/\S+::\S+)\s+(?:PASSED|SKIPPED|FAILED|ERROR)",
+    r"^(tests/\S+::\S+)\s+(PASSED|SKIPPED|FAILED|ERROR)",
     re.MULTILINE,
 )
-CORE_ARTIFACT_PUBLIC_TEST_NAMES = (
-    "test_evidence_doc_scopes_every_published_number",
-    "test_core_reference_owns_intake_cli_gate_and_drift_contracts",
-    "test_core_reference_owns_blocking_and_boundary_drift_contracts",
-    "test_getting_started_reaches_first_success_without_release_claims",
-    "test_architecture_defines_pipeline_and_authority_boundaries",
-    "test_troubleshooting_uses_non_escalating_recovery",
-    "test_intent_lock_reference_has_no_internal_labels",
-    "test_adapter_tree_requires_packaging_metadata",
-    "test_adapter_readme_requires_smoke_before_activation",
-    "test_intended_public_markdown_links_resolve_inside_repository",
-    "test_local_readme_images_have_nonempty_alt_text",
+CORE_ARTIFACT_EXPECTED_OUTCOMES = (
+    ("tests/test_public_docs.py::test_evidence_doc_scopes_every_published_number", "PASSED"),
+    ("tests/test_public_docs.py::test_core_reference_owns_intake_cli_gate_and_drift_contracts", "PASSED"),
+    ("tests/test_public_docs.py::test_core_reference_owns_blocking_and_boundary_drift_contracts", "PASSED"),
+    ("tests/test_public_docs.py::test_getting_started_reaches_first_success_without_release_claims", "PASSED"),
+    ("tests/test_public_docs.py::test_architecture_defines_pipeline_and_authority_boundaries", "PASSED"),
+    ("tests/test_public_docs.py::test_troubleshooting_uses_non_escalating_recovery", "PASSED"),
+    ("tests/test_public_docs.py::test_intent_lock_reference_has_no_internal_labels", "PASSED"),
+    ("tests/test_public_docs.py::test_adapter_tree_requires_packaging_metadata", "PASSED"),
+    ("tests/test_public_docs.py::test_intended_public_markdown_links_resolve_inside_repository", "PASSED"),
+    ("tests/test_public_docs.py::test_local_readme_images_have_nonempty_alt_text", "PASSED"),
+    ("tests/test_distribution_boundary.py::test_distribution_keeps_exact_four_runtime_commands_and_no_lab_entrypoint", "PASSED"),
+    ("tests/test_distribution_boundary.py::test_changelog_keeps_both_development_lines_unreleased", "PASSED"),
+    ("tests/test_distribution_boundary.py::test_core_pep621_metadata_describes_unreleased_package", "PASSED"),
+    ("tests/test_distribution_boundary.py::test_core_guide_uses_canonical_cross_distribution_links", "PASSED"),
+    ("tests/test_distribution_boundary.py::test_both_distributions_use_current_spdx_license_metadata", "PASSED"),
+    ("tests/test_distribution_boundary.py::test_clean_core_sdist_has_exact_closed_member_set", "PASSED"),
+    ("tests/test_distribution_boundary.py::test_clean_core_sdist_closes_every_relative_document_link", "PASSED"),
 )
-CORE_ARTIFACT_BOUNDARY_TEST_NAMES = (
-    "test_distribution_keeps_exact_four_runtime_commands_and_no_lab_entrypoint",
-    "test_core_pep621_metadata_describes_unreleased_package",
-    "test_core_guide_uses_canonical_cross_distribution_links",
-    "test_both_distributions_use_current_spdx_license_metadata",
-    "test_clean_core_sdist_has_exact_closed_member_set",
-    "test_clean_core_sdist_closes_every_relative_document_link",
+CORE_ARTIFACT_TESTS = tuple(
+    nodeid for nodeid, _status in CORE_ARTIFACT_EXPECTED_OUTCOMES
 )
-CORE_ARTIFACT_PUBLIC_TESTS = tuple(
-    f"tests/test_public_docs.py::{name}"
-    for name in CORE_ARTIFACT_PUBLIC_TEST_NAMES
-)
-CORE_ARTIFACT_BOUNDARY_TESTS = tuple(
-    f"tests/test_distribution_boundary.py::{name}"
-    for name in CORE_ARTIFACT_BOUNDARY_TEST_NAMES
-)
+
+
+def _assert_core_artifact_outcomes(
+    observed: tuple[tuple[str, str], ...],
+) -> None:
+    assert observed == CORE_ARTIFACT_EXPECTED_OUTCOMES, (
+        f"artifact pytest status contract mismatch: {observed!r}"
+    )
 
 
 @pytest.mark.skipif(
@@ -691,12 +755,26 @@ def test_clean_core_sdist_runs_its_shipped_public_contracts(
     monkeypatch: pytest.MonkeyPatch,
     hostile_environment: bool,
 ) -> None:
+    assert len(CORE_ARTIFACT_EXPECTED_OUTCOMES) == 17
     artifact_root = _materialize_validated_regular_members(
         core_sdist,
         tmp_path / "materialized",
     )
     if hostile_environment:
+        hostile_home = tmp_path / "hostile-home"
+        hostile_config = tmp_path / "hostile-config"
+        hostile_home.mkdir()
+        hostile_config.mkdir()
+        hostile_pip_config = hostile_config / "pip.conf"
+        hostile_pip_config.write_text(
+            "[global]\nno-index = false\n",
+            encoding="utf-8",
+        )
         hostile = {
+            "HOME": str(hostile_home),
+            "USERPROFILE": str(hostile_home),
+            "XDG_CONFIG_HOME": str(hostile_config),
+            "PIP_CONFIG_FILE": str(hostile_pip_config),
             "PYTEST_ADDOPTS": (
                 "-k test_core_pep621_metadata_describes_unreleased_package"
             ),
@@ -719,20 +797,34 @@ def test_clean_core_sdist_runs_its_shipped_public_contracts(
             "-vv",
             "--no-header",
             "--no-summary",
-            "tests/test_public_docs.py",
-            *CORE_ARTIFACT_BOUNDARY_TESTS,
+            *CORE_ARTIFACT_TESTS,
         ],
         cwd=artifact_root,
-        env=_controlled_python_environment({CORE_SDIST_PROBE_ENV: "1"}),
+        env=_controlled_python_environment(
+            tmp_path / "artifact-home",
+            {CORE_SDIST_PROBE_ENV: "1"},
+        ),
         capture_output=True,
         text=True,
     )
 
     observed = tuple(PYTEST_OUTCOME.findall(result.stdout))
-    assert observed == (
-        CORE_ARTIFACT_PUBLIC_TESTS + CORE_ARTIFACT_BOUNDARY_TESTS
-    ), f"{result.stdout}\n{result.stderr}"
+    try:
+        _assert_core_artifact_outcomes(observed)
+    except AssertionError as error:
+        raise AssertionError(
+            f"{error}\n{result.stdout}\n{result.stderr}"
+        ) from error
     assert result.returncode == 0, f"{result.stdout}\n{result.stderr}"
+
+
+def test_artifact_outcome_contract_rejects_skipped_applicable_node() -> None:
+    mutated = list(CORE_ARTIFACT_EXPECTED_OUTCOMES)
+    nodeid, _status = mutated[0]
+    mutated[0] = (nodeid, "SKIPPED")
+
+    with pytest.raises(AssertionError, match=nodeid):
+        _assert_core_artifact_outcomes(tuple(mutated))
 
 
 def test_partial_adapter_tree_cannot_skip_packaging_metadata(
@@ -759,7 +851,10 @@ def test_partial_adapter_tree_cannot_skip_packaging_metadata(
             ),
         ],
         cwd=artifact_root,
-        env=_controlled_python_environment({CORE_SDIST_PROBE_ENV: "1"}),
+        env=_controlled_python_environment(
+            tmp_path / "artifact-home",
+            {CORE_SDIST_PROBE_ENV: "1"},
+        ),
         capture_output=True,
         text=True,
     )
@@ -783,8 +878,8 @@ def test_clean_sdists_install_core_first_and_import_without_an_index(
     target = tmp_path / "site"
     target.mkdir()
     environment = _controlled_python_environment(
+        tmp_path / "artifact-home",
         {
-            "PIP_CONFIG_FILE": os.devnull,
             "PIP_DISABLE_PIP_VERSION_CHECK": "1",
             "PIP_NO_INDEX": "1",
         }

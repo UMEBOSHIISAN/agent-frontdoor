@@ -213,6 +213,26 @@ _CORRECTION_MENTION_PATTERN = re.compile(
     r"(?:最初の依頼|元の依頼|original request|first request)",
     re.IGNORECASE,
 )
+_AMBIGUOUS_RESULT_FOLLOWUP_PATTERN = re.compile(
+    r"^\s*(?:(?:can|could|would)\s+you\s+)?(?:please\s+)?"
+    r"(?:explain\s+)?(?:"
+    r"why\s+(?:did\s+)?(?:it|that|this)\s+"
+    r"(?:fail(?:ed)?|error(?:ed)?|not\s+work|not\s+succeed)"
+    r"|what\s+(?:happened|went\s+wrong)"
+    r"|did\s+(?:it|that|this)\s+(?:fail|work|succeed)"
+    r")\s*[?.!]*\s*$",
+    re.IGNORECASE,
+)
+_SUBSTANTIVE_UNRELATED_PROMPT_PATTERN = re.compile(
+    r"(?:"
+    r"\b(?:add|analy[sz]e|audit|check|create|delete|edit|explain|find|fix|"
+    r"implement|inspect|list|open|read|remove|review|run|search|show|"
+    r"summari[sz]e|tell|test|update|write)\b"
+    r"|(?:監査|確認|調査|分析|修正|更新|作成|実装|テスト|読ん|教えて|"
+    r"表示|検索|削除|追加)"
+    r")",
+    re.IGNORECASE,
+)
 _CONTINUATION_PATTERN = re.compile(
     r"^(?:やって|全部やって|続けて|進めて|うん|はい|go|proceed|continue|yes)[。.!！ ]*$",
     re.IGNORECASE,
@@ -594,8 +614,14 @@ def _hold(prompt: str, previous: IntentLock) -> IntentLock:
 def _matches_locked_identity(lock: IntentLock, action: str) -> bool:
     if lock.mode == "EXACT_COMMAND":
         return _digest(_normalized_command(action)) == lock.exact_command_sha256
+    try:
+        parts = shlex.split(action, comments=True, posix=True)
+    except ValueError:
+        return False
     action_digests = {
-        _digest(token.casefold()) for token in _ACTION_TOKEN_PATTERN.findall(action)
+        _digest(token.casefold())
+        for part in parts
+        for token in _ACTION_TOKEN_PATTERN.findall(part)
     }
     return all(digest in action_digests for digest in lock.target_token_sha256)
 
@@ -661,8 +687,14 @@ def derive_lock(
         or _CONTINUATION_PATTERN.fullmatch(prompt.strip())
     ):
         return _relock(prompt, previous)
-    if previous is not None and _CORRECTION_MENTION_PATTERN.search(prompt):
-        return previous
+    if previous is not None:
+        if (
+            _CORRECTION_MENTION_PATTERN.search(prompt)
+            or _AMBIGUOUS_RESULT_FOLLOWUP_PATTERN.fullmatch(prompt)
+        ):
+            return previous
+        if not _SUBSTANTIVE_UNRELATED_PROMPT_PATTERN.search(prompt):
+            return previous
     return None
 
 
@@ -676,7 +708,23 @@ def _target_reason(lock: IntentLock) -> str:
     return "Proposed action does not contain the locked literal target."
 
 
-def evaluate_action(lock: IntentLock, action: str) -> IntentDecision:
+def _is_serialized_tool_envelope(action: str) -> bool:
+    try:
+        value = json.loads(action)
+    except json.JSONDecodeError:
+        return False
+    return isinstance(value, Mapping) and {
+        "tool_name",
+        "tool_input",
+    }.issubset(value)
+
+
+def evaluate_action(
+    lock: IntentLock,
+    action: str,
+    *,
+    shell_action: bool = True,
+) -> IntentDecision:
     """Check task identity only; this function never grants authority."""
 
     if lock.phase == "REPORT_REQUIRED":
@@ -697,6 +745,12 @@ def evaluate_action(lock: IntentLock, action: str) -> IntentDecision:
             "Proposed action does not match the locked exact command.",
         )
 
+    if not shell_action or _is_serialized_tool_envelope(action):
+        return IntentDecision(
+            False,
+            "literal_target_non_shell_action",
+            "Literal-target matching requires a recognized shell action.",
+        )
     if _TARGET_SHELL_CONTROL_PATTERN.search(action):
         return IntentDecision(
             False,
@@ -752,12 +806,13 @@ def record_result(
     action: str,
     *,
     failed: bool,
+    shell_action: bool = True,
 ) -> IntentLock:
     """Record a matching direct result without mutating the supplied lock."""
 
     if lock.phase == "RELEASED":
         return lock
-    if not evaluate_action(lock, action).allowed:
+    if not evaluate_action(lock, action, shell_action=shell_action).allowed:
         return lock
     if failed:
         phase = "REPORT_REQUIRED"

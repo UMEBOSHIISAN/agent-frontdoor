@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+from io import StringIO
 from pathlib import Path
 from threading import Event, Thread, current_thread
 
@@ -9,7 +11,7 @@ import pytest
 
 import frontdoor_hooks.hook as hook_module
 from frontdoor_hooks.hook import handle_event
-from frontdoor_hooks.state import load_session_lock
+from frontdoor_hooks.state import StateError, load_session_lock
 
 
 SESSION = "session-123"
@@ -122,6 +124,66 @@ def test_pre_tool_denies_lateral_target_and_silently_accepts_match(
         }
     }
     assert matched is None
+
+
+def test_literal_target_ignores_unquoted_comment_but_keeps_quoted_hash(
+    tmp_path: Path,
+) -> None:
+    _activate_target_lock(tmp_path)
+
+    comment = handle_event(
+        _payload(
+            "PreToolUse",
+            tool_name="Bash",
+            tool_use_id="comment-tool",
+            tool_input={"command": "npx wrangler whoami # cloudflare-api"},
+        ),
+        tmp_path,
+        platform="codex",
+    )
+    quoted = handle_event(
+        _payload(
+            "PreToolUse",
+            tool_name="Bash",
+            tool_use_id="quoted-tool",
+            tool_input={"command": 'npx wrangler whoami "# cloudflare-api"'},
+        ),
+        tmp_path,
+        platform="codex",
+    )
+
+    assert comment is not None
+    assert comment["hookSpecificOutput"]["permissionDecision"] == "deny"
+    assert comment["hookSpecificOutput"]["permissionDecisionReason"] == (
+        "Proposed action does not contain the locked literal target: "
+        "cloudflare-api."
+    )
+    assert quoted is None
+
+
+def test_literal_target_rejects_non_shell_payload_containing_target(
+    tmp_path: Path,
+) -> None:
+    _activate_target_lock(tmp_path)
+
+    output = handle_event(
+        _payload(
+            "PreToolUse",
+            tool_name="apply_patch",
+            tool_use_id="patch-tool",
+            tool_input={
+                "patch": "*** Begin Patch\n+cloudflare-api\n*** End Patch"
+            },
+        ),
+        tmp_path,
+        platform="codex",
+    )
+
+    assert output is not None
+    assert output["hookSpecificOutput"]["permissionDecision"] == "deny"
+    assert output["hookSpecificOutput"]["permissionDecisionReason"] == (
+        "Literal-target matching requires a recognized shell action."
+    )
 
 
 def test_exact_command_requires_a_known_shell_tool_identity(tmp_path: Path) -> None:
@@ -477,6 +539,63 @@ def test_ambiguous_correction_keeps_report_required_lock(
 
     assert output is not None
     assert load_session_lock(tmp_path, SESSION).phase == "REPORT_REQUIRED"
+
+
+def test_ambiguous_failure_followup_keeps_report_hold_until_unrelated_release(
+    tmp_path: Path,
+) -> None:
+    _activate_exact_lock(tmp_path)
+    _accept_exact_tool(tmp_path)
+    feedback = handle_event(
+        _payload(
+            "PostToolUse",
+            tool_name="Bash",
+            tool_use_id="accepted-tool",
+            tool_input={"command": "codex mcp login cloudflare-api"},
+            tool_response={"exit_code": 1, "output": "failed"},
+        ),
+        tmp_path,
+        platform="codex",
+    )
+
+    followup = handle_event(
+        _payload("UserPromptSubmit", prompt="Why did that fail?"),
+        tmp_path,
+        platform="codex",
+    )
+    denied = handle_event(
+        _payload(
+            "PreToolUse",
+            tool_name="Bash",
+            tool_use_id="next-tool",
+            tool_input={"command": "codex mcp login cloudflare-api"},
+        ),
+        tmp_path,
+        platform="codex",
+    )
+
+    assert feedback is not None
+    assert followup is not None
+    current = load_session_lock(tmp_path, SESSION)
+    assert current is not None
+    assert current.phase == "REPORT_REQUIRED"
+    assert denied is not None
+    assert denied["hookSpecificOutput"]["permissionDecision"] == "deny"
+    assert denied["hookSpecificOutput"]["permissionDecisionReason"] == (
+        "A human-facing response is required before using another tool."
+    )
+
+    released = handle_event(
+        _payload(
+            "UserPromptSubmit",
+            prompt="Inspect README and report only the documentation findings.",
+        ),
+        tmp_path,
+        platform="codex",
+    )
+
+    assert released is None
+    assert load_session_lock(tmp_path, SESSION) is None
 
 
 def test_codex_failed_post_tool_requires_report_and_blocks_next_tool(
@@ -852,6 +971,70 @@ def test_malformed_persisted_state_fails_closed_for_pre_tool(
 
     assert output is not None
     assert output["hookSpecificOutput"]["permissionDecision"] == "deny"
-    assert "state is invalid" in output["hookSpecificOutput"][
-        "permissionDecisionReason"
-    ]
+    assert output["hookSpecificOutput"]["permissionDecisionReason"] == (
+        "INTENT_LOCK_STATE_ERROR: Intent Lock state is unavailable; "
+        "the event is blocked."
+    )
+
+
+def test_state_error_private_path_is_redacted_from_hook_stdout(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    private_path = "/private/operator/secrets/intent-lock-state"
+
+    def fail_guard(state_root: Path, session_id: str):
+        raise StateError(f"unable to inspect {private_path}")
+
+    monkeypatch.setattr(hook_module, "session_state_guard", fail_guard)
+    monkeypatch.setattr(
+        hook_module.sys,
+        "stdin",
+        StringIO(json.dumps(_payload("UserPromptSubmit", prompt=ERROR_PROMPT))),
+    )
+
+    exit_code = hook_module.main(
+        ["--platform", "codex", "--state-dir", str(tmp_path)]
+    )
+    captured = capsys.readouterr()
+
+    assert exit_code == 0
+    assert json.loads(captured.out) == {
+        "decision": "block",
+        "reason": (
+            "INTENT_LOCK_STATE_ERROR: Intent Lock state is unavailable; "
+            "the event is blocked."
+        ),
+    }
+    assert captured.err == ""
+    assert private_path not in captured.out
+    assert private_path not in captured.err
+
+
+def test_uncaught_state_error_private_path_is_redacted_from_hook_stderr(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    private_path = "/private/operator/secrets/intent-lock-state"
+
+    def fail_event(*args, **kwargs):
+        raise StateError(f"unable to inspect {private_path}")
+
+    monkeypatch.setattr(hook_module, "handle_event", fail_event)
+    monkeypatch.setattr(hook_module.sys, "stdin", StringIO("{}"))
+
+    exit_code = hook_module.main(
+        ["--platform", "codex", "--state-dir", str(tmp_path)]
+    )
+    captured = capsys.readouterr()
+
+    assert exit_code == 2
+    assert captured.out == ""
+    assert captured.err == (
+        "INTENT_LOCK_STATE_ERROR: Intent Lock state is unavailable; "
+        "the event is blocked.\n"
+    )
+    assert private_path not in captured.out
+    assert private_path not in captured.err

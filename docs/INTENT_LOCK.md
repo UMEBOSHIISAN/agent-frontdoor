@@ -97,17 +97,26 @@ Codex result with no explicit structured status -> REPORT_REQUIRED
 REPORT_REQUIRED + any tool -> deny and require human-facing report
 affirmative human correction phrase -> DIRECT_REQUIRED on the previous literal intent
 negated/cancellation phrase -> REPORT_REQUIRED hold; never re-enable the action
-ambiguous mention of an original request -> preserve the prior lock without re-locking
+ambiguous mention or result question such as "Why did that fail?" -> preserve without re-locking
 new explicit command/error -> new epoch and replacement lock
 new substantive unrelated prompt -> prior lock released
 ```
 
+A follow-up with no new deterministic task evidence preserves the prior lock.
+Release requires explicit new task wording; an unrecognized acknowledgement or
+question is not release evidence.
+
 In `EXACT_COMMAND` mode, only the syntax-preserving exact command is accepted. In
-`LITERAL_TARGET` mode, every proposed local tool action must contain all target
-tokens. This prevents `cloudflare-api` from becoming an unqualified `wrangler`
-action without trying to infer semantic equivalence. Target-mode actions must also
-be one shell command: control operators, redirections, substitutions, parentheses,
-and embedded newlines are rejected even when the target token is present.
+`LITERAL_TARGET` mode, only a recognized shell action can match, and that command
+must contain all target tokens as shell arguments. An unquoted shell comment does
+not contribute tokens; a `#` inside a quoted argument remains part of that
+argument. Non-shell tool envelopes and inert payload text never satisfy the
+literal-target check. This prevents `cloudflare-api` from becoming an unqualified
+`wrangler` action without trying to infer semantic equivalence. Target-mode
+actions must also be one shell command: control operators, redirections,
+substitutions, parentheses, and embedded newlines are rejected even when the
+target token is present. Direct API callers identify non-shell input with
+`evaluate_action(..., shell_action=False)`.
 
 ## Adapter boundary
 
@@ -127,9 +136,9 @@ The optional adapter consumes hook JSON from stdin and supports:
 The adapter does not execute workers, commands, network requests, retries, repairs,
 or alternative routes. Multiple-hook authority remains independent; a same-task
 allow decision is represented by silence, never an authority-granting `allow`.
-Only recognized shell-tool identities may supply the raw command used for an
-exact-command comparison; an unrelated function or MCP tool with a coincidental
-`command` field retains its full envelope and does not match.
+Only recognized shell-tool identities may supply the raw command used for exact-
+command or literal-target comparison; an unrelated function or MCP tool with a
+coincidental `command` field retains its full envelope and does not match.
 Result events are applied only when their `tool_use_id` matches the digest bound
 at `PreToolUse`. A result from an older epoch, even for the same command, is
 ignored and cannot release or fail the current lock.
@@ -160,6 +169,10 @@ symlink failures; only genuine absence means no saved lock.
 The optional state adapter requires POSIX permission and advisory-lock semantics.
 Windows is rejected explicitly instead of pretending that POSIX mode checks
 provide an equivalent privacy boundary there.
+State failures remain fail-closed but expose only the bounded public code and
+message `INTENT_LOCK_STATE_ERROR: Intent Lock state is unavailable; the event is
+blocked.` Raw exception and operator-path text is never emitted in a hook result,
+stdout, or stderr.
 
 ## Required regression cases
 

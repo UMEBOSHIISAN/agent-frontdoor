@@ -199,6 +199,51 @@ def test_target_lock_denies_adjacent_product_and_allows_literal_target() -> None
     assert allowed.code == "literal_target_match"
 
 
+def test_target_lock_ignores_target_in_unquoted_shell_comment() -> None:
+    lock = derive_lock(ERROR_PROMPT)
+    assert lock is not None
+
+    decision = evaluate_action(lock, "npx wrangler whoami # cloudflare-api")
+
+    assert decision == IntentDecision(
+        allowed=False,
+        code="literal_target_mismatch",
+        reason=(
+            "Proposed action does not contain the locked literal target: "
+            "cloudflare-api."
+        ),
+    )
+
+
+def test_target_lock_preserves_hash_inside_quoted_shell_argument() -> None:
+    lock = derive_lock(ERROR_PROMPT)
+    assert lock is not None
+
+    decision = evaluate_action(lock, 'npx wrangler whoami "# cloudflare-api"')
+
+    assert decision.allowed
+    assert decision.code == "literal_target_match"
+
+
+def test_target_lock_rejects_non_shell_payload_containing_target() -> None:
+    lock = derive_lock(ERROR_PROMPT)
+    assert lock is not None
+    payload = json.dumps(
+        {
+            "tool_name": "apply_patch",
+            "tool_input": {"patch": "*** Add File: cloudflare-api"},
+        }
+    )
+
+    decision = evaluate_action(lock, payload)
+
+    assert decision == IntentDecision(
+        allowed=False,
+        code="literal_target_non_shell_action",
+        reason="Literal-target matching requires a recognized shell action.",
+    )
+
+
 @pytest.mark.parametrize(
     "action",
     [
@@ -810,6 +855,33 @@ def test_ambiguous_original_request_mention_preserves_previous_hold() -> None:
     held = record_result(previous, "git status", failed=True)
 
     assert derive_lock("the original request", previous=held) is held
+
+
+@pytest.mark.parametrize(
+    "prompt",
+    [
+        "Why did that fail?",
+        "Can you explain why that failed?",
+        "What happened?",
+        "Okay?",
+    ],
+)
+def test_no_new_evidence_preserves_previous_report_hold(prompt: str) -> None:
+    previous = derive_lock(ERROR_PROMPT)
+    assert previous is not None
+    held = record_result(
+        previous,
+        "codex mcp login cloudflare-api",
+        failed=True,
+    )
+
+    preserved = derive_lock(prompt, previous=held)
+
+    assert preserved is held
+    assert evaluate_action(
+        preserved,
+        "codex mcp login cloudflare-api",
+    ).code == "report_required"
 
 
 def test_substantive_unrelated_prompt_releases_previous_lock() -> None:

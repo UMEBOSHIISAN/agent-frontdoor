@@ -37,6 +37,10 @@ _CODEX_OPAQUE_REPORT_CONTEXT = (
     "INTENT_LOCK_REPORT_REQUIRED: report the direct result; Codex Bash hooks "
     "do not expose its exit status. Do not try another tool or subsystem first."
 )
+_STATE_FAILURE_REASON = (
+    "INTENT_LOCK_STATE_ERROR: Intent Lock state is unavailable; "
+    "the event is blocked."
+)
 _SHELL_TOOL_NAMES = frozenset(
     {
         "bash",
@@ -69,7 +73,7 @@ def _tool_use_id(payload: Mapping[str, object]) -> str | None:
     return value if isinstance(value, str) and value else None
 
 
-def _tool_action(payload: Mapping[str, object]) -> str:
+def _tool_action(payload: Mapping[str, object]) -> tuple[str, bool]:
     tool_input = payload.get("tool_input")
     tool_name = payload.get("tool_name")
     is_shell_tool = (
@@ -80,16 +84,19 @@ def _tool_action(payload: Mapping[str, object]) -> str:
         for key in ("command", "cmd"):
             value = tool_input.get(key)
             if isinstance(value, str):
-                return value
+                return value, True
     envelope = {
         "tool_name": tool_name,
         "tool_input": tool_input,
     }
-    return json.dumps(
-        envelope,
-        ensure_ascii=False,
-        sort_keys=True,
-        separators=(",", ":"),
+    return (
+        json.dumps(
+            envelope,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        ),
+        False,
     )
 
 
@@ -109,10 +116,7 @@ def _load_or_deny(
     try:
         return load_session_lock(state_root, session_id), None
     except StateError:
-        return None, _deny(
-            "Intent Lock state is invalid; tool use is denied until the state "
-            "is repaired or the session ends."
-        )
+        return None, _deny(_STATE_FAILURE_REASON)
 
 
 def handle_user_prompt(
@@ -136,10 +140,10 @@ def handle_user_prompt(
                 return None
             release_session_tool_claim(state_root, session_id)
             save_session_lock(state_root, session_id, lock)
-    except (StateError, ValueError) as error:
+    except (StateError, ValueError):
         return {
             "decision": "block",
-            "reason": f"Intent Lock state is invalid: {error}",
+            "reason": _STATE_FAILURE_REASON,
         }
     return {
         "hookSpecificOutput": {
@@ -166,7 +170,12 @@ def handle_pre_tool(
             if lock is None:
                 return None
 
-            decision = evaluate_action(lock, _tool_action(payload))
+            action, shell_action = _tool_action(payload)
+            decision = evaluate_action(
+                lock,
+                action,
+                shell_action=shell_action,
+            )
             if not decision.allowed:
                 return _deny(decision.reason)
             tool_use_id = _tool_use_id(payload)
@@ -198,10 +207,7 @@ def handle_pre_tool(
                 raise
             return None
     except (StateError, ValueError):
-        return _deny(
-            "Intent Lock state is invalid; tool use is denied until the state "
-            "is repaired or the session ends."
-        )
+        return _deny(_STATE_FAILURE_REASON)
 
 
 def _explicit_failure(value: object) -> bool | None:
@@ -284,8 +290,13 @@ def handle_tool_result(
             status = _result_status(payload, platform)
             if status is None:
                 return None
-            action = _tool_action(payload)
-            updated = record_result(lock, action, failed=status != "success")
+            action, shell_action = _tool_action(payload)
+            updated = record_result(
+                lock,
+                action,
+                failed=status != "success",
+                shell_action=shell_action,
+            )
             if updated is lock:
                 return None
             if updated.phase == "RELEASED":
@@ -378,8 +389,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             arguments.state_dir,
             platform=arguments.platform,
         )
-    except (StateError, ValueError) as error:
-        print(f"Intent Lock hook failure: {error}", file=sys.stderr)
+    except (StateError, ValueError):
+        print(_STATE_FAILURE_REASON, file=sys.stderr)
         return 2
     if output is not None:
         json.dump(output, sys.stdout, ensure_ascii=False, sort_keys=True)

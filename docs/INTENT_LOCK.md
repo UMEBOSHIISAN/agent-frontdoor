@@ -8,7 +8,7 @@ attached to the literal target.
 
 This reference describes the deterministic contract and adapter boundary. See
 [Architecture](https://github.com/UMEBOSHIISAN/agent-frontdoor/blob/main/docs/ARCHITECTURE.md)
-for the full pipeline,
+for the independent core primitives and authority boundaries,
 [Evidence](https://github.com/UMEBOSHIISAN/agent-frontdoor/blob/main/docs/EVIDENCE.md)
 for the published test scope,
 [Troubleshooting](https://github.com/UMEBOSHIISAN/agent-frontdoor/blob/main/docs/TROUBLESHOOTING.md)

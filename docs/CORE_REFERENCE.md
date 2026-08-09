@@ -33,7 +33,8 @@ agent-frontdoor explain task.json
 agent-frontdoor check-drift before.json after.json
 ```
 
-- `validate` prints a stable valid or invalid result.
+- `validate` prints a deterministic valid or invalid result for the current
+  source contract.
 - `card` prints the complete fixed-order task card only after validation
   succeeds.
 - `explain` prints a self-contained explanation only after validation
@@ -185,9 +186,10 @@ from the separate `agent-frontdoor-hooks` distribution.
 
 ## Contract evolution
 
-The public CLI and exit codes are stable. Changing `schema_version` is an
-explicit compatibility decision. Keep the core read-only and preserve the four
-command names, exit meanings, output markers, schema fields, gate behavior,
-and named drift families when evolving the contract. Use
+This is an unreleased 0.2 development contract. The command names, exit
+meanings, output markers, schema fields, gate behavior, and named drift families
+document the current source revision; they may change before a release, with no
+compatibility guarantee. Changing `schema_version` remains an explicit contract
+decision. Keep the core read-only when evolving the contract. Use
 [EVIDENCE.md](EVIDENCE.md) for reproducible corpus and source-boundary evidence
 rather than duplicating measured fixture results here.

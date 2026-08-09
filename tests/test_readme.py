@@ -90,7 +90,28 @@ def test_readme_uses_integrated_accessible_visuals() -> None:
     text = _text()
     assert 'src="assets/agent-frontdoor-hero.svg"' in text
     assert 'src="assets/agent-frontdoor-architecture.svg"' in text
+    assert "three independent read-only checks" in text
+    assert "Task Card -> Validation -> Drift Detection" not in text
+    for independent_route in (
+        "Task Card -> Validation -> VALID / INVALID",
+        "Baseline + revised card -> Drift Detection -> CLEAR / DRIFT",
+        "Prompt + proposed action -> Intent Lock -> ALLOW / DENY / HOLD",
+    ):
+        assert independent_route in text
     assert "agent-frontdoor-pulse" not in text
+
+
+def test_readme_distinguishes_invalid_cards_from_input_errors() -> None:
+    text = _text()
+    boundary_table = text.split("The same fail-closed rule", 1)[1].split(
+        "## How the gateway works", 1
+    )[0]
+    normalized = boundary_table.casefold()
+    assert "successfully loaded but contract-invalid or unsafe card" in normalized
+    assert "`INVALID` (exit `1`)" in boundary_table
+    assert "unreadable input or malformed json" in normalized
+    assert "`ERROR` (exit `2`)" in boundary_table
+    assert "unsafe or malformed card" not in normalized
 
 
 def test_readme_routes_details_to_every_public_owner() -> None:

@@ -56,6 +56,29 @@ def test_security_policy_uses_only_private_reporting() -> None:
     assert "discussions" not in text.casefold()
 
 
+def test_code_of_conduct_matches_the_project_moderation_boundary() -> None:
+    text = (ROOT / "CODE_OF_CONDUCT.md").read_text(encoding="utf-8")
+    normalized = " ".join(text.split())
+    for marker in (
+        "participation in this GitHub repository and its GitHub-hosted project spaces",
+        "Maintainers moderate visible repository contributions",
+        "GitHub's documented abuse-reporting tools",
+        "use that venue's own moderation or safety route",
+    ):
+        assert marker in normalized
+    for unsupported_scope in (
+        "applies within all community spaces",
+        "officially representing the community",
+        "official e-mail address",
+        "official social media account",
+        "external channels like social media",
+        "No public or private interaction",
+        "separate private conduct inbox",
+        "security-advisory",
+    ):
+        assert unsupported_scope not in text
+
+
 def test_contributing_activates_venv_before_python_test_commands() -> None:
     text = (ROOT / "CONTRIBUTING.md").read_text(encoding="utf-8")
     activation = "source .venv/bin/activate"

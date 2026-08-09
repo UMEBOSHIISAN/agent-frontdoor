@@ -779,7 +779,7 @@ CORE_ARTIFACT_EXPECTED_OUTCOMES = (
     ("tests/test_public_docs.py::test_core_reference_owns_intake_cli_gate_and_drift_contracts", "PASSED"),
     ("tests/test_public_docs.py::test_core_reference_owns_blocking_and_boundary_drift_contracts", "PASSED"),
     ("tests/test_public_docs.py::test_getting_started_reaches_first_success_without_release_claims", "PASSED"),
-    ("tests/test_public_docs.py::test_architecture_defines_pipeline_and_authority_boundaries", "PASSED"),
+    ("tests/test_public_docs.py::test_architecture_defines_independent_primitives_and_authority_boundaries", "PASSED"),
     ("tests/test_public_docs.py::test_troubleshooting_uses_non_escalating_recovery", "PASSED"),
     ("tests/test_public_docs.py::test_intent_lock_reference_has_no_internal_labels", "PASSED"),
     ("tests/test_public_docs.py::test_adapter_tree_requires_packaging_metadata", "PASSED"),

@@ -216,12 +216,20 @@ def test_getting_started_reaches_first_success_without_release_claims() -> None:
     assert '-e ".[test]"' not in text
 
 
-def test_architecture_defines_pipeline_and_authority_boundaries() -> None:
+def test_architecture_defines_independent_primitives_and_authority_boundaries() -> None:
     text = ARCHITECTURE.read_text(encoding="utf-8")
+    for independent_route in (
+        "Task Card -> Validation -> VALID / INVALID",
+        "Baseline + revised card -> Drift Detection -> CLEAR / DRIFT",
+        "Prompt + proposed action -> Intent Lock -> ALLOW / DENY / HOLD",
+    ):
+        assert independent_route in text
+    assert "three independent primitives" in text
+    assert "maps supported lifecycle events to Intent Lock only" in text
     assert (
-        "Task Card -> Validation -> Drift Detection -> Intent Lock "
-        "-> Human Gate -> Safe Handoff"
-    ) in text
+        "Task Card -> Validation -> Drift Detection -> Intent Lock"
+        not in text
+    )
     for marker in (
         "`agent-frontdoor`",
         "`agent-frontdoor-hooks`",
@@ -235,6 +243,21 @@ def test_architecture_defines_pipeline_and_authority_boundaries() -> None:
         "mothership",
     ):
         assert marker in text
+
+
+def test_unreleased_public_docs_do_not_promise_cli_or_exit_stability() -> None:
+    unsupported_stability_claim = re.compile(
+        r"(?:public\s+)?CLI(?:\s+and\s+exit\s+codes?)?\s+"
+        r"(?:is|are)\s+stable|exit\s+codes?\s+(?:is|are)\s+stable",
+        re.IGNORECASE,
+    )
+    for source in PUBLIC_MARKDOWN:
+        text = (ROOT / source).read_text(encoding="utf-8")
+        assert unsupported_stability_claim.search(text) is None, source
+
+    core_reference = CORE_REFERENCE.read_text(encoding="utf-8")
+    assert "unreleased 0.2 development contract" in core_reference
+    assert "may change before a release" in core_reference
 
 
 def test_troubleshooting_uses_non_escalating_recovery() -> None:

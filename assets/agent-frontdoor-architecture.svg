@@ -1,6 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 900" role="img" aria-labelledby="architecture-title architecture-desc">
-  <title id="architecture-title">Agent Frontdoor architecture and authority boundaries</title>
-  <desc id="architecture-desc">Task Card, Validation, Drift Detection, and Intent Lock are enclosed in the read-only core. Human Gate and Safe Handoff remain under external human authority. A separate optional adapter may write privacy-minimized local session state.</desc>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" role="img" aria-labelledby="architecture-title architecture-desc">
+  <title id="architecture-title">Agent Frontdoor independent primitives and authority boundaries</title>
+  <desc id="architecture-desc">Three independent primitives live in the read-only core: Validation, Drift Detection, and Intent Lock. The optional adapter connects only to Intent Lock. Human Gate and Safe Handoff remain under external human or host authority.</desc>
   <defs>
     <linearGradient id="architecture-bg" x1="0" y1="0" x2="1" y2="1">
       <stop stop-color="#0b1020"/>
@@ -9,98 +9,80 @@
     <pattern id="architecture-grid" width="56" height="56" patternUnits="userSpaceOnUse">
       <path d="M56 0H0V56" fill="none" stroke="#334155" stroke-opacity=".15"/>
     </pattern>
-    <marker id="architecture-indigo-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-      <path d="M0 0L10 5L0 10Z" fill="#818cf8"/>
-    </marker>
-    <marker id="architecture-green-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-      <path d="M0 0L10 5L0 10Z" fill="#34d399"/>
-    </marker>
   </defs>
 
-  <rect width="1440" height="900" fill="url(#architecture-bg)"/>
-  <rect width="1440" height="900" fill="url(#architecture-grid)"/>
+  <rect width="1280" height="720" fill="url(#architecture-bg)"/>
+  <rect width="1280" height="720" fill="url(#architecture-grid)"/>
 
   <g font-family="Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
-    <text x="72" y="78" fill="#f8fafc" font-size="34" font-weight="760">One gateway, separate authority boundaries</text>
-    <text x="72" y="116" fill="#94a3b8" font-size="18">Pure local decisions remain distinct from adapter state and downstream authority.</text>
+    <text x="52" y="58" fill="#f8fafc" font-size="30" font-weight="760">Independent checks. External authority.</text>
+    <text x="52" y="90" fill="#94a3b8" font-size="16">No core result is routed into another primitive, and identity never grants permission.</text>
 
-    <rect x="64" y="170" width="900" height="390" rx="28" fill="#111827" fill-opacity=".84" stroke="#6366f1" stroke-width="3"/>
-    <rect x="82" y="188" width="866" height="354" rx="20" fill="none" stroke="#3730a3" stroke-opacity=".46"/>
-    <text x="102" y="224" fill="#c7d2fe" font-size="17" font-weight="750" letter-spacing="1.1">Read-only core</text>
-    <text x="102" y="254" fill="#94a3b8" font-size="15">Reads local inputs · returns deterministic decisions · makes no persistent writes</text>
+    <rect x="44" y="122" width="824" height="554" rx="26" fill="#111827" fill-opacity=".84" stroke="#6366f1" stroke-width="3"/>
+    <rect x="60" y="138" width="792" height="522" rx="18" fill="none" stroke="#3730a3" stroke-opacity=".46"/>
+    <text x="82" y="174" fill="#c7d2fe" font-size="17" font-weight="750" letter-spacing="1">Read-only core</text>
+    <text x="82" y="202" fill="#94a3b8" font-size="14">Three independent primitives · deterministic local results · no persistent writes</text>
 
-    <g>
-      <rect x="102" y="314" width="176" height="134" rx="20" fill="#1e1b4b" stroke="#6366f1" stroke-width="2"/>
-      <circle cx="130" cy="344" r="8" fill="#818cf8"/>
-      <text x="150" y="351" fill="#a5b4fc" font-size="13" font-weight="700" letter-spacing="1">01</text>
-      <text x="126" y="391" fill="#f8fafc" font-size="22" font-weight="700">Task Card</text>
-      <text x="126" y="421" fill="#94a3b8" font-size="14">bounded request</text>
+    <g id="validation-primitive">
+      <rect x="82" y="226" width="748" height="112" rx="18" fill="#1e1b4b" stroke="#6366f1" stroke-width="2"/>
+      <text x="106" y="254" fill="#a5b4fc" font-size="12" font-weight="700" letter-spacing=".8">INPUT</text>
+      <text x="106" y="286" fill="#f8fafc" font-size="17" font-weight="650">Task Card</text>
+      <line x1="298" y1="246" x2="298" y2="318" stroke="#4338ca"/>
+      <text x="330" y="274" fill="#f8fafc" font-size="22" font-weight="730">Validation</text>
+      <text x="330" y="301" fill="#94a3b8" font-size="13">schema + semantics</text>
+      <line x1="604" y1="246" x2="604" y2="318" stroke="#4338ca"/>
+      <text x="636" y="254" fill="#a5b4fc" font-size="12" font-weight="700" letter-spacing=".8">RESULT</text>
+      <text x="636" y="286" fill="#e0e7ff" font-size="17" font-weight="700">VALID / INVALID</text>
     </g>
 
-    <path d="M286 381H320" fill="none" stroke="#818cf8" stroke-width="4" stroke-linecap="round" marker-end="url(#architecture-indigo-arrow)"/>
-
-    <g>
-      <rect x="328" y="314" width="176" height="134" rx="20" fill="#1e1b4b" stroke="#6366f1" stroke-width="2"/>
-      <circle cx="356" cy="344" r="8" fill="#818cf8"/>
-      <text x="376" y="351" fill="#a5b4fc" font-size="13" font-weight="700" letter-spacing="1">02</text>
-      <text x="352" y="391" fill="#f8fafc" font-size="22" font-weight="700">Validation</text>
-      <text x="352" y="421" fill="#94a3b8" font-size="14">schema + semantics</text>
+    <g id="drift-detection-primitive">
+      <rect x="82" y="354" width="748" height="112" rx="18" fill="#1e1b4b" stroke="#6366f1" stroke-width="2"/>
+      <text x="106" y="382" fill="#a5b4fc" font-size="12" font-weight="700" letter-spacing=".8">INPUT</text>
+      <text x="106" y="410" fill="#f8fafc" font-size="16" font-weight="650">Baseline + revised</text>
+      <text x="106" y="433" fill="#94a3b8" font-size="13">validated cards</text>
+      <line x1="298" y1="374" x2="298" y2="446" stroke="#4338ca"/>
+      <text x="330" y="402" fill="#f8fafc" font-size="21" font-weight="730">Drift Detection</text>
+      <text x="330" y="429" fill="#94a3b8" font-size="13">named expansion checks</text>
+      <line x1="604" y1="374" x2="604" y2="446" stroke="#4338ca"/>
+      <text x="636" y="382" fill="#a5b4fc" font-size="12" font-weight="700" letter-spacing=".8">RESULT</text>
+      <text x="636" y="414" fill="#e0e7ff" font-size="17" font-weight="700">CLEAR / DRIFT</text>
     </g>
 
-    <path d="M512 381H546" fill="none" stroke="#818cf8" stroke-width="4" stroke-linecap="round" marker-end="url(#architecture-indigo-arrow)"/>
-
-    <g>
-      <rect x="554" y="314" width="176" height="134" rx="20" fill="#1e1b4b" stroke="#6366f1" stroke-width="2"/>
-      <circle cx="582" cy="344" r="8" fill="#818cf8"/>
-      <text x="602" y="351" fill="#a5b4fc" font-size="13" font-weight="700" letter-spacing="1">03</text>
-      <text x="578" y="382" fill="#f8fafc" font-size="20" font-weight="700">Drift Detection</text>
-      <text x="578" y="421" fill="#94a3b8" font-size="14">named expansion checks</text>
+    <g id="intent-lock-primitive">
+      <rect x="82" y="482" width="748" height="144" rx="18" fill="#1e1b4b" stroke="#818cf8" stroke-width="2"/>
+      <text x="106" y="510" fill="#a5b4fc" font-size="12" font-weight="700" letter-spacing=".8">INPUT</text>
+      <text x="106" y="538" fill="#f8fafc" font-size="16" font-weight="650">Prompt + proposed</text>
+      <text x="106" y="561" fill="#94a3b8" font-size="13">action</text>
+      <line x1="298" y1="502" x2="298" y2="606" stroke="#4338ca"/>
+      <text x="330" y="542" fill="#f8fafc" font-size="22" font-weight="730">Intent Lock</text>
+      <text x="330" y="569" fill="#94a3b8" font-size="13">literal task identity</text>
+      <line x1="604" y1="502" x2="604" y2="606" stroke="#4338ca"/>
+      <text x="636" y="510" fill="#a5b4fc" font-size="12" font-weight="700" letter-spacing=".8">RESULT</text>
+      <text x="636" y="542" fill="#e0e7ff" font-size="16" font-weight="700">ALLOW / DENY / HOLD</text>
+      <text x="636" y="570" fill="#94a3b8" font-size="12">identity decision only</text>
     </g>
 
-    <path d="M738 381H772" fill="none" stroke="#818cf8" stroke-width="4" stroke-linecap="round" marker-end="url(#architecture-indigo-arrow)"/>
+    <text x="908" y="154" fill="#86efac" font-size="15" font-weight="750">Human authority remains external</text>
+    <rect x="900" y="122" width="336" height="296" rx="26" fill="#052e2b" fill-opacity=".46" stroke="#22c55e" stroke-width="3"/>
+    <rect x="918" y="184" width="300" height="216" rx="18" fill="none" stroke="#34d399" stroke-opacity=".38"/>
+    <text x="942" y="220" fill="#a7f3d0" font-size="13">Human or host separately decides</text>
+    <text x="942" y="242" fill="#a7f3d0" font-size="13">permission, execution, and handoff.</text>
+    <rect x="942" y="270" width="118" height="92" rx="16" fill="#064e3b" fill-opacity=".78" stroke="#22c55e" stroke-width="2"/>
+    <text x="1001" y="310" fill="#f0fdf4" font-size="17" font-weight="700" text-anchor="middle">Human Gate</text>
+    <text x="1001" y="336" fill="#a7f3d0" font-size="12" text-anchor="middle">permission</text>
+    <rect x="1074" y="270" width="120" height="92" rx="16" fill="#064e3b" fill-opacity=".78" stroke="#34d399" stroke-width="2"/>
+    <text x="1134" y="304" fill="#f0fdf4" font-size="16" font-weight="700" text-anchor="middle">Safe</text>
+    <text x="1134" y="326" fill="#f0fdf4" font-size="16" font-weight="700" text-anchor="middle">Handoff</text>
+    <text x="1134" y="348" fill="#a7f3d0" font-size="12" text-anchor="middle">downstream</text>
 
-    <g>
-      <rect x="780" y="314" width="146" height="134" rx="20" fill="#1e1b4b" stroke="#818cf8" stroke-width="2"/>
-      <circle cx="808" cy="344" r="8" fill="#818cf8"/>
-      <text x="828" y="351" fill="#a5b4fc" font-size="13" font-weight="700" letter-spacing="1">04</text>
-      <text x="804" y="391" fill="#f8fafc" font-size="21" font-weight="700">Intent Lock</text>
-      <text x="853" y="421" fill="#94a3b8" font-size="12" text-anchor="middle">literal task identity</text>
-    </g>
+    <rect x="900" y="454" width="336" height="172" rx="24" fill="#0f172a" stroke="#6366f1" stroke-width="3" stroke-dasharray="10 8"/>
+    <text x="926" y="490" fill="#c7d2fe" font-size="18" font-weight="750">Optional adapter</text>
+    <text x="926" y="520" fill="#94a3b8" font-size="14">Maps supported lifecycle events</text>
+    <text x="926" y="543" fill="#e0e7ff" font-size="14" font-weight="700">to Intent Lock only.</text>
+    <text x="926" y="574" fill="#94a3b8" font-size="13">May retain privacy-minimized</text>
+    <text x="926" y="596" fill="#94a3b8" font-size="13">local session state.</text>
+    <path d="M830 554H884V540H900" fill="none" stroke="#818cf8" stroke-width="3" stroke-dasharray="7 7"/>
 
-    <rect x="1000" y="170" width="376" height="390" rx="28" fill="#052e2b" fill-opacity=".46" stroke="#22c55e" stroke-width="3"/>
-    <rect x="1018" y="188" width="340" height="354" rx="20" fill="none" stroke="#34d399" stroke-opacity=".38"/>
-    <text x="1038" y="224" fill="#86efac" font-size="15" font-weight="750" letter-spacing=".25">Human authority remains external</text>
-    <text x="1038" y="252" fill="#a7f3d0" fill-opacity=".78" font-size="13">Approval and downstream action belong</text>
-    <text x="1038" y="273" fill="#a7f3d0" fill-opacity=".78" font-size="13">to the human or host</text>
-
-    <path d="M934 381H1026" fill="none" stroke="#818cf8" stroke-width="4" stroke-linecap="round" marker-end="url(#architecture-indigo-arrow)"/>
-
-    <g>
-      <rect x="1034" y="314" width="144" height="134" rx="20" fill="#064e3b" fill-opacity=".78" stroke="#22c55e" stroke-width="2"/>
-      <text x="1106" y="381" fill="#f0fdf4" font-size="18" font-weight="700" text-anchor="middle">Human Gate</text>
-      <text x="1106" y="416" fill="#a7f3d0" font-size="13" text-anchor="middle">approval decision</text>
-    </g>
-
-    <path d="M1186 381H1206" fill="none" stroke="#34d399" stroke-width="4" stroke-linecap="round" marker-end="url(#architecture-green-arrow)"/>
-
-    <g>
-      <rect x="1214" y="314" width="126" height="134" rx="20" fill="#064e3b" fill-opacity=".78" stroke="#34d399" stroke-width="2"/>
-      <text x="1277" y="374" fill="#f0fdf4" font-size="19" font-weight="700" text-anchor="middle">Safe</text>
-      <text x="1277" y="400" fill="#f0fdf4" font-size="19" font-weight="700" text-anchor="middle">Handoff</text>
-      <text x="1277" y="427" fill="#a7f3d0" font-size="13" text-anchor="middle">reviewed output</text>
-    </g>
-
-    <rect x="188" y="660" width="1064" height="150" rx="26" fill="#0f172a" stroke="#6366f1" stroke-width="3" stroke-dasharray="12 10"/>
-    <text x="226" y="704" fill="#c7d2fe" font-size="20" font-weight="750">Optional adapter</text>
-    <text x="226" y="735" fill="#94a3b8" font-size="15">Maps supported local lifecycle events to pure core decisions.</text>
-    <text x="226" y="762" fill="#94a3b8" font-size="15">May retain privacy-minimized local session state.</text>
-    <rect x="942" y="691" width="266" height="72" rx="18" fill="#1e1b4b" stroke="#818cf8" stroke-width="2"/>
-    <text x="1075" y="722" fill="#e0e7ff" font-size="15" font-weight="700" text-anchor="middle">STATE-WRITING BOUNDARY</text>
-    <text x="1075" y="747" fill="#a5b4fc" font-size="13" text-anchor="middle">local adapter state only</text>
-
-    <path d="M853 652V566" fill="none" stroke="#818cf8" stroke-width="3" stroke-dasharray="7 7" marker-end="url(#architecture-indigo-arrow)"/>
-    <text x="869" y="615" fill="#a5b4fc" font-size="13">calls pure decision</text>
-
-    <text x="720" y="860" fill="#94a3b8" font-size="15" text-anchor="middle">No execution · no automatic routing · identity does not grant authority</text>
+    <text x="640" y="704" fill="#94a3b8" font-size="14" text-anchor="middle">No execution · no automatic routing · core primitives do not compose implicitly</text>
   </g>
 </svg>

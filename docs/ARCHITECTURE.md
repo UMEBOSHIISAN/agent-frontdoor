@@ -17,19 +17,27 @@ grant authority. The adapter maps local lifecycle events and stores only
 privacy-minimized local state; it does not execute work, route work, or make an
 authority decision.
 
-## End-to-end flow
+## Three independent core primitives
 
 ```text
-Task Card -> Validation -> Drift Detection -> Intent Lock -> Human Gate -> Safe Handoff
+Task Card -> Validation -> VALID / INVALID
+Baseline + revised card -> Drift Detection -> CLEAR / DRIFT
+Prompt + proposed action -> Intent Lock -> ALLOW / DENY / HOLD
 ```
 
-The core owns pure task-card validation, boundary-drift detection, and Intent
-Lock decisions. Its outputs are deterministic local results. The optional
-adapter maps supported lifecycle events to those pure decisions and can retain
-privacy-minimized local state needed for a session-scoped lock. The human or
-host owns approval, execution, and any handoff after review.
+These are three independent primitives, not consecutive stages. Callers invoke
+task-card validation for one loaded card, drift detection for one validated
+before/after pair, or Intent Lock for one prompt and proposed action. The core
+returns deterministic local results without routing an output from one
+primitive into another.
 
-![Agent Frontdoor architecture flow with read-only core, optional adapter, and external human authority](../assets/agent-frontdoor-architecture.svg)
+The optional adapter maps supported lifecycle events to Intent Lock only and
+can retain privacy-minimized local state needed for a session-scoped lock. It
+does not integrate Validation or Drift Detection. The human or host remains a
+separate authority boundary and owns permission, execution, and any handoff
+after reviewing whichever result it received.
+
+![Three independent Agent Frontdoor core primitives, an optional adapter connected only to Intent Lock, and external human authority](../assets/agent-frontdoor-architecture.svg)
 
 ## Distribution and write boundaries
 

@@ -30,7 +30,7 @@ Examples of unacceptable behavior include:
 * The use of sexualized language or imagery, and sexual attention or advances
   of any kind
 * Trolling, insulting or derogatory comments, and personal or political attacks
-* Public or private harassment
+* Harassment in the covered GitHub spaces
 * Publishing others' private information, such as a physical or email address,
   without their explicit permission
 * Other conduct which could reasonably be considered inappropriate in a
@@ -38,23 +38,23 @@ Examples of unacceptable behavior include:
 
 ## Enforcement Responsibilities
 
-Community leaders are responsible for clarifying and enforcing our standards of
-acceptable behavior and will take appropriate and fair corrective action in
-response to any behavior that they deem inappropriate, threatening, offensive,
+Within the covered GitHub spaces, maintainers are responsible for clarifying
+and enforcing these standards. They may take fair corrective action in response
+to visible repository content that is inappropriate, threatening, offensive,
 or harmful.
 
-Community leaders have the right and responsibility to remove, edit, or reject
-comments, commits, code, wiki edits, issues, and other contributions that are not
-aligned to this Code of Conduct, and will communicate reasons for moderation
-decisions when appropriate.
+Maintainers moderate visible repository contributions. They may remove, edit,
+or reject comments, commits, code, wiki edits, issues, pull requests, and other
+contributions that are not aligned with this Code of Conduct, and may explain
+repository moderation decisions when appropriate.
 
 ## Scope
 
-This Code of Conduct applies within all community spaces, and also applies when
-an individual is officially representing the community in public spaces.
-Examples of representing our community include using an official e-mail
-address, posting via an official social media account, or acting as an appointed
-representative at an online or offline event.
+This Code of Conduct applies to participation in this GitHub repository and its
+GitHub-hosted project spaces. The project does not claim moderation authority
+over third-party forums, social networks, private communications, or offline
+venues. For an incident in one of those venues, use that venue's own moderation
+or safety route.
 
 ## Enforcement
 
@@ -62,49 +62,43 @@ Instances of abusive, harassing, or otherwise unacceptable behavior should be
 reported through [GitHub's documented abuse-reporting tools](https://docs.github.com/en/communities/maintaining-your-safety-on-github/reporting-abuse-or-spam).
 For an issue, pull request, or comment, use its **Report content** menu and choose
 the GitHub Support route when offered; for a user, use **Block or Report**.
-GitHub handles that report through its own process. This project advertises no
-separate private conduct inbox. Do not use the security-advisory form for a
-non-security conduct report.
-
-All community leaders are obligated to respect the privacy and security of the
-reporter of any incident.
+GitHub handles those content and user reports through its own process.
+Maintainers can separately moderate contributions that remain visible in this
+repository. For incidents outside the covered GitHub spaces, use that venue's
+own moderation or safety route.
 
 ## Enforcement Guidelines
 
-Community leaders will follow these Community Impact Guidelines in determining
-the consequences for any action they deem in violation of this Code of Conduct:
+Maintainers will use these Community Impact Guidelines when choosing moderation
+actions available within the covered GitHub spaces:
 
 ### 1. Correction
 
 **Community Impact**: Use of inappropriate language or other behavior deemed
 unprofessional or unwelcome in the community.
 
-**Consequence**: A private, written warning from community leaders, providing
-clarity around the nature of the violation and an explanation of why the
-behavior was inappropriate. A public apology may be requested.
+**Consequence**: A request to edit or remove the visible contribution, with an
+explanation of why it does not meet the repository standard. A public apology
+may be requested when appropriate.
 
 ### 2. Warning
 
 **Community Impact**: A violation through a single incident or series of
 actions.
 
-**Consequence**: A warning with consequences for continued behavior. No
-interaction with the people involved, including unsolicited interaction with
-those enforcing the Code of Conduct, for a specified period of time. This
-includes avoiding interactions in community spaces as well as external channels
-like social media. Violating these terms may lead to a temporary or permanent
-ban.
+**Consequence**: A repository warning plus removal, editing, locking, or
+rejection of the visible contribution as appropriate. Continued violations in
+the covered GitHub spaces may lead to a temporary or permanent repository ban.
 
 ### 3. Temporary Ban
 
 **Community Impact**: A serious violation of community standards, including
 sustained inappropriate behavior.
 
-**Consequence**: A temporary ban from any sort of interaction or public
-communication with the community for a specified period of time. No public or
-private interaction with the people involved, including unsolicited interaction
-with those enforcing the Code of Conduct, is allowed during this period.
-Violating these terms may lead to a permanent ban.
+**Consequence**: A temporary restriction from participating in this repository
+and its GitHub-hosted project spaces, to the extent available through project
+and platform moderation controls. Continued violations there may lead to a
+permanent repository ban.
 
 ### 4. Permanent Ban
 
@@ -112,8 +106,9 @@ Violating these terms may lead to a permanent ban.
 standards, including sustained inappropriate behavior, harassment of an
 individual, or aggression toward or disparagement of classes of individuals.
 
-**Consequence**: A permanent ban from any sort of public interaction within the
-community.
+**Consequence**: A permanent restriction from participating in this repository
+and its GitHub-hosted project spaces, to the extent available through project
+and platform moderation controls.
 
 ## Attribution
 

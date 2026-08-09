@@ -9,7 +9,7 @@
 Agent Frontdoorは、読み取り専用コアで承認済みの依頼を境界付きカードに固定し、AIコーディングエージェントの逸脱を実行前に止める安全ゲートウェイです。
 
 <p align="center">
-  <img src="assets/agent-frontdoor-hero.svg" alt="Agent Frontdoor keeps an approved task on a constrained path through validation, drift detection, Intent Lock, and human review" width="960">
+  <img src="assets/agent-frontdoor-hero.svg" alt="Agent Frontdoor keeps task identity bounded while deterministic checks stay separate from external human authority" width="960">
 </p>
 
 This is not an agent runtime.
@@ -38,24 +38,29 @@ The same fail-closed rule gives task cards and later revisions concrete results:
 | Boundary check | Example result | Meaning |
 | --- | --- | --- |
 | A bounded local audit card | `VALID example-readme-audit` | The card satisfies the input contract; it is not approval to perform the audit. |
-| An unsafe or malformed card | `INVALID` | The card is refused instead of softened into a runnable task. |
+| A successfully loaded but contract-invalid or unsafe card | `INVALID` (exit `1`) | The card is refused instead of softened into a runnable task. |
+| Unreadable input or malformed JSON | `ERROR` (exit `2`) | Input handling stops before a task card is accepted. |
 | A read-only audit becomes “apply the fix” | `DRIFT` with `audit_to_mutation` | The expansion is reported, exits non-zero, and mutates nothing. |
 
 ## How the gateway works
 
 <p align="center">
-  <img src="assets/agent-frontdoor-architecture.svg" alt="Agent Frontdoor architecture: a read-only core leads from Task Card through Validation, Drift Detection, and Intent Lock; an optional adapter maps local events; human authority remains external through Human Gate and Safe Handoff" width="960">
+  <img src="assets/agent-frontdoor-architecture.svg" alt="Agent Frontdoor architecture: three independent read-only checks, an optional adapter connected only to Intent Lock, and external human authority" width="960">
 </p>
 
 ```text
-Task Card -> Validation -> Drift Detection -> Intent Lock -> Human Gate -> Safe Handoff
+Task Card -> Validation -> VALID / INVALID
+Baseline + revised card -> Drift Detection -> CLEAR / DRIFT
+Prompt + proposed action -> Intent Lock -> ALLOW / DENY / HOLD
 ```
 
-The core is read-only: it evaluates local inputs and returns deterministic
-decisions without task execution or state writes. The separately installable
-`agent-frontdoor-hooks` adapter can map supported local Codex and Claude Code
-events and write only privacy-minimized session state after an operator
-configures it. Human authority remains external to both distributions.
+These are three independent read-only checks, not stages in a composed
+pipeline. The core evaluates local inputs and returns deterministic decisions
+without task execution or state writes. The separately installable
+`agent-frontdoor-hooks` adapter maps supported local Codex and Claude Code
+lifecycle events to Intent Lock only and writes only privacy-minimized session
+state after an operator configures it. Human authority remains external to both
+distributions and separately decides permission, execution, and handoff.
 
 See the complete component and trust boundaries in
 [Architecture](docs/ARCHITECTURE.md).

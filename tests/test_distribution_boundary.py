@@ -74,18 +74,6 @@ ADAPTER_GENERATED_METADATA = {
 MARKDOWN_LINK = re.compile(r"!?\[[^\]]*\]\(([^)\s]+)(?:\s+[^)]*)?\)")
 HTML_LINK = re.compile(r"(?:src|href)\s*=\s*['\"]([^'\"]+)['\"]", re.I)
 
-# Task 9 owns converting these four measured cross-distribution references to
-# canonical GitHub URLs, then deleting this transition exception. Counts matter:
-# the adapter README is referenced twice, and any fifth unresolved path must fail.
-TASK_9_CROSS_DISTRIBUTION_LINKS = Counter(
-    {
-        ("README.md", "adapters/README.md"): 2,
-        ("README.md", "adapters/examples/codex-hooks.json"): 1,
-        ("README.md", "adapters/examples/claude-settings.json"): 1,
-    }
-)
-
-
 @dataclass(frozen=True)
 class SdistSnapshot:
     name: str
@@ -571,7 +559,7 @@ def test_clean_adapter_sdist_has_exact_closed_member_set(
 def test_clean_core_sdist_closes_every_relative_document_link(
     core_sdist: SdistSnapshot,
 ) -> None:
-    assert _unresolved_links(core_sdist) == TASK_9_CROSS_DISTRIBUTION_LINKS
+    assert _unresolved_links(core_sdist) == Counter()
 
 
 @pytest.mark.skipif(

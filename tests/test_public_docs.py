@@ -1,5 +1,10 @@
+from __future__ import annotations
+
+import html
 import json
 from pathlib import Path
+import re
+from urllib.parse import unquote, urlsplit
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -15,6 +20,73 @@ INTENT_LOCK_SCHEMA = (
 ADAPTER_README = ROOT / "adapters" / "README.md"
 CORE_SOURCE = ROOT / "src" / "frontdoor"
 INTAKE_SCHEMA = ROOT / "src" / "frontdoor" / "schema" / "intake.v0.json"
+
+PUBLIC_MARKDOWN = (
+    Path("README.md"),
+    Path("CHANGELOG.md"),
+    Path("CONTRIBUTING.md"),
+    Path("SECURITY.md"),
+    Path("SUPPORT.md"),
+    Path("CODE_OF_CONDUCT.md"),
+    Path("docs/GETTING_STARTED.md"),
+    Path("docs/ARCHITECTURE.md"),
+    Path("docs/EVIDENCE.md"),
+    Path("docs/CORE_REFERENCE.md"),
+    Path("docs/INTENT_LOCK.md"),
+    Path("docs/TROUBLESHOOTING.md"),
+    Path("docs/FRIEND_LAB.md"),
+    Path("examples/README.md"),
+    Path("adapters/README.md"),
+    Path(".github/pull_request_template.md"),
+)
+
+MARKDOWN_LINK = re.compile(
+    r"(?P<image>!)?\[(?P<label>[^\]]*)\]"
+    r"\((?P<target><[^>]+>|[^)\s]+)(?:\s+[^)]*)?\)"
+)
+MARKDOWN_REFERENCE_TARGET = re.compile(
+    r"^\s*\[[^\]]+\]:\s*(?P<target><[^>]+>|\S+)",
+    re.MULTILINE,
+)
+HTML_TARGET = re.compile(
+    r"(?:src|href)\s*=\s*['\"](?P<target>[^'\"]+)['\"]",
+    re.IGNORECASE,
+)
+HTML_IMAGE = re.compile(r"<img\b(?P<attrs>[^>]*)>", re.IGNORECASE)
+HTML_ATTRIBUTE = re.compile(
+    r"\b(?P<name>src|alt)\s*=\s*(?P<quote>['\"])"
+    r"(?P<value>.*?)(?P=quote)",
+    re.IGNORECASE,
+)
+
+
+def _link_targets(text: str) -> list[str]:
+    targets = [match.group("target") for match in MARKDOWN_LINK.finditer(text)]
+    targets.extend(
+        match.group("target")
+        for match in MARKDOWN_REFERENCE_TARGET.finditer(text)
+    )
+    targets.extend(match.group("target") for match in HTML_TARGET.finditer(text))
+    return targets
+
+
+def _local_target(source: Path, raw_target: str) -> Path | None:
+    target = html.unescape(raw_target).strip().strip("<>")
+    if not target or target.startswith(("#", "//")):
+        return None
+    parsed = urlsplit(target)
+    if parsed.scheme or parsed.netloc or not parsed.path:
+        return None
+    assert not parsed.path.startswith("/"), (source, raw_target)
+
+    resolved = (ROOT / source.parent / unquote(parsed.path)).resolve()
+    try:
+        resolved.relative_to(ROOT.resolve())
+    except ValueError as error:
+        raise AssertionError(
+            f"public link escapes repository: {source} -> {raw_target}"
+        ) from error
+    return resolved
 
 
 def test_evidence_doc_scopes_every_published_number() -> None:
@@ -220,3 +292,33 @@ def test_adapter_readme_requires_smoke_before_activation() -> None:
         "Check this assumption against the current official Codex hook "
         "documentation before activation."
     ) in normalized
+
+
+def test_intended_public_markdown_links_resolve_inside_repository() -> None:
+    for source in PUBLIC_MARKDOWN:
+        path = ROOT / source
+        assert path.is_file(), source
+        text = path.read_text(encoding="utf-8")
+        for raw_target in _link_targets(text):
+            target = _local_target(source, raw_target)
+            if target is not None:
+                assert target.exists(), (source, raw_target)
+
+
+def test_local_readme_images_have_nonempty_alt_text() -> None:
+    text = (ROOT / "README.md").read_text(encoding="utf-8")
+
+    for match in MARKDOWN_LINK.finditer(text):
+        if match.group("image") and _local_target(
+            Path("README.md"), match.group("target")
+        ) is not None:
+            assert match.group("label").strip(), match.group(0)
+
+    for match in HTML_IMAGE.finditer(text):
+        attributes = {
+            attribute.group("name").casefold(): attribute.group("value")
+            for attribute in HTML_ATTRIBUTE.finditer(match.group("attrs"))
+        }
+        source = attributes.get("src")
+        if source and _local_target(Path("README.md"), source) is not None:
+            assert attributes.get("alt", "").strip(), match.group(0)

@@ -1123,6 +1123,10 @@ def test_explicit_new_task_marker_replaces_report_hold(
         "\u3000NeW TaSk: Translate this sentence",
         "別件: READMEの文章を監査して結果だけ教えて",
         "  別件: なぜ空は青いのですか",
+        "new task:\u200bA\u200d",
+        "new task:\u200b7\u200d",
+        "new task:\u200b!\u200d",
+        "別件:\u200b©\u200d",
     ],
 )
 def test_explicit_new_task_marker_with_generic_request_releases_hold(
@@ -1149,9 +1153,17 @@ def test_explicit_new_task_marker_with_generic_request_releases_hold(
         "Please use new task: Fix docs.",
         '"new task: Fix docs."',
         "new taſk: Fix docs.",
+        "new task:\u200b",
+        "別件:\u200d",
+        "new task:\ufeff",
+        "別件:\x00",
+        "別件:\u0301",
+        "new task: \t\u200b\u200d\ufeff\x00\u00a0\u2028\u3000\n",
     ],
 )
-def test_invalid_new_task_marker_preserves_report_hold(prompt: str) -> None:
+def test_invalid_or_invisible_new_task_marker_preserves_report_hold(
+    prompt: str,
+) -> None:
     previous = derive_lock("`codex mcp login cloudflare-api`")
     assert previous is not None
     held = record_result(

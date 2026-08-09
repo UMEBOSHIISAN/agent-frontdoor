@@ -1198,6 +1198,10 @@ def test_human_correction_cannot_bypass_adapter_report_hold(
         "\u3000NeW TaSk: Translate this sentence",
         "別件: READMEの文章を監査して結果だけ教えて",
         "  別件: なぜ空は青いのですか",
+        "new task:\u200bA\u200d",
+        "new task:\u200b7\u200d",
+        "new task:\u200b!\u200d",
+        "別件:\u200b©\u200d",
     ],
 )
 def test_explicit_new_task_marker_clears_report_hold(
@@ -1242,9 +1246,15 @@ def test_explicit_new_task_marker_clears_report_hold(
         "Please use new task: Fix docs.",
         '"new task: Fix docs."',
         "new taſk: Fix docs.",
+        "new task:\u200b",
+        "別件:\u200d",
+        "new task:\ufeff",
+        "別件:\x00",
+        "別件:\u0301",
+        "new task: \t\u200b\u200d\ufeff\x00\u00a0\u2028\u3000\n",
     ],
 )
-def test_invalid_new_task_marker_keeps_report_hold_and_denies_next_tool(
+def test_invalid_or_invisible_marker_keeps_hold_and_denies_next_tool(
     tmp_path: Path,
     prompt: str,
 ) -> None:

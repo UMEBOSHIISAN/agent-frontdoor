@@ -10,6 +10,7 @@ import json
 import re
 import shlex
 from typing import Any
+from unicodedata import category
 
 from jsonschema import Draft202012Validator
 
@@ -681,7 +682,9 @@ def _explicit_new_task_request(prompt: str) -> str | None:
     else:
         return None
     request = remainder.strip()
-    return request or None
+    if not any(category(character)[0] in "LNPS" for character in request):
+        return None
+    return request
 
 
 def _derive_fresh_lock(prompt: str, *, epoch: int) -> IntentLock | None:

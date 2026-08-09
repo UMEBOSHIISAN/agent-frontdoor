@@ -116,13 +116,16 @@ character starts a fresh task transition:
 - `別件: <request>` (exact Japanese marker).
 
 Leading whitespace is allowed. The request after the colon must contain
-non-whitespace text. Empty markers, quoted or mid-sentence marker text, and
-Unicode-confusable English forms preserve the report hold. For example,
-`new task: Fix docs.` releases the old hold because its remainder creates no
-literal lock, while `別件: component docs failed during validation` creates a
-fresh literal-target lock with a monotonically increased epoch. An explicit
-marker may intentionally create a fresh lock for the same action or target; the
-marker, not inferred semantic unrelatedness, is the human transition signal.
+at least one character whose Unicode general category begins with `L`, `N`,
+`P`, or `S`. Empty, mark-only, separator-only, or format/control-only
+remainders, quoted or mid-sentence marker text, and Unicode-confusable English
+forms preserve the report hold. Visible content may contain surrounding
+formatting characters. For example, `new task: Fix docs.` releases the old hold
+because its remainder creates no literal lock, while
+`別件: component docs failed during validation` creates a fresh literal-target
+lock with a monotonically increased epoch. An explicit marker may intentionally
+create a fresh lock for the same action or target; the marker, not inferred
+semantic unrelatedness, is the human transition signal.
 
 Both identity modes first require a recognized shell-action context. A caller
 marked with `evaluate_action(..., shell_action=False)`, or a standalone parsed

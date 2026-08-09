@@ -1,0 +1,59 @@
+name: test
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  unit:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: python -m pip install --upgrade pip
+      - run: python -m pip install -e ".[test]"
+      - run: python -m pytest -q
+
+  exit-codes:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install --upgrade pip
+      - run: python -m pip install -e ".[test]"
+      # The exit-code contract is public API, so assert it from the CLI itself
+      # rather than trusting the suite to have covered every documented value.
+      #
+      # Every call is written as `|| actual=$?` on purpose: the default shell is
+      # `bash -e`, and a bare invocation that returns a deliberate non-zero code
+      # would end the step before the comparison ran.
+      - name: documented exit codes hold
+        run: |
+          set -uo pipefail
+          fail=0
+          check() {  # check <expected> <description> <command...>
+            local expected="$1" description="$2"; shift 2
+            local actual=0
+            "$@" >/dev/null 2>&1 || actual=$?
+            if [ "$actual" != "$expected" ]; then
+              echo "::error::$description expected exit $expected, got $actual"
+              fail=1
+            else
+              echo "ok: $description -> $actual"
+            fi
+          }
+          check 0 "valid card"          agent-frontdoor validate fixtures/positive/01_install_only.json
+          check 1 "contract violation"  agent-frontdoor validate fixtures/negative/neg_05_deploy_tag_none.json
+          check 3 "audit_to_mutation"   agent-frontdoor check-drift examples/drift_before.json examples/drift_after.json
+          check 0 "no drift"            agent-frontdoor check-drift examples/safe_before.json examples/safe_after.json
+          exit $fail

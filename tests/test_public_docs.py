@@ -405,3 +405,9 @@ def test_local_readme_images_have_nonempty_alt_text() -> None:
         source = attributes.get("src")
         if source and _local_target(Path("README.md"), source) is not None:
             assert attributes.get("alt", "").strip(), match.group(0)
+
+
+def test_public_tree_contains_no_internal_superpowers_artifacts() -> None:
+    root = ROOT / "docs" / "superpowers"
+    paths = list(root.rglob("*.md")) if root.exists() else []
+    assert not paths, [path.relative_to(ROOT) for path in paths]

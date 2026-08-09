@@ -180,6 +180,130 @@ def test_schema_is_valid_draft_2020_12_and_accepts_minimal_object(
     assert errors == ()
 
 
+@pytest.mark.parametrize(
+    ("name", "package_version", "versioned_member"),
+    [
+        ("receipt", "0.1.0", None),
+        ("receipt", "0.2.0", None),
+        (
+            "friend_pack",
+            "0.1.0",
+            "source/agent-frontdoor-0.1.0.tar.gz",
+        ),
+        (
+            "friend_pack",
+            "0.2.0",
+            "source/agent-frontdoor-0.2.0.tar.gz",
+        ),
+        ("source", "0.1.0", "agent-frontdoor-0.1.0"),
+        ("source", "0.2.0", "agent-frontdoor-0.2.0"),
+        ("wheelhouse", "0.1.0", None),
+        ("wheelhouse", "0.2.0", None),
+    ],
+)
+def test_v1_schema_accepts_each_development_candidate(
+    name: str,
+    package_version: str,
+    versioned_member: str | None,
+) -> None:
+    schema = load_schema(name)
+    assert schema is not None
+    value = VALID_OBJECTS[name]()
+    value["package_version"] = package_version
+    if name == "friend_pack":
+        value["source_archive"]["path"] = versioned_member
+    elif name == "source":
+        value["archive_root"] = versioned_member
+
+    assert tuple(Draft202012Validator(schema).iter_errors(value)) == ()
+
+
+@pytest.mark.parametrize(
+    ("package_version", "source_path"),
+    [
+        ("0.1.0", "source/agent-frontdoor-0.2.0.tar.gz"),
+        ("0.2.0", "source/agent-frontdoor-0.1.0.tar.gz"),
+    ],
+)
+def test_friend_pack_rejects_mismatched_version_and_source_path(
+    package_version: str,
+    source_path: str,
+) -> None:
+    schema = load_schema("friend_pack")
+    assert schema is not None
+    manifest = valid_friend_pack_manifest()
+    manifest["package_version"] = package_version
+    manifest["source_archive"]["path"] = source_path
+
+    assert tuple(Draft202012Validator(schema).iter_errors(manifest))
+
+
+@pytest.mark.parametrize(
+    ("package_version", "archive_root"),
+    [
+        ("0.1.0", "agent-frontdoor-0.2.0"),
+        ("0.2.0", "agent-frontdoor-0.1.0"),
+    ],
+)
+def test_source_manifest_rejects_mismatched_version_and_archive_root(
+    package_version: str,
+    archive_root: str,
+) -> None:
+    schema = load_schema("source")
+    assert schema is not None
+    manifest = valid_source_manifest()
+    manifest["package_version"] = package_version
+    manifest["archive_root"] = archive_root
+
+    assert tuple(Draft202012Validator(schema).iter_errors(manifest))
+
+
+@pytest.mark.parametrize(
+    ("name", "versioned_member"),
+    [
+        ("receipt", None),
+        ("friend_pack", "source/agent-frontdoor-0.3.0.tar.gz"),
+        ("source", "agent-frontdoor-0.3.0"),
+        ("wheelhouse", None),
+    ],
+)
+def test_v1_schema_rejects_unknown_package_version(
+    name: str,
+    versioned_member: str | None,
+) -> None:
+    schema = load_schema(name)
+    assert schema is not None
+    value = VALID_OBJECTS[name]()
+    value["package_version"] = "0.3.0"
+    if name == "friend_pack":
+        value["source_archive"]["path"] = versioned_member
+    elif name == "source":
+        value["archive_root"] = versioned_member
+
+    assert tuple(Draft202012Validator(schema).iter_errors(value))
+
+
+@pytest.mark.parametrize(
+    ("name", "schema_version"),
+    [
+        ("receipt", "friend-acceptance-receipt.v2"),
+        ("friend_pack", "friend-pack-manifest.v2"),
+        ("source", "source-archive-manifest.v2"),
+        ("wheelhouse", "wheelhouse-manifest.v2"),
+    ],
+)
+def test_v1_schema_rejects_other_schema_version(
+    name: str,
+    schema_version: str,
+) -> None:
+    schema = load_schema(name)
+    assert schema is not None
+    value = VALID_OBJECTS[name]()
+    value["schema_version"] = schema_version
+
+    assert tuple(Draft202012Validator(schema).iter_errors(value))
+
+
 def object_schemas(value: object):
     if isinstance(value, dict):
         if value.get("type") == "object":

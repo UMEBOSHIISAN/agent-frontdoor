@@ -219,8 +219,7 @@ def _controlled_python_environment(
     home = home.resolve()
     config_home = home / "config"
     config_home.mkdir(parents=True)
-    pip_config = config_home / "pip.conf"
-    pip_config.write_text("", encoding="utf-8")
+    pip_config = Path(os.devnull)
     environment.update(
         {
             "COLUMNS": "240",
@@ -259,7 +258,7 @@ def test_controlled_python_environment_overrides_host_user_configuration(
     controlled_home = tmp_path / "controlled-home"
     environment = _controlled_python_environment(controlled_home)
     controlled_config = controlled_home / "config"
-    controlled_pip_config = controlled_config / "pip.conf"
+    controlled_pip_config = Path(os.devnull)
     result = subprocess.run(
         [
             sys.executable,
@@ -285,6 +284,74 @@ def test_controlled_python_environment_overrides_host_user_configuration(
     )
 
     assert result.returncode == 0, f"{result.stdout}\n{result.stderr}"
+
+
+def test_controlled_python_environment_disables_file_pip_configuration(
+    tmp_path: Path,
+) -> None:
+    probe_venv = tmp_path / "pip-config-probe"
+    setup = subprocess.run(
+        [sys.executable, "-m", "venv", "--copies", str(probe_venv)],
+        env=_controlled_python_environment(tmp_path / "venv-setup-home"),
+        capture_output=True,
+        text=True,
+    )
+    assert setup.returncode == 0, f"{setup.stdout}\n{setup.stderr}"
+
+    if os.name == "nt":
+        probe_python = probe_venv / "Scripts" / "python.exe"
+        site_config = probe_venv / "pip.ini"
+    else:
+        probe_python = probe_venv / "bin" / "python"
+        site_config = probe_venv / "pip.conf"
+    sentinel = "731"
+    site_config.write_text(
+        f"[global]\ntimeout = {sentinel}\n",
+        encoding="utf-8",
+    )
+
+    environment = _controlled_python_environment(tmp_path / "probe-home")
+    existing_empty_config = tmp_path / "empty-pip.conf"
+    existing_empty_config.write_text("", encoding="utf-8")
+    mutation_environment = {
+        **environment,
+        "PIP_CONFIG_FILE": str(existing_empty_config),
+    }
+    mutation = subprocess.run(
+        [str(probe_python), "-m", "pip", "config", "debug"],
+        env=mutation_environment,
+        capture_output=True,
+        text=True,
+    )
+    assert mutation.returncode == 0, (
+        f"{mutation.stdout}\n{mutation.stderr}"
+    )
+    assert str(site_config) in mutation.stdout
+    assert sentinel in mutation.stdout
+    mutation_values = tuple(
+        line.strip()
+        for line in mutation.stdout.splitlines()
+        if line.startswith("    ")
+    )
+    assert mutation_values == ("global.timeout: 731",)
+
+    protected = subprocess.run(
+        [str(probe_python), "-m", "pip", "config", "debug"],
+        env=environment,
+        capture_output=True,
+        text=True,
+    )
+    assert protected.returncode == 0, (
+        f"{protected.stdout}\n{protected.stderr}"
+    )
+    assert str(site_config) in protected.stdout
+    assert sentinel not in protected.stdout
+    protected_values = tuple(
+        line.strip()
+        for line in protected.stdout.splitlines()
+        if line.startswith("    ")
+    )
+    assert protected_values == ()
 
 
 @pytest.fixture(scope="module")

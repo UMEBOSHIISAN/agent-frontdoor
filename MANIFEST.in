@@ -1,11 +1,31 @@
 include .gitattributes
 include CHANGELOG.md
+include CODE_OF_CONDUCT.md
+include CONTRIBUTING.md
+include LICENSE
+include README.md
+include SECURITY.md
+include SUPPORT.md
+include .github/ISSUE_TEMPLATE/bug.yml
+include .github/ISSUE_TEMPLATE/config.yml
+include .github/ISSUE_TEMPLATE/feature.yml
+include .github/pull_request_template.md
+recursive-include assets *.png *.svg
+include docs/ARCHITECTURE.md
+include docs/CORE_REFERENCE.md
+include docs/EVIDENCE.md
 include docs/FRIEND_LAB.md
+include docs/GETTING_STARTED.md
 include docs/INTENT_LOCK.md
-recursive-include examples *.json
+include docs/TROUBLESHOOTING.md
+recursive-include examples *.json *.md *.py
 recursive-include fixtures *.json
 recursive-include schemas *.json
 include tools/verify_handoff_archive.py
+prune adapters
+prune docs/superpowers
+prune tests/friend_lab
+prune tools/friend_lab
 exclude tests/test_adapter_safety.py
 exclude tests/test_hook_adapter.py
 exclude tests/test_hook_fixtures.py

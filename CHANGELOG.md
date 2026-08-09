@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+No Git tag or GitHub release represents either subsection.
+
+### Planned 0.2.0
+
 - Reserved `0.2.0` as the first core and adapter release line containing
   `intent-lock.v1`; the adapter rejects the incompatible `0.1.x` core line.
 - Added the pure `intent-lock.v1` schema and deterministic task-identity state
@@ -20,9 +24,10 @@
 - Corrected offline installation instructions to require an exact verified
   wheelhouse without global-package or index fallback.
 
-## 0.1.0 (release candidate)
+### Earlier 0.1 development candidate
 
-Initial release candidate.
+This earlier development history was never tagged or published as a GitHub
+release.
 
 - `intake.v0` JSON Schema contract: 14 core fields, 10 bounded task classes,
   three human-gate states.

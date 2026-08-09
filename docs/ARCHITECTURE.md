@@ -29,7 +29,7 @@ adapter maps supported lifecycle events to those pure decisions and can retain
 privacy-minimized local state needed for a session-scoped lock. The human or
 host owns approval, execution, and any handoff after review.
 
-The architecture image is deferred until Task 7 creates the asset.
+![Agent Frontdoor architecture flow with read-only core, optional adapter, and external human authority](../assets/agent-frontdoor-architecture.svg)
 
 ## Distribution and write boundaries
 

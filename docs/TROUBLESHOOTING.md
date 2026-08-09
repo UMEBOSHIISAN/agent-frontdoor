@@ -10,6 +10,7 @@ report, inspect, or return the decision to the human. In recovery, do not retry,
 | `ERROR`, exit `2` | Input was unreadable or malformed JSON. | Stop and inspect the exact local input with the human; provide a corrected input only through the normal review path. |
 | `INVALID`, exit `1` | A loaded card violates the contract. | Stop and report the typed validation issue; return the card to its author or human reviewer. |
 | `DRIFT`, exit `3` | Valid before/after cards crossed a named boundary. | Stop the handoff and present the drift report to the human; do not treat the newer card as approved. |
+| `UNKNOWN` | The task has unresolved facts or an unbounded classification. | Stop and return the task for human clarification. |
 | `BLOCKING` | The card contains an unresolved or high-risk boundary. | Keep the work blocked until a human explicitly resolves the gate. |
 | `REPORT_REQUIRED` | A matching adapter action failed or has an unknown outcome. | Surface the direct result to the human before any later tool action. |
 
@@ -32,9 +33,7 @@ A Codex result without explicit structured status is outcome-opaque. It enters
 `REPORT_REQUIRED` because output text is not proof of success or failure. Keep
 the original result available for reporting and stop before any new action.
 
-Windows is rejected for this adapter release because its POSIX permission model
-cannot be enforced there. Use the read-only core on Windows, or return adapter
-adoption to the operator; do not claim an equivalent adapter configuration.
+Windows is rejected for this adapter release because its POSIX permission model cannot be enforced there. In this case, stop adapter adoption and return the choice to the operator; do not claim an equivalent adapter configuration.
 
 Paths outside supported hook coverage are outside this guardrail. Treat them as
 uncovered, report that limit to the human or host, and use the host's own

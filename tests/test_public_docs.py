@@ -158,3 +158,8 @@ def test_troubleshooting_uses_non_escalating_recovery() -> None:
         "operator-owned settings",
     ):
         assert boundary in text
+    assert "| `UNKNOWN` |" in text
+    assert "return the task for human clarification" in text
+    assert "stop adapter adoption" in text
+    assert "return the choice to the operator" in text
+    assert "Use the read-only core on Windows" not in text

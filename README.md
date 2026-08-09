@@ -1,43 +1,122 @@
-This is not an agent runtime.
-This is not an autonomous router.
-This is a preflight contract and validator for safely preparing tasks for AI workers.
-
-![Agent Frontdoor](https://img.shields.io/badge/Agent%20Frontdoor-v0.1.0-111827)
-![Python](https://img.shields.io/badge/python-3.10%2B-3776ab)
-![Safety](https://img.shields.io/badge/runtime-fail--closed-16a34a)
-
-# Agent Frontdoor
-
 <p align="center">
   <img src="assets/agent-frontdoor-logo.svg" alt="Agent Frontdoor logo" width="180">
 </p>
 
+<h1 align="center">Agent Frontdoor</h1>
+
+<p align="center">
+  <b>The request that reaches your AI worker should be the one a human read.</b><br>
+  <sub>AIに仕事を渡す前に、雑な依頼を「境界付きタスクカード」へ変換し、危険な拡張をそこで止める。</sub>
+</p>
+
+<p align="center">
+  <img alt="version" src="https://img.shields.io/badge/intake-v0-111827">
+  <img alt="python" src="https://img.shields.io/badge/python-3.10%2B-3776ab">
+  <img alt="fixtures" src="https://img.shields.io/badge/fixtures-92-5fd3d3">
+  <img alt="runtime" src="https://img.shields.io/badge/runtime-fail--closed-16a34a">
+  <img alt="execution" src="https://img.shields.io/badge/execution-none-e06a6a">
+  <img alt="license" src="https://img.shields.io/badge/license-MIT-f0a04b">
+</p>
+
 <p align="center"><img src="assets/agent-frontdoor-pulse.svg" alt="Agent Frontdoor validation pulse" width="720"></p>
 
-> Fail-closed preflight validation for bounded AI task cards.
->
-> AIに仕事を渡す前に、依頼を境界付きタスクカードへ変換し、危険な拡張を止めるための読み取り専用OSSです。
+---
 
-## What it is / これは何か
+**This is not an agent runtime. This is not an autonomous router.**
 
-Agent Frontdoor is the **front door before an AI worker**. It does not run an
-agent, choose a model, call an API, or grant authority. It turns an informal
-request into an explicit contract that a human can inspect before any other
-system acts.
+Agent Frontdoor is the front door *before* an AI worker. It does not run an agent, choose a model, call an API, or grant authority. It turns an informal request into an explicit contract a human can inspect before any other system acts.
 
-Agent Frontdoorは、AIワーカーの「入口」です。エージェントを実行せず、モデル選択・API呼び出し・自動ルーティング・権限付与も行いません。人間の依頼を、別システムが実行する前に確認できる契約へ変換します。
+> Agent Frontdoorは、AIワーカーの「入口」です。エージェントを実行せず、モデル選択・API呼び出し・自動ルーティング・権限付与も行いません。人間の依頼を、別システムが動く**前**に確認できる契約へ変換します。
 
 ```mermaid
 flowchart LR
-    A[Messy request\n雑な依頼] --> B[Task card\n境界付きカード]
-    B --> C{Validate\n検証}
-    C -->|BLOCKING / invalid| D[Stop\n停止]
-    C -->|valid| E[Human review\n人間確認]
-    E --> F[Optional downstream system\n別システムへ渡す]
-    F -. never controlled by .-> G[Agent / router / deployer]
+    A["Messy request<br/>雑な依頼"] --> B["Task card<br/>境界付きカード"]
+    B --> C{"Validate<br/>検証"}
+    C -->|"BLOCKING / invalid"| D["Stop<br/>停止"]
+    C -->|"valid"| E["Human review<br/>人間確認"]
+    E --> F["Optional downstream system<br/>別システムへ渡す"]
+    F -. never controlled by .-> G["Agent / router / deployer"]
 ```
 
-## Safety promise / 安全境界
+---
+
+## See it work
+
+A valid card renders as something a person can actually read before approving:
+
+```console
+$ agent-frontdoor card fixtures/positive/01_install_only.json
+Request: positive-01
+Schema version: intake.v0
+Human request: Install only the named validation package in the local environment
+Task class: INSTALLATION
+Risk tags:
+- none
+Allowed actions:
+- inspect package metadata
+- install only the named package
+Forbidden actions:
+- change application architecture
+- install unrelated packages
+Required evidence:
+- package name and version
+- local installation result
+Required manifest: install-manifest.txt
+Human gate: CONFIRM
+Predicted worker capability: installation
+Unknowns:
+- none
+Assumptions:
+- the package source is already available locally
+Next safe step: Confirm the package name and version before installation
+```
+
+Note what is on that card and what is not. There is a **worker capability** (`installation`) but no model name. There are **forbidden actions** stated as explicitly as the allowed ones. There is a `next_safe_step` that does not escalate. A downstream system reading this card learns its boundaries — it does not receive permission.
+
+An unsafe card does not get softened. It gets refused:
+
+```console
+$ agent-frontdoor validate fixtures/negative/neg_05_deploy_tag_none.json
+INVALID task: blocking_gate_required at $.human_gate: Unsafe or unknown work requires human_gate BLOCKING.
+$ echo $?
+1
+```
+
+And an expansion that appears *after* a review is caught by comparing the two cards:
+
+```console
+$ agent-frontdoor check-drift examples/drift_before.json examples/drift_after.json
+DRIFT
+- audit_to_mutation: Read-only audit scope expanded to mutation work.
+$ echo $?
+3
+
+$ agent-frontdoor check-drift examples/safe_before.json examples/safe_after.json
+NO DRIFT
+$ echo $?
+0
+```
+
+That last pair is the one worth internalising. **"Read-only audit" quietly becoming "apply the fix" is not a malicious act.** It is the single most natural way for scope to grow between the moment a human said yes and the moment work happens. Frontdoor names it, exits non-zero, and mutates nothing.
+
+---
+
+## Exit codes are part of the contract
+
+Measured, not aspirational:
+
+| Exit | Meaning | Marker |
+|---|---|---|
+| `0` | Valid card, or no drift | `VALID` / `NO DRIFT` |
+| `1` | The loaded card violates the contract | `INVALID` |
+| `2` | Input is unreadable or malformed JSON | `ERROR` |
+| `3` | A validated before/after pair crossed a named boundary | `DRIFT` |
+
+For `check-drift`, an unreadable input takes precedence over a loaded-invalid card. Diagnostics go to stderr; successful output and drift findings go to stdout. **None of these results executes or repairs anything.**
+
+---
+
+## Safety promise
 
 The package is deliberately boring and local:
 
@@ -50,26 +129,13 @@ The package is deliberately boring and local:
 - input files are read locally; results are deterministic stdout/stderr output;
 - `UNKNOWN` and high-risk expansion fail closed with `BLOCKING`.
 
-このパッケージが**しないこと**を明示するのが重要です。入力を直したり、危険な依頼を実行したり、別のAIへ自動転送したりはしません。検証に失敗したら、成功したふりをせず停止します。
+> このパッケージが**しないこと**を明示するのが重要です。入力を直したり、危険な依頼を実行したり、別のAIへ自動転送したりはしません。検証に失敗したら、成功したふりをせず停止します。
 
-## Core contract / 中核フロー
+---
 
-```text
-request / 依頼
-  -> schema + semantic validation / スキーマ・意味検証
-  -> bounded task card / 境界付きタスクカード
-  -> card | explain / 人間が読める出力
-  -> optional check-drift / 変更による権限拡張の検出
-```
+## Quick start
 
-The contract is versioned as `intake.v0` in
-[`src/frontdoor/schema/intake.v0.json`](src/frontdoor/schema/intake.v0.json).
-The public CLI and exit codes are stable; changing the schema version is an
-explicit compatibility decision.
-
-契約は `intake.v0` としてバージョン管理されています。スキーマを変える場合は、暗黙に挙動を変えず、互換性の判断として明示的に行います。
-
-## Quick start / 最短で試す
+Python 3.10 or newer.
 
 ```bash
 git clone https://github.com/UMEBOSHIISAN/agent-frontdoor.git
@@ -82,95 +148,11 @@ python3 -m venv .venv
 .venv/bin/agent-frontdoor card fixtures/positive/01_install_only.json
 ```
 
-Python 3.10以上が必要です。実行時のAgent Frontdoor自体はネットワークを使いません。ネットワークはインストール時の依存取得に限られます。完全オフラインの友人向け受入手順は [`docs/FRIEND_LAB.md`](docs/FRIEND_LAB.md) を参照してください。
-
-## When to use / 使う場面
-
-| Situation / 場面 | Frontdoor result / 出力 |
-|---|---|
-| A bounded implementation request / 境界付き実装依頼 | `IMPLEMENTATION` card |
-| A design or security review / 設計・安全レビュー | `DESIGN_REVIEW` or `AUDIT` |
-| An ambiguous or unsafe request / 曖昧・危険な依頼 | `UNKNOWN` + `BLOCKING` |
-| A proposed expansion after review / レビュー後の拡張 | `check-drift` reports drift |
-
-It is **not** a replacement for human judgment, a policy engine with authority,
-or a full agent harness. It is the small, inspectable contract at the boundary.
-
-人間の判断を置き換えるものでも、権限を持つポリシーエンジンでもありません。人間と実行系の間に置く、小さく検査可能な契約部品です。
-
----
-
-## English documentation
-
-The sections below are the detailed English reference: installation, CLI,
-schema fields, gates, drift detection, fixtures, metrics, and uninstall.
-
-## 日本語ドキュメント
-
-### CLI
-
-```bash
-agent-frontdoor validate task.json       # 契約を検証
-agent-frontdoor card task.json           # 固定順のタスクカードを表示
-agent-frontdoor explain task.json        # 人間向け説明を表示
-agent-frontdoor check-drift before.json after.json
-```
-
-`validate` が成功して初めて `card` と `explain` が出力されます。`check-drift` は、レビュー後に許可範囲が広がっていないかを比較します。
-
-### ゲート
-
-- `NONE`: 追加確認なし
-- `CONFIRM`: 次の限定された手順の前に人間確認
-- `BLOCKING`: 人間が明示的に解決するまで停止
-
-deploy、production、scheduler、secret、auth、billing、delete、SSOT mutation、external publish、authority promotion は、原則 `BLOCKING` です。`UNKNOWN` も必ず停止側に倒れます。
-
-### 友人向け受入
-
-友人に渡す場合は、まずZIPと検証スクリプトのSHA-256を照合し、ネットワークを切断した状態で `docs/FRIEND_LAB.md` の手順を実行してください。受入試験はインストール、fixture、CLI、境界ガード、プライバシー検査、アンインストール、receiptを確認します。合格しても、友人の既存hook・settings・モデル・秘密情報を自動変更することはありません。
-
-### OSS公開の原則
-
-公開リポジトリには、秘密、実在ユーザー名、LANアドレス、個人パス、ローカルの履歴・memory・設定を含めません。友人固有の構成はアダプターとREADMEで説明し、本体コアへ混ぜません。
-
----
-
-## Detailed English reference
-
-## Installation
-
-Python 3.10 or newer is required. Supply the repository location explicitly;
-the install procedure never infers a private checkout or operator path. The
-standard installation may resolve `jsonschema>=4` and the `test` extra from
-PyPI:
-
-```bash
-export AGENT_FRONTDOOR_REPOSITORY_URL='https://github.com/UMEBOSHIISAN/agent-frontdoor.git'
-git clone "$AGENT_FRONTDOOR_REPOSITORY_URL" agent-frontdoor
-cd agent-frontdoor
-python3 -m venv .venv
-.venv/bin/python -m pip install --upgrade pip
-.venv/bin/python -m pip install -e ".[test]"
-.venv/bin/pytest -q
-.venv/bin/agent-frontdoor validate fixtures/positive/01_install_only.json
-.venv/bin/agent-frontdoor card fixtures/positive/01_install_only.json
-```
-
-Agent Frontdoor itself requires no network access at runtime. Network access is
-used only to retrieve dependencies during installation.
-
-For the frozen-contract Gate 4 reproduction, create a fresh local bare
-repository from the reviewed public commit and set
-`AGENT_FRONTDOOR_REPOSITORY_URL` to its explicitly supplied `file://` URL. Use
-the same clone, install, full-test, `validate`, and `card` sequence above.
+Agent Frontdoor itself makes no network requests at runtime. Network access is used only to fetch dependencies during installation. For a fully offline acceptance procedure, see [`docs/FRIEND_LAB.md`](docs/FRIEND_LAB.md).
 
 ### Offline installation
 
-Do not reuse host or global packages for offline acceptance. Use only the
-hash-verified, receiver-specific wheelhouse from the friend pack. The complete
-attended procedure, detached verification order, controls, and receipt rules are
-in [`docs/FRIEND_LAB.md`](docs/FRIEND_LAB.md).
+Do not reuse host or global packages for offline acceptance. Use only the hash-verified, receiver-specific wheelhouse from the friend pack:
 
 ```bash
 export WHEELHOUSE='<VERIFIED_WHEELHOUSE>'
@@ -179,176 +161,153 @@ python3 -m venv .venv
 .venv/bin/python -m pip install --no-index --find-links "$WHEELHOUSE" --no-build-isolation -e ".[test]"
 ```
 
-Missing or incompatible wheels are a hard stop. There is no index fallback,
-source-build fallback, retry, or host-package fallback.
+Missing or incompatible wheels are a hard stop. There is no index fallback, source-build fallback, retry, or host-package fallback.
 
-## CLI
+---
 
-The installed package exposes exactly four read-only preflight commands:
+## The CLI
+
+Exactly four read-only preflight commands:
 
 ```bash
-agent-frontdoor validate task.json
-agent-frontdoor card task.json
-agent-frontdoor explain task.json
-agent-frontdoor check-drift before.json after.json
+agent-frontdoor validate task.json                      # stable valid/invalid result
+agent-frontdoor card task.json                          # fixed-order card, only after validation passes
+agent-frontdoor explain task.json                       # self-contained explanation, only after validation passes
+agent-frontdoor check-drift before.json after.json      # validates both, then compares boundaries
 ```
 
-- `validate` prints a stable valid/invalid result.
-- `card` prints the complete fixed-order task card only after validation succeeds.
-- `explain` prints a self-contained explanation only after validation succeeds.
-- `check-drift` validates both cards before comparing their boundaries.
+`card` and `explain` refuse to print anything until `validate` would have succeeded. There is no "here is a partial card, use your judgement" path.
 
-Exit codes are part of the CLI contract:
+---
 
-- `0`: valid card or no drift
-- `1`: loaded card is invalid
-- `2`: input is unreadable or malformed JSON
-- `3`: boundary drift detected
+## The `intake.v0` task card
 
-Output markers are equally strict: `INVALID` means a loaded card violated the
-contract, `ERROR` means an input could not be read or decoded, and `DRIFT` means
-a validated before/after pair crossed a named boundary. None of these results
-executes or repairs the task.
-
-For `check-drift`, an unreadable or malformed input takes exit-code precedence
-over a loaded-invalid card. Diagnostics go to standard error; successful output
-and drift findings go to standard output.
-
-## `intake.v0` task card
-
-Every card contains all 14 core fields:
+The contract lives at [`src/frontdoor/schema/intake.v0.json`](src/frontdoor/schema/intake.v0.json) — JSON Schema Draft 2020-12 plus deterministic semantic checks in the validator. Every card carries all 14 core fields:
 
 | Field | Purpose |
 |---|---|
 | `schema_version` | Fixed contract version: `intake.v0` |
 | `request_id` | Stable request identifier |
-| `human_request` | Original human request |
+| `human_request` | The original human request, preserved |
 | `task_class` | One bounded task class |
 | `risk_tags` | Explicit safety-relevant categories |
-| `allowed_actions` | Actions inside the task boundary |
-| `forbidden_actions` | Actions explicitly outside the boundary |
-| `required_evidence` | Evidence needed to verify the outcome |
-| `required_manifest` | Optional named manifest, otherwise null |
+| `allowed_actions` | Actions inside the boundary |
+| `forbidden_actions` | Actions explicitly outside it |
+| `required_evidence` | What must exist to verify the outcome |
+| `required_manifest` | A named manifest, or null |
 | `human_gate` | Required human decision state |
-| `predicted_worker_capability` | Capability label, never a model name |
-| `unknowns` | Unresolved facts that must remain visible |
+| `predicted_worker_capability` | A capability label — **never a model name** |
+| `unknowns` | Unresolved facts that must stay visible |
 | `assumptions` | Explicit bounded assumptions |
 | `next_safe_step` | The next non-escalating step |
 
-The task classes are deliberately small:
+Task classes are deliberately few: `RESEARCH`, `DESIGN_REVIEW`, `IMPLEMENTATION`, `CODE_REVIEW`, `AUDIT`, `CONTENT_DRAFT`, `DATA_ANALYSIS`, `INSTALLATION`, `OPERATIONS`, `UNKNOWN`.
 
-- `RESEARCH`
-- `DESIGN_REVIEW`
-- `IMPLEMENTATION`
-- `CODE_REVIEW`
-- `AUDIT`
-- `CONTENT_DRAFT`
-- `DATA_ANALYSIS`
-- `INSTALLATION`
-- `OPERATIONS`
-- `UNKNOWN`
+**`unknowns` being a required field is the quiet centrepiece.** A card cannot represent a request by silently resolving what nobody actually knows. If something is unresolved it stays on the card, in front of the human, before the work starts.
 
-Specific model or vendor names are not valid worker capabilities.
+---
 
-## Human gates and fail-closed rules
+## Gates and fail-closed rules
 
-The three gate values are:
+| Gate | Meaning |
+|---|---|
+| `NONE` | No additional confirmation required by this card |
+| `CONFIRM` | A human confirmation is requested before the bounded next step |
+| `BLOCKING` | Stop until a human explicitly resolves the gate |
 
-- `NONE`: no additional confirmation is required by this card;
-- `CONFIRM`: a human confirmation is requested before the bounded next step;
-- `BLOCKING`: stop until a human explicitly resolves the gate.
+`BLOCKING` is **mandatory** when risk tags or request/action text involve any of:
 
-`BLOCKING` is mandatory when risk tags or request/action text involve any of:
+`deploy` · `production` · `scheduler` · `secret` · `auth` · `billing` · `delete` · `destructive cleanup` · `SSOT mutation` · `external publish` · `authority promotion`
 
-- `deploy`
-- `production`
-- `scheduler`
-- `secret`
-- `auth`
-- `billing`
-- `delete`
-- `destructive cleanup`
-- `SSOT mutation`
-- `external publish`
-- `authority promotion`
+`UNKNOWN` also fails closed. It requires `BLOCKING`, the `none-until-clarified` capability, at least one stated unknown, explicitly safe allowed actions, and a non-mutating next step.
 
-`UNKNOWN` also fails closed: it requires `BLOCKING`, the
-`none-until-clarified` capability, at least one stated unknown, explicitly safe
-allowed actions, and a non-mutating next step.
+The validator additionally rejects schema errors, an action that is both allowed and forbidden after normalization, unsafe non-blocking work, and malformed or unreadable input. It returns typed issues rather than permissive prose.
 
-The validator additionally rejects schema errors, a normalized action that is
-both allowed and forbidden, unsafe non-blocking work, and malformed or unreadable
-input. It returns typed issues rather than permissive prose.
+---
 
 ## Boundary drift
 
-`check-drift` reports every matching named expansion. The required families are:
+`check-drift` reports every matching named expansion:
 
-- read-only audit -> mutation recommendation
-- design review -> implementation
-- installation -> architecture migration
-- draft -> external publish
-- proposal-only -> authority promotion
-- bounded files -> unrelated broad refactor
+| Family | The shape it catches |
+|---|---|
+| read-only audit → mutation recommendation | "while I was looking, I fixed it" |
+| design review → implementation | the review that became the change |
+| installation → architecture migration | one package became a refactor |
+| draft → external publish | internal text became a public post |
+| proposal-only → authority promotion | a suggestion that granted itself a tier |
+| bounded files → unrelated broad refactor | three files became the repository |
 
-The comparator uses deterministic lexical heuristics over validated task classes,
-risk-tag additions, allowed actions, and `next_safe_step`. It never mutates either
-card.
+The comparator uses deterministic lexical heuristics over validated task classes, risk-tag additions, allowed actions, and `next_safe_step`. **It never mutates either card.**
 
-The split card examples can be passed directly to the CLI:
-
-```bash
-.venv/bin/agent-frontdoor check-drift examples/drift_before.json examples/drift_after.json
-# exit 3: reports audit_to_mutation
-.venv/bin/agent-frontdoor check-drift examples/safe_before.json examples/safe_after.json
-# exit 0: prints NO DRIFT
-```
+---
 
 ## Fixtures and hard metrics
 
-Synthetic fixtures live under:
+| Corpus | Count | Purpose |
+|---|---|---|
+| `fixtures/positive/` | 31 | Complete valid cards |
+| `fixtures/negative/` | 41 | Named fail-closed cases |
+| `fixtures/drift/` | 20 | Labelled before/after envelopes plus safe controls |
 
-- `fixtures/positive/` for complete valid cards;
-- `fixtures/negative/` for named fail-closed cases;
-- `fixtures/drift/` for labeled before/after envelopes and safe controls.
-
-The `fixtures/drift/*.json` files are labeled test envelopes containing
-`before`, `after`, `label`, and `expected_codes`; they are not direct CLI inputs.
-Use the split cards under `examples/` for directly runnable CLI examples.
-
-Run the hard corpus and source-safety contracts with:
+`fixtures/drift/*.json` are labelled test envelopes containing `before`, `after`, `label`, and `expected_codes` — they are not direct CLI inputs. Use the split cards under `examples/` for runnable examples.
 
 ```bash
-.venv/bin/pytest tests/test_fixture_metrics.py tests/test_no_execution_paths.py -q
+.venv/bin/pytest tests/test_fixture_metrics.py tests/test_no_execution_paths.py -q   # hard contracts
+.venv/bin/pytest -q                                                                  # full suite
 ```
 
-Run the complete local suite with:
+The hard contracts require schema validity `1.00`, negative blocking recall `1.00`, fail-safe `UNKNOWN` behaviour, boundary-drift recall of at least `0.95`, and **zero** forbidden execution, network, worker, routing, or source-write paths. These are test contracts, not claims about an unverified run.
 
-```bash
-.venv/bin/pytest -q
+That last one deserves emphasis: `tests/test_no_execution_paths.py` asserts a property about the *source*, not the behaviour. It is one thing to promise a package does not execute anything. It is another to fail the build if a subprocess import appears.
+
+---
+
+## When to use it
+
+| Situation | Result |
+|---|---|
+| A bounded implementation request | `IMPLEMENTATION` card |
+| A design or security review | `DESIGN_REVIEW` or `AUDIT` |
+| An ambiguous or unsafe request | `UNKNOWN` + `BLOCKING` |
+| A proposed expansion after review | `check-drift` reports drift |
+
+It is **not** a replacement for human judgment, a policy engine with authority, or a full agent harness. It is the small, inspectable contract at the boundary.
+
+> 人間の判断を置き換えるものでも、権限を持つポリシーエンジンでもありません。人間と実行系の間に置く、小さく検査可能な契約部品です。
+
+---
+
+## Where it sits
+
+```text
+messy human request
+    |
+    v
+Agent Frontdoor          ── bounded card, fail-closed, human-readable
+    |  (reviewed request)
+    v
+Workflow Governance Model ── evidence, approval, receipt, verification
+    |
+    v
+Mothership Router         ── human-gated, digest-bound dry run
+    |
+    v
+Mothership                ── portable contracts, diagnostics, boundaries
 ```
 
-The hard contracts require schema validity `1.00`, negative blocking recall
-`1.00`, fail-safe UNKNOWN behavior, boundary-drift recall of at least `0.95`, and
-zero forbidden execution, network, worker, routing, or source-write paths.
-These are test contracts, not claims about an unverified run.
+| Project | Role |
+|---|---|
+| **Agent Frontdoor** | Converts a request into a bounded card before anything downstream acts |
+| [workflow-governance-model](https://github.com/UMEBOSHIISAN/workflow-governance-model) | Validates the evidence and authority trail |
+| [mothership-router](https://github.com/UMEBOSHIISAN/mothership-router) | Emits a human-gated dry-run manifest bound to a registry digest |
+| [mothership](https://github.com/UMEBOSHIISAN/mothership) | The portable control plane holding the contracts and the authority boundary |
 
-## Uninstall
+Each project is independently adoptable. None installs, configures, or invokes another.
 
-Remove the package from the active virtual environment without touching the
-source checkout or any other environment:
-
-```bash
-.venv/bin/python -m pip uninstall -y agent-frontdoor
-```
-
-Confirm that `.venv/bin/agent-frontdoor` is no longer available. Deleting a
-disposable test directory is a separate human action and is never performed by
-Agent Frontdoor.
+---
 
 ## Programmatic interfaces
-
-The public local interfaces are:
 
 ```python
 from frontdoor.boundary_drift import detect_boundary_drift
@@ -356,6 +315,26 @@ from frontdoor.formatter import format_card, format_explanation
 from frontdoor.validator import load_card, validate_card
 ```
 
-`load_card` reads one local JSON file and returns the loaded value plus a typed
-validation result. `validate_card` and `detect_boundary_drift` are deterministic
-and do not mutate their inputs.
+`load_card` reads one local JSON file and returns the loaded value plus a typed validation result. `validate_card` and `detect_boundary_drift` are deterministic and do not mutate their inputs.
+
+## Uninstall
+
+```bash
+.venv/bin/python -m pip uninstall -y agent-frontdoor
+```
+
+Confirm that `.venv/bin/agent-frontdoor` is gone. Deleting a disposable test directory is a separate human action and is never performed by Agent Frontdoor.
+
+## OSS publishing principle
+
+The public repository contains no secrets, real usernames, LAN addresses, personal paths, or local history, memory, and settings. Environment-specific setup is explained through adapters and documentation rather than mixed into the core.
+
+---
+
+## License
+
+MIT. See [LICENSE](LICENSE).
+
+<p align="center">
+  <sub>The public CLI and exit codes are stable.<br>Changing the schema version is an explicit compatibility decision, never a silent behaviour change.</sub>
+</p>

@@ -97,23 +97,32 @@ Codex result with no explicit structured status -> REPORT_REQUIRED
 REPORT_REQUIRED + any tool -> deny and require human-facing report
 affirmative correction while DIRECT_REQUIRED -> new DIRECT_REQUIRED epoch
 affirmative correction while REPORT_REQUIRED -> preserve the report hold
-negated/cancellation phrase -> REPORT_REQUIRED hold; never re-enable the action
-REPORT_REQUIRED + same target/action or bounded related-result evidence -> preserve
-REPORT_REQUIRED + genuinely different explicit command/error -> replacement lock
-REPORT_REQUIRED + meaningful unrelated prompt, even a short one -> prior lock released
+negated/cancellation phrase while DIRECT_REQUIRED -> REPORT_REQUIRED hold
+REPORT_REQUIRED + ordinary prompt -> preserve the exact report hold
+REPORT_REQUIRED + explicit nonempty new-task marker -> derive its remainder fresh
+SessionEnd -> release the session state
 ```
 
-During `REPORT_REQUIRED`, related evidence is bounded to a prompt-token digest
-matching the stored target digests, strong prior-result terms such as `failed`,
-`problem`, `issue`, or `happened`, and short acknowledgements or bounded deictic
-references such as `What about that?`. Digest comparison also covers targets
-that are intentionally hidden from display. Affirmative correction and
-standalone continuation wording preserve the same report hold. Generic `work`,
-`report`, `why`, or `なぜ`, and string length alone are not related evidence.
-Therefore short unrelated tasks such as `Fix docs.` and `Run tests.` release the
-hold, while a genuinely different explicit command or structured error replaces
-it with a new lock. The same explicit action or target never bypasses the required
-report by creating a new epoch.
+During `REPORT_REQUIRED`, prompt wording is not classified as related or
+unrelated. Every ordinary `UserPromptSubmit` preserves the exact immutable hold,
+including acknowledgements, questions, explicit commands, error descriptions,
+and requests that appear to concern another subject. This fail-closed rule avoids
+guessing whether natural-language prose is a task switch.
+
+Only either of these nonempty markers at the prompt's first non-whitespace
+character starts a fresh task transition:
+
+- `new task: <request>` (ASCII case-insensitive);
+- `別件: <request>` (exact Japanese marker).
+
+Leading whitespace is allowed. The request after the colon must contain
+non-whitespace text. Empty markers, quoted or mid-sentence marker text, and
+Unicode-confusable English forms preserve the report hold. For example,
+`new task: Fix docs.` releases the old hold because its remainder creates no
+literal lock, while `別件: component docs failed during validation` creates a
+fresh literal-target lock with a monotonically increased epoch. An explicit
+marker may intentionally create a fresh lock for the same action or target; the
+marker, not inferred semantic unrelatedness, is the human transition signal.
 
 Both identity modes first require a recognized shell-action context. A caller
 marked with `evaluate_action(..., shell_action=False)`, or a standalone parsed

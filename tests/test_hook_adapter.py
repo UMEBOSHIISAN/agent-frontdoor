@@ -113,6 +113,8 @@ def _assert_report_hold_preserved(
     prompt: str,
     command: str,
 ) -> None:
+    before = load_session_lock(state_root, SESSION)
+    assert before is not None
     followup = handle_event(
         _payload("UserPromptSubmit", prompt=prompt),
         state_root,
@@ -132,7 +134,7 @@ def _assert_report_hold_preserved(
     assert followup is not None
     current = load_session_lock(state_root, SESSION)
     assert current is not None
-    assert current.phase == "REPORT_REQUIRED"
+    assert current == before
     assert denied is not None
     assert denied["hookSpecificOutput"]["permissionDecision"] == "deny"
     assert denied["hookSpecificOutput"]["permissionDecisionReason"] == (
@@ -590,7 +592,10 @@ def test_concurrent_old_failure_cannot_overwrite_replacement_intent(
         name="replacement-prompt",
         target=lambda: (
             handle_event(
-                _payload("UserPromptSubmit", prompt="`git diff`"),
+                _payload(
+                    "UserPromptSubmit",
+                    prompt="new task: `git diff`",
+                ),
                 tmp_path,
                 platform="codex",
             ),
@@ -704,6 +709,11 @@ def test_ambiguous_correction_keeps_report_required_lock(
     "prompt",
     [
         "Why did that fail?",
+        "Thanks.",
+        "It will rain on Monday.",
+        "Fix docs.",
+        "Work on another project.",
+        "READMEの文章を監査して結果だけ教えて",
         "Tell me what failed",
         "Review the failure",
         "Explain why cloudflare-api failed",
@@ -716,7 +726,7 @@ def test_ambiguous_correction_keeps_report_required_lock(
         "What about that?",
     ],
 )
-def test_related_failure_followup_keeps_report_hold_and_denies_next_tool(
+def test_ordinary_prompt_keeps_report_hold_and_denies_next_tool(
     tmp_path: Path,
     prompt: str,
 ) -> None:
@@ -786,7 +796,7 @@ def test_same_error_target_keeps_report_hold_and_denies_next_tool(
         (
             "codex mcp login cloudflare-apiしてや",
             "codex mcp login cloudflare-api",
-            "`git status`",
+            "new task: `git status`",
             "git status",
             "EXACT_COMMAND",
             ("status",),
@@ -794,14 +804,22 @@ def test_same_error_target_keeps_report_hold_and_denies_next_tool(
         (
             ERROR_PROMPT,
             "codex mcp login cloudflare-api",
-            "component docs failed during validation",
+            "別件: component docs failed during validation",
             "echo docs",
             "LITERAL_TARGET",
             ("docs",),
         ),
+        (
+            "codex mcp login cloudflare-apiしてや",
+            "codex mcp login cloudflare-api",
+            "NEW TASK: `codex mcp login cloudflare-api`",
+            "codex mcp login cloudflare-api",
+            "EXACT_COMMAND",
+            ("cloudflare-api",),
+        ),
     ],
 )
-def test_different_explicit_prompt_replaces_hold_and_accepts_next_tool(
+def test_explicit_new_task_marker_replaces_hold_and_accepts_next_tool(
     tmp_path: Path,
     initial_prompt: str,
     initial_command: str,
@@ -815,12 +833,21 @@ def test_different_explicit_prompt_replaces_hold_and_accepts_next_tool(
         prompt=initial_prompt,
         command=initial_command,
     )
+    held = load_session_lock(tmp_path, SESSION)
+    assert held is not None
 
     replacement = handle_event(
         _payload("UserPromptSubmit", prompt=replacement_prompt),
         tmp_path,
         platform="codex",
     )
+    fresh = load_session_lock(tmp_path, SESSION)
+    assert fresh is not None
+    assert replacement is not None
+    assert fresh.phase == "DIRECT_REQUIRED"
+    assert fresh.mode == expected_mode
+    assert fresh.intent_epoch == held.intent_epoch + 1
+    assert fresh.display_targets == expected_targets
     accepted = handle_event(
         _payload(
             "PreToolUse",
@@ -832,11 +859,11 @@ def test_different_explicit_prompt_replaces_hold_and_accepts_next_tool(
         platform="codex",
     )
 
-    assert replacement is not None
     current = load_session_lock(tmp_path, SESSION)
     assert current is not None
     assert current.phase == "DIRECT_REQUIRED"
     assert current.mode == expected_mode
+    assert current.intent_epoch == fresh.intent_epoch
     assert current.display_targets == expected_targets
     assert current.pending_tool_use_sha256 is not None
     assert accepted is None
@@ -1166,19 +1193,14 @@ def test_human_correction_cannot_bypass_adapter_report_hold(
 @pytest.mark.parametrize(
     "prompt",
     [
-        "READMEの文章を監査して結果だけ教えて",
-        "Translate this sentence",
-        "Compare these files",
-        "Fix docs.",
-        "Run tests.",
-        "Write a work report for README.",
-        "Write report.",
-        "Review work.",
-        "Why is the sky blue?",
-        "なぜ空は青いのですか",
+        "new task: Fix docs.",
+        "NEW TASK: Run tests.",
+        "\u3000NeW TaSk: Translate this sentence",
+        "別件: READMEの文章を監査して結果だけ教えて",
+        "  別件: なぜ空は青いのですか",
     ],
 )
-def test_substantive_new_prompt_clears_report_hold(
+def test_explicit_new_task_marker_clears_report_hold(
     tmp_path: Path,
     prompt: str,
 ) -> None:
@@ -1209,6 +1231,33 @@ def test_substantive_new_prompt_clears_report_hold(
         tmp_path,
         platform="codex",
     ) is None
+
+
+@pytest.mark.parametrize(
+    "prompt",
+    [
+        "new task:",
+        "NEW TASK:   ",
+        "別件:",
+        "Please use new task: Fix docs.",
+        '"new task: Fix docs."',
+        "new taſk: Fix docs.",
+    ],
+)
+def test_invalid_new_task_marker_keeps_report_hold_and_denies_next_tool(
+    tmp_path: Path,
+    prompt: str,
+) -> None:
+    _activate_report_hold(
+        tmp_path,
+        prompt="codex mcp login cloudflare-apiしてや",
+        command="codex mcp login cloudflare-api",
+    )
+    _assert_report_hold_preserved(
+        tmp_path,
+        prompt=prompt,
+        command="codex mcp login cloudflare-api",
+    )
 
 
 def test_session_end_deletes_only_current_session_state(tmp_path: Path) -> None:

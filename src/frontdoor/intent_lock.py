@@ -9,7 +9,7 @@ from importlib import resources
 import json
 import re
 import shlex
-from typing import Any, Literal
+from typing import Any
 
 from jsonschema import Draft202012Validator
 
@@ -213,31 +213,12 @@ _CORRECTION_MENTION_PATTERN = re.compile(
     r"(?:最初の依頼|元の依頼|original request|first request)",
     re.IGNORECASE,
 )
-_STRONG_RESULT_REFERENCE_PATTERN = re.compile(
-    r"(?:"
-    r"\b(?:error|fail(?:ed|ure)?|happened|issue|outcome|problem|result|"
-    r"succeed(?:ed)?|success|went\s+wrong)\b"
-    r"|(?:エラー|失敗|問題|障害|どうな)"
-    r")",
-    re.IGNORECASE,
-)
-_SHORT_ACKNOWLEDGEMENT_PATTERN = re.compile(
-    r"(?:ok(?:ay)?|yes|yeah|yep|sure|right|understood|got\s+it|"
-    r"うん|はい|了解)[。?.!！ ]*",
-    re.IGNORECASE,
-)
-_DEICTIC_REFERENCE_PATTERN = re.compile(
-    r"(?:"
-    r"\bit\b"
-    r"|\b(?:this|that|these|those)\b(?=\s*[?.!]*\s*$)"
-    r"|(?:これ|それ|あれ)(?:は|を|が|について)?[。?？!！]*\s*$"
-    r")",
-    re.IGNORECASE,
-)
 _CONTINUATION_PATTERN = re.compile(
     r"^(?:やって|全部やって|続けて|進めて|うん|はい|go|proceed|continue|yes)[。.!！ ]*$",
     re.IGNORECASE,
 )
+_ENGLISH_NEW_TASK_MARKER = "new task:"
+_JAPANESE_NEW_TASK_MARKER = "別件:"
 _SAFE_LABEL_PATTERN = re.compile(
     r"^[A-Za-z0-9][A-Za-z0-9._:@/-]{0,127}$"
 )
@@ -687,100 +668,36 @@ def _matches_locked_identity(lock: IntentLock, action: str) -> bool:
     return all(digest in action_digests for digest in lock.target_token_sha256)
 
 
-def _targets_match_lock(
-    lock: IntentLock,
-    targets: tuple[str, ...],
-) -> bool:
-    return any(
-        _digest(target.casefold()) in lock.target_token_sha256
-        for target in targets
-    )
+def _explicit_new_task_request(prompt: str) -> str | None:
+    candidate = prompt.lstrip()
+    english_prefix = candidate[: len(_ENGLISH_NEW_TASK_MARKER)]
+    if (
+        english_prefix.isascii()
+        and english_prefix.lower() == _ENGLISH_NEW_TASK_MARKER
+    ):
+        remainder = candidate[len(_ENGLISH_NEW_TASK_MARKER) :]
+    elif candidate.startswith(_JAPANESE_NEW_TASK_MARKER):
+        remainder = candidate[len(_JAPANESE_NEW_TASK_MARKER) :]
+    else:
+        return None
+    request = remainder.strip()
+    return request or None
 
 
-def _prompt_mentions_lock_target(lock: IntentLock, prompt: str) -> bool:
-    prompt_digests = {
-        _digest(token.rstrip(".:,;").casefold())
-        for token in _ACTION_TOKEN_PATTERN.findall(prompt)
-        if token.rstrip(".:,;")
-    }
-    return any(
-        target_digest in prompt_digests
-        for target_digest in lock.target_token_sha256
-    )
-
-
-def _is_related_followup(
-    prompt: str,
-    previous: IntentLock,
-    targets: tuple[str, ...],
-) -> bool:
-    if _CORRECTION_MENTION_PATTERN.search(prompt):
-        return True
-    if _prompt_mentions_lock_target(previous, prompt):
-        return True
+def _derive_fresh_lock(prompt: str, *, epoch: int) -> IntentLock | None:
+    command = _extract_exact_command(prompt)
+    if command is not None:
+        return _new_exact_lock(prompt, epoch=epoch, command=command)
+    targets = _extract_error_targets(prompt)
     if targets:
-        return _targets_match_lock(previous, targets)
-    return bool(
-        _STRONG_RESULT_REFERENCE_PATTERN.search(prompt)
-        or _has_bounded_deictic_reference(prompt)
-    )
-
-
-def _has_bounded_deictic_reference(prompt: str) -> bool:
-    stripped = prompt.strip()
-    words = re.findall(r"[^\W_]+", stripped, re.UNICODE)
-    return (
-        len(stripped) <= 80
-        and len(words) <= 8
-        and bool(_DEICTIC_REFERENCE_PATTERN.search(stripped))
-    )
-
-
-def _has_substantive_content(prompt: str) -> bool:
-    return bool(re.search(r"[^\W_]", prompt, re.UNICODE))
-
-
-def _is_substantive_prompt(prompt: str) -> bool:
-    words = re.findall(r"[^\W_]+", prompt, re.UNICODE)
-    if len(words) >= 3:
-        return True
-    return len("".join(words)) >= 12
-
-
-def _classify_report_prompt(
-    prompt: str,
-    previous: IntentLock,
-    command: str | None,
-    targets: tuple[str, ...],
-    *,
-    affirmative_correction: bool,
-) -> Literal["PRESERVE", "REPLACE", "RELEASE"]:
-    if (
-        _prompt_mentions_lock_target(previous, prompt)
-        or (
-            command is not None
-            and _matches_locked_identity(previous, command)
+        return _new_lock(
+            prompt,
+            epoch=epoch,
+            mode="LITERAL_TARGET",
+            command=None,
+            targets=targets,
         )
-        or (targets and _targets_match_lock(previous, targets))
-    ):
-        return "PRESERVE"
-    if (
-        affirmative_correction
-        or _CORRECTION_MENTION_PATTERN.search(prompt)
-        or _CONTINUATION_PATTERN.fullmatch(prompt.strip())
-    ):
-        return "PRESERVE"
-    if command is not None or targets:
-        return "REPLACE"
-    if (
-        _STRONG_RESULT_REFERENCE_PATTERN.search(prompt)
-        or _SHORT_ACKNOWLEDGEMENT_PATTERN.fullmatch(prompt.strip())
-        or _has_bounded_deictic_reference(prompt)
-    ):
-        return "PRESERVE"
-    if _has_substantive_content(prompt):
-        return "RELEASE"
-    return "PRESERVE"
+    return None
 
 
 def derive_lock(
@@ -788,6 +705,15 @@ def derive_lock(
     previous: IntentLock | None = None,
 ) -> IntentLock | None:
     """Derive a literal lock, preserve a human re-lock, or return no lock."""
+
+    if previous is not None and previous.phase == "REPORT_REQUIRED":
+        new_task_request = _explicit_new_task_request(prompt)
+        if new_task_request is None:
+            return previous
+        return _derive_fresh_lock(
+            new_task_request,
+            epoch=previous.intent_epoch + 1,
+        )
 
     command = _extract_exact_command(prompt)
     epoch = 1 if previous is None else previous.intent_epoch + 1
@@ -819,32 +745,6 @@ def derive_lock(
     ):
         return _hold(prompt, previous)
 
-    if previous is not None and previous.phase == "REPORT_REQUIRED":
-        transition = _classify_report_prompt(
-            prompt,
-            previous,
-            command,
-            targets,
-            affirmative_correction=bool(affirmative_correction),
-        )
-        if transition == "PRESERVE":
-            return previous
-        if transition == "REPLACE":
-            if command is not None:
-                return _new_exact_lock(
-                    prompt,
-                    epoch=epoch,
-                    command=command,
-                )
-            return _new_lock(
-                prompt,
-                epoch=epoch,
-                mode="LITERAL_TARGET",
-                command=None,
-                targets=targets,
-            )
-        return None
-
     if command is not None:
         return _new_exact_lock(
             prompt,
@@ -866,11 +766,8 @@ def derive_lock(
         or _CONTINUATION_PATTERN.fullmatch(prompt.strip())
     ):
         return _relock(prompt, previous)
-    if previous is not None:
-        if _is_related_followup(prompt, previous, targets):
-            return previous
-        if not _is_substantive_prompt(prompt):
-            return previous
+    if previous is not None and _CORRECTION_MENTION_PATTERN.search(prompt):
+        return previous
     return None
 
 

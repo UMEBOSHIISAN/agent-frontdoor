@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
+from hashlib import sha256
 import json
 
 import pytest
@@ -809,7 +810,7 @@ def test_human_correction_cannot_bypass_report_hold(prompt: str) -> None:
         "最初の依頼はやらないで",
     ],
 )
-def test_negated_correction_holds_instead_of_reenabling_previous_action(
+def test_negated_correction_preserves_existing_report_hold(
     prompt: str,
 ) -> None:
     previous = derive_lock("`codex mcp login cloudflare-api`")
@@ -822,9 +823,7 @@ def test_negated_correction_holds_instead_of_reenabling_previous_action(
 
     held = derive_lock(prompt, previous=failed)
 
-    assert held is not None
-    assert held.intent_epoch == failed.intent_epoch + 1
-    assert held.phase == "REPORT_REQUIRED"
+    assert held is failed
     assert not evaluate_action(
         held,
         "codex mcp login cloudflare-api",
@@ -967,6 +966,11 @@ def test_ambiguous_original_request_mention_preserves_previous_hold() -> None:
     "prompt",
     [
         "Why did that fail?",
+        "Thanks.",
+        "It will rain on Monday.",
+        "Fix docs.",
+        "Work on another project.",
+        "READMEの文章を監査して結果だけ教えて",
         "Can you explain why that failed?",
         "What happened?",
         "Tell me what failed",
@@ -982,7 +986,7 @@ def test_ambiguous_original_request_mention_preserves_previous_hold() -> None:
         "What about that?",
     ],
 )
-def test_no_new_evidence_preserves_previous_report_hold(prompt: str) -> None:
+def test_ordinary_prompt_preserves_previous_report_hold(prompt: str) -> None:
     previous = derive_lock(ERROR_PROMPT)
     assert previous is not None
     held = record_result(
@@ -1001,11 +1005,13 @@ def test_no_new_evidence_preserves_previous_report_hold(prompt: str) -> None:
 
 
 @pytest.mark.parametrize("prompt", ["Why did that fail?", "Did it work?"])
-def test_related_result_question_preserves_direct_lock(prompt: str) -> None:
+def test_ordinary_prompt_does_not_semantically_extend_direct_lock(
+    prompt: str,
+) -> None:
     previous = derive_lock("`codex mcp login cloudflare-api`")
     assert previous is not None
 
-    assert derive_lock(prompt, previous=previous) is previous
+    assert derive_lock(prompt, previous=previous) is None
 
 
 @pytest.mark.parametrize(
@@ -1050,32 +1056,44 @@ def test_report_hold_preserves_same_structured_error_target() -> None:
         "initial_prompt",
         "initial_action",
         "replacement_prompt",
-        "replacement_action",
-        "expected_mode",
-    ),
+            "replacement_action",
+            "expected_mode",
+            "expected_source_prompt",
+        ),
     [
         (
             "`codex mcp login cloudflare-api`",
             "codex mcp login cloudflare-api",
-            "`git status`",
+            "new task: `git status`",
             "git status",
             "EXACT_COMMAND",
+            "`git status`",
         ),
         (
             ERROR_PROMPT,
             "codex mcp login cloudflare-api",
-            "component docs failed during validation",
+            "別件: component docs failed during validation",
             "echo docs",
             "LITERAL_TARGET",
+            "component docs failed during validation",
+        ),
+        (
+            "`codex mcp login cloudflare-api`",
+            "codex mcp login cloudflare-api",
+            "NEW TASK: `codex mcp login cloudflare-api`",
+            "codex mcp login cloudflare-api",
+            "EXACT_COMMAND",
+            "`codex mcp login cloudflare-api`",
         ),
     ],
 )
-def test_report_hold_replaces_genuinely_different_explicit_task(
+def test_explicit_new_task_marker_replaces_report_hold(
     initial_prompt: str,
     initial_action: str,
     replacement_prompt: str,
     replacement_action: str,
     expected_mode: str,
+    expected_source_prompt: str,
 ) -> None:
     previous = derive_lock(initial_prompt)
     assert previous is not None
@@ -1091,25 +1109,23 @@ def test_report_hold_replaces_genuinely_different_explicit_task(
     assert replacement.phase == "DIRECT_REQUIRED"
     assert replacement.mode == expected_mode
     assert replacement.intent_epoch == held.intent_epoch + 1
+    assert replacement.source_prompt_sha256 == sha256(
+        expected_source_prompt.encode("utf-8")
+    ).hexdigest()
     assert evaluate_action(replacement, replacement_action).allowed
 
 
 @pytest.mark.parametrize(
     "prompt",
     [
-        "READMEの文章を監査して結果だけ教えて",
-        "Translate this sentence",
-        "Compare these files",
-        "Fix docs.",
-        "Run tests.",
-        "Write a work report for README.",
-        "Write report.",
-        "Review work.",
-        "Why is the sky blue?",
-        "なぜ空は青いのですか",
+        "new task: Fix docs.",
+        "NEW TASK: Run tests.",
+        "\u3000NeW TaSk: Translate this sentence",
+        "別件: READMEの文章を監査して結果だけ教えて",
+        "  別件: なぜ空は青いのですか",
     ],
 )
-def test_substantive_unrelated_prompt_releases_previous_lock(
+def test_explicit_new_task_marker_with_generic_request_releases_hold(
     prompt: str,
 ) -> None:
     previous = derive_lock("`codex mcp login cloudflare-api`")
@@ -1122,6 +1138,33 @@ def test_substantive_unrelated_prompt_releases_previous_lock(
     assert held.phase == "REPORT_REQUIRED"
 
     assert derive_lock(prompt, previous=held) is None
+
+
+@pytest.mark.parametrize(
+    "prompt",
+    [
+        "new task:",
+        "NEW TASK:   ",
+        "別件:",
+        "Please use new task: Fix docs.",
+        '"new task: Fix docs."',
+        "new taſk: Fix docs.",
+    ],
+)
+def test_invalid_new_task_marker_preserves_report_hold(prompt: str) -> None:
+    previous = derive_lock("`codex mcp login cloudflare-api`")
+    assert previous is not None
+    held = record_result(
+        previous,
+        "codex mcp login cloudflare-api",
+        failed=True,
+    )
+
+    assert derive_lock(prompt, previous=held) is held
+    assert evaluate_action(
+        held,
+        "codex mcp login cloudflare-api",
+    ).code == "report_required"
 
 
 def test_unrelated_negated_command_does_not_cancel_active_exact_lock() -> None:

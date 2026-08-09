@@ -3,6 +3,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 EVIDENCE = ROOT / "docs" / "EVIDENCE.md"
+CORE_SOURCE = ROOT / "src" / "frontdoor"
 
 
 def test_evidence_doc_scopes_every_published_number() -> None:
@@ -20,6 +21,10 @@ def test_evidence_doc_scopes_every_published_number() -> None:
         "python3 -m pytest -q",
     ):
         assert marker in text
+    source_files = sorted(CORE_SOURCE.glob("*.py"))
+    assert source_files
+    assert f"`0 / {len(source_files)}` prohibited matches" in text
+    assert "`src/frontdoor/*.py` scan population" in text
     normalized = " ".join(text.split()).casefold()
     assert "fixture-corpus regression evidence" in normalized
     assert "not a real-world effectiveness benchmark" in normalized

@@ -16,7 +16,7 @@ release status.
 | Negative cards | `41 / 41` | All 41 are rejected with their exact named issue-code sets. |
 | Drift cases | `16 / 16` | All 16 labeled drift envelopes produce their exact expected code sets. |
 | Safe controls | `4 / 4` | All four labeled safe envelopes produce no finding. |
-| Source boundary | zero forbidden core execution/network/worker/routing/source-write paths | The static core-source guard finds zero prohibited path classes. |
+| Source boundary | `0 / 6` prohibited matches: zero forbidden core execution/network/worker/routing/source-write paths | The static core-source guard scans the `src/frontdoor/*.py` scan population (all 6 matching source files). |
 
 ## Reproduce the hard contracts
 

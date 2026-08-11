@@ -1,5 +1,7 @@
 # Changelog
 
+## Unreleased
+
 ## 0.1.0 - 2026-08-11
 
 - Added a closed Mothership 0.2.0 conformance manifest, an `intake.v0`

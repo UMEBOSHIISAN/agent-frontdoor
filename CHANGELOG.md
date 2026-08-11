@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.1.0 - 2026-08-11
 
 - Added a closed Mothership 0.2.0 conformance manifest, an `intake.v0`
   synthetic task card, and owner-schema/CLI tests without adding runtime
@@ -13,10 +13,6 @@
   boundaries that do not expand the four-command runtime.
 - Corrected offline installation instructions to require an exact verified
   wheelhouse without global-package or index fallback.
-
-## 0.1.0 (release candidate)
-
-Initial release candidate.
 
 - `intake.v0` JSON Schema contract: 14 core fields, 10 bounded task classes,
   three human-gate states.
